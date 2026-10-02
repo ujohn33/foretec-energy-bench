@@ -6,3 +6,5 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: toto
 script: forecaster.py
+enabled: false
+retired: "Negligible gain in the 18-day backtest (rel. MAE 0.806 vs 0.819 without covariates) for ~4.5 min and ~4.6 GB per day. The released Toto weights have no trained exogenous labels."

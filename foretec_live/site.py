@@ -16,10 +16,11 @@ import shutil
 from pathlib import Path
 
 import numpy as np
+import yaml
+from types import SimpleNamespace
 import pandas as pd
 
 from .config import paths
-from .registry import load_models
 from .timeutil import delivery_date, delivery_index, local_now
 
 log = logging.getLogger(__name__)
@@ -190,10 +191,13 @@ def build_site(cfg) -> Path:
         f.write_text(json.dumps(js, separators=(",", ":"), allow_nan=False))
 
     models = []
-    for spec in load_models(p["models"]):
-        r = spec.raw
+    # every model folder, including retired ones: their backtest stays public, with the reason
+    for yml in sorted(p["models"].glob("*/model.yaml")):
+        r = yaml.safe_load(yml.read_text()) or {}
+        spec = SimpleNamespace(name=r.get("name", yml.parent.name))
         models.append({"name": spec.name, "author": r.get("author", ""), "description": r.get("description", ""),
                        "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
+                       "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
                        "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess" else (r.get("estimator") or r.get("module", ""))})
     summary = {
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),

@@ -6,3 +6,5 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: moirai
 script: forecaster.py
+enabled: false
+retired: "Covariates made Moirai 2 worse in the 18-day backtest (rel. MAE 1.32 vs 0.85 without; better on only 24% of day-series). Moirai2Forecast.predict() also cuts the future part off the covariates; this entry used the GluonTS predictor."

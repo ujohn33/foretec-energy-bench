@@ -365,7 +365,7 @@
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
       D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${esc(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}</td>
-        <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td>${live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
+        <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
   const INPUT_LABEL = { history: "Own history", nwp: "NWP ensemble", load_forecast: "ENTSO-E load fc", fuel: "Fuel cost", calendar: "Calendar" };
