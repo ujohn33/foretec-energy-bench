@@ -1,0 +1,6 @@
+name: naive_daily
+author: Foretec
+description: Same quarter-hour on the last available day.
+estimator: NaiveForecaster
+params: {strategy: last, sp: 96}
+family: baseline

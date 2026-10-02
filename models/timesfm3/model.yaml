@@ -1,0 +1,7 @@
+name: timesfm3
+author: Foretec
+description: Google TimesFM 3.0, zero-shot, target history only.
+runner: subprocess
+env: timesfm
+script: forecaster.py
+family: timesfm

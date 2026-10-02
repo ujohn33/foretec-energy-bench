@@ -1,0 +1,8 @@
+name: chronos2_cov
+author: Foretec
+description: Chronos-2 (120M) zero-shot with covariates. Known-future NWP ensemble means and spreads (wind 100 m, irradiance, cloud, temperature), ENTSO-E load forecast and fuel cost, over the history and the delivery day.
+family: chronos
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: chronos
+script: forecaster.py

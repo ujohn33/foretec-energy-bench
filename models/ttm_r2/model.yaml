@@ -1,0 +1,7 @@
+name: ttm_r2
+author: Foretec
+description: IBM Granite TinyTimeMixer r2 (~1-5M), zero-shot point forecast, 1536-step context.
+runner: subprocess
+env: ttm
+script: forecaster.py
+family: ttm

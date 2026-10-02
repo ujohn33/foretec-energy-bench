@@ -1,0 +1,12 @@
+# generated on the server
+data/
+results/
+site/
+# local environments and caches
+.venv/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+# secrets never live in the repo (keys are in /root/.env on the server)
+*.env
+.env

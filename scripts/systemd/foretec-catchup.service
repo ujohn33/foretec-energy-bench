@@ -1,0 +1,18 @@
+[Unit]
+Description=Foretec Live: backtest any model missing from the backtest window (new model folders)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=foretec
+WorkingDirectory=/srv/foretec/foretec-live
+Environment=FORETEC_HOME=/srv/foretec/foretec-live
+Environment=HF_HOME=/srv/foretec/.hf-cache
+Environment=PYTHONWARNINGS=ignore::FutureWarning
+EnvironmentFile=-/srv/foretec/foretec.env
+# API keys (OPENMETEOKEY, ENTSOE_TOKEN, OIL_PRICE_KEY), read by systemd as root before dropping to User=
+EnvironmentFile=-/root/.env
+ExecStart=/srv/foretec/venv/bin/foretec-live catchup
+TimeoutStartSec=6h
+Nice=10

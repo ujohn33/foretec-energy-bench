@@ -1,0 +1,7 @@
+name: tirex
+author: Foretec
+description: NX-AI TiRex (35M, xLSTM), zero-shot quantile forecasts.
+runner: subprocess
+env: tirex
+script: forecaster.py
+family: tirex

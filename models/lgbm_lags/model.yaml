@@ -1,0 +1,5 @@
+name: lgbm_lags
+author: Foretec
+description: LightGBM on the last two days of lags, recursive. No covariates yet.
+module: forecaster.py
+family: baseline

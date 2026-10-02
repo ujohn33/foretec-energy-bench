@@ -1,0 +1,180 @@
+"""End-to-end check on the synthetic source: forecast -> score -> report, plus DST and leakage cutoffs."""
+import datetime as dt
+import json
+import shutil
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from foretec_live.config import load_config, paths
+from foretec_live.report import write_report
+from foretec_live.run import run_forecasts, take_snapshot
+from foretec_live.score import score_pending
+from foretec_live.site import build_site
+from foretec_live.timeutil import availability_cutoff, delivery_index, issue_timestamp
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def cfg(tmp_path, monkeypatch):
+    shutil.copy(REPO / "config.yaml", tmp_path / "config.yaml")
+    shutil.copytree(REPO / "models", tmp_path / "models")
+    monkeypatch.setenv("FORETEC_HOME", str(tmp_path))
+    c = load_config(tmp_path / "config.yaml")
+    c["source"] = "synthetic"
+    return c
+
+
+@pytest.mark.parametrize("delivery,n", [("2026-03-29", 92), ("2026-10-25", 100), ("2026-10-02", 96)])
+def test_dst_lengths(cfg, delivery, n):
+    issue = dt.date.fromisoformat(delivery) - dt.timedelta(days=1)
+    assert len(delivery_index(issue, cfg)) == n
+
+
+def test_no_leakage(cfg):
+    d = dt.date(2026, 10, 1)
+    idx = delivery_index(d, cfg)
+    assert availability_cutoff(d, "price", cfg) == idx[0]
+    # generation is only known up to issue time minus publication lag
+    assert availability_cutoff(d, "wind", cfg) <= issue_timestamp(d, cfg) - pd.Timedelta("1h")
+    snaps = take_snapshot(d, cfg, save=False)
+    for (zone, target), y in snaps.items():
+        assert y.index.max() < availability_cutoff(d, target, cfg), (zone, target)
+
+
+def test_forecast_score_report(cfg):
+    d = dt.date(2026, 9, 20)
+    models = ["naive_weekly", "naive_daily"]
+    meta = run_forecasts(d, cfg, results_subdir="results/backtest", only_models=models)
+    assert all(r["status"] == "ok" for r in meta["runs"])
+    p = paths(cfg, "results/backtest")
+    fc = pd.read_parquet(p["forecasts"] / d.isoformat() / "naive_daily.parquet")
+    assert len(fc) == 96 * 3 * 3  # quarter-hours x zones x targets
+
+    scores = score_pending(cfg, results_subdir="results/backtest", now=pd.Timestamp("2026-10-01"))
+    assert set(scores["model"]) == set(models)
+    assert (scores.loc[scores.model == "naive_weekly", "rel_mae"].round(9) == 1).all()
+
+    lb = write_report(cfg, results_subdir="results/backtest")
+    assert set(lb.index) == set(models) and p["leaderboard"].exists()
+
+    site = build_site(cfg)
+    summary = json.loads((site / "data" / "summary.json").read_text())
+    assert {r[1] for r in summary["scores"]} == {"backtest"} and summary["days"] == {d.isoformat(): "backtest"}
+    day = json.loads((site / "data" / "days" / f"{d.isoformat()}.json").read_text())
+    assert len(day["series"]["BE_price"]["models"]["naive_daily"]["p"]) == 96
+    assert all((site / f).exists() for f in ["index.html", "app.js", "style.css"])
+
+
+def test_subprocess_model(cfg, tmp_path):
+    """A subprocess model gets gap-free history and its steps land on the delivery grid."""
+    import os
+    import sys
+    from foretec_live.registry import load_models
+    from foretec_live.run import _forecast_external
+
+    root = Path(cfg["_root"])
+    cfg["envs_dir"] = str(tmp_path / "envs")
+    env = tmp_path / "envs" / "dummy" / "bin"
+    env.mkdir(parents=True)
+    (env / "python").write_text(f"#!/bin/sh\nexec {sys.executable} \"$@\"\n")   # a bare symlink would drop the venv
+    (env / "python").chmod(0o755)
+    m = root / "models" / "dummy_ext"
+    m.mkdir()
+    (m / "model.yaml").write_text("name: dummy_ext\nrunner: subprocess\nenv: dummy\n")
+    (m / "forecaster.py").write_text(
+        "import numpy as np\nfrom fl_io import read_request, write_output\n"
+        "req, s = read_request()\n"
+        "write_output(req, {k: (np.full(req['horizon'][k], y[-1]), np.tile(y[-1] + np.arange(9.0), (req['horizon'][k], 1))) for k, y in s.items()})\n")
+    d = dt.date(2026, 9, 20)
+    snaps = take_snapshot(d, cfg, save=False)
+    y = snaps[("BE", "wind")].copy()
+    y.iloc[-20:-15] = float("nan")                      # a short gap must be filled
+    spec = load_models(root / "models", ["dummy_ext"])[0]
+    idx = delivery_index(d, cfg)
+    res = _forecast_external(spec, [(("BE", "wind"), y.dropna())], idx, cfg)[("BE", "wind")]
+    assert not isinstance(res, Exception), res
+    assert list(res["delivery_utc"]) == list(idx) and res["point"].notna().all()
+    assert (res["q0.9"] - res["q0.1"]).eq(8).all()
+
+
+def test_catchup_backtests_new_models(cfg, capsys):
+    """A model folder without backtest results gets backtested; a second pass has nothing to do."""
+    from foretec_live.cli import cmd_catchup
+
+    cfg["backtest"] = {"start": "2026-09-20", "end": "2026-09-21"}
+    root = Path(cfg["_root"])
+    for m in root.glob("models/*/model.yaml"):
+        if m.parent.name not in ("naive_daily", "naive_weekly"):
+            shutil.rmtree(m.parent)
+    cmd_catchup(cfg, None)
+    p = paths(cfg, "results/backtest")
+    assert all((p["forecasts"] / d / f"{m}.parquet").exists() for d in ["2026-09-20", "2026-09-21"] for m in ["naive_daily", "naive_weekly"])
+    capsys.readouterr()
+    cmd_catchup(cfg, None)
+    assert "backtest complete" in capsys.readouterr().out
+
+
+def test_live_run_after_gate_is_not_scored(cfg):
+    """A live run that finishes after the day-ahead gate never gets scored; an on-time one does."""
+    d = dt.date(2026, 9, 20)
+    run_forecasts(d, cfg, only_models=["naive_weekly"])
+    p = paths(cfg)
+    log = p["forecasts"] / d.isoformat() / "_run.json"
+    meta = json.loads(log.read_text())
+    meta["run_finished_utc"] = "2026-09-20 10:30:00+00:00"   # 12:30 Brussels, after the 12:00 gate
+    log.write_text(json.dumps(meta))
+    assert score_pending(cfg, now=pd.Timestamp("2026-10-01")).empty
+    meta["run_finished_utc"] = "2026-09-20 09:35:00+00:00"   # 11:35 Brussels
+    log.write_text(json.dumps(meta))
+    assert len(score_pending(cfg, now=pd.Timestamp("2026-10-01"))) == 9
+
+
+def test_forecast_refuses_after_gate_and_over_locked_day(cfg):
+    from types import SimpleNamespace
+    from foretec_live.cli import cmd_forecast
+
+    late = SimpleNamespace(date=dt.date(2026, 9, 20), models=["naive_weekly"], force=False)
+    assert cmd_forecast(cfg, late) == 1                                   # 2026-09-20 12:00 is long past
+    assert not (paths(cfg)["forecasts"] / "2026-09-20").exists()
+
+
+def test_covariate_building_blocks(cfg):
+    """Run selection respects publication lags (DST-safe), A03 curves repeat, ensemble stats are predico-style."""
+    from foretec_live.covariates import _ensemble_stats, _parse_entsoe, select_run
+
+    nwp = {"icon_eu": {"cycle_hours": 3, "lag_hours": 3.5}, "ecmwf_ifs": {"cycle_hours": 6, "lag_hours": 7}}
+    cfg["covariates"] = {"nwp": {"models": nwp}}
+    # cut-off 11:30 Brussels = 09:30 UTC in summer, 10:30 UTC in winter
+    assert select_run("icon_eu", "2026-09-20", cfg) == pd.Timestamp("2026-09-20 06:00")
+    assert select_run("ecmwf_ifs", "2026-09-20", cfg) == pd.Timestamp("2026-09-20 00:00")
+    assert select_run("icon_eu", "2026-12-01", cfg) == pd.Timestamp("2026-12-01 06:00")
+
+    xml = ('<GL_MarketDocument xmlns="urn:x"><TimeSeries><Period><timeInterval><start>2026-09-20T22:00Z</start>'
+           '<end>2026-09-20T23:00Z</end></timeInterval><resolution>PT15M</resolution>'
+           '<Point><position>1</position><quantity>10</quantity></Point>'
+           '<Point><position>3</position><quantity>30</quantity></Point></Period></TimeSeries></GL_MarketDocument>')
+    s = _parse_entsoe(xml)
+    assert list(s.values) == [10, 10, 30, 30]          # A03: missing positions repeat the previous value
+
+    idx = pd.date_range("2026-09-21", periods=2, freq="15min")
+    wide = pd.DataFrame({"BE.solar.a.shortwave_radiation": [100.0, 0.0], "BE.solar.b.shortwave_radiation": [200.0, 0.0]}, index=idx)
+    st = _ensemble_stats(wide, ["a", "b"])
+    assert st["BE.solar.ens_mean.shortwave_radiation"].tolist() == [150.0, 0.0]
+    assert st["BE.solar.ens_range.shortwave_radiation"].tolist() == [100.0, 0.0]
+    assert st["BE.solar.diff_a_b.shortwave_radiation"].tolist() == [-100.0, 0.0]
+    assert st["BE.solar.ens_cv.shortwave_radiation"].iloc[1] == 0.0   # no division by zero at night
+
+
+def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
+    """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
+    from foretec_live.covariates import fuel_quotes
+
+    monkeypatch.delenv("OIL_PRICE_KEY", raising=False)
+    cache = Path(cfg["_root"]) / "data" / "cache" / "fuel_quotes.parquet"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"time_utc": pd.to_datetime(["2026-09-18", "2026-09-19"]), "code": "TTF_EUR", "price": [70.0, 99.0]}).to_parquet(cache)
+    q = fuel_quotes(cfg, pd.Timestamp("2026-09-19 09:30"))      # cut-off of issue day 2026-09-19
+    assert q["price"].tolist() == [70.0]

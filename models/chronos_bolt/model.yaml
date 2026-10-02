@@ -1,0 +1,7 @@
+name: chronos_bolt
+author: Foretec
+description: Amazon Chronos-Bolt base (205M), zero-shot, last 2048 quarter-hours of history.
+runner: subprocess
+env: chronos
+script: forecaster.py
+family: chronos

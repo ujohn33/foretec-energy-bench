@@ -1,0 +1,6 @@
+name: naive_weekly
+author: Foretec
+description: Same quarter-hour one week earlier. The baseline every entry is measured against.
+estimator: NaiveForecaster
+params: {strategy: last, sp: 672}
+family: baseline

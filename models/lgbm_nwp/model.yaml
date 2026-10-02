@@ -1,0 +1,8 @@
+name: lgbm_nwp
+author: Foretec
+description: LightGBM per series on the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast and calendar; for price also wind/solar in all three zones and fuel cost. Trained on the 28-day window, one model per quantile.
+family: nwp
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: _self
+script: forecaster.py

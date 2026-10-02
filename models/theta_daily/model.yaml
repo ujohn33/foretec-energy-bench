@@ -1,0 +1,5 @@
+name: theta_daily
+author: Foretec
+description: Theta on additively deseasonalised data (daily cycle). Works with zeros and negative prices.
+module: forecaster.py
+family: baseline

@@ -1,0 +1,7 @@
+name: timesfm25
+author: Foretec
+description: Google TimesFM 2.5 (200M), zero-shot, continuous quantile head.
+runner: subprocess
+env: timesfm
+script: forecaster.py
+family: timesfm

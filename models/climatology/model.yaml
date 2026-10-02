@@ -1,0 +1,7 @@
+name: climatology
+author: Foretec
+description: Multi-year climatology. Mean and 10-90th percentiles of all values at the same Brussels time of day within +/-14 calendar days, 2023-01-01 to 2026-08-31 (before the backtest window). No recent information at all.
+family: baseline
+runner: subprocess
+env: _self
+script: forecaster.py

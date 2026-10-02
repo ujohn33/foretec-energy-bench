@@ -1,0 +1,242 @@
+/* Foretec Transparency: same tokens, type and layout as foretec.be */
+:root{
+  --ground:#E6F0F2; --surface:#FFFFFF; --raise:#F1F7F8;
+  --ink:#0B1F3A; --ink2:#4E6578; --rule:#C6D9E0;
+  --blue:#3F6C8B; --blue-ink:#3F6C8B; --blue-soft:#DCE9EF;
+  --amber:#B24B77; --amber-soft:#F7E4EC;
+  --green:#24735A; --green-soft:#D9EDE3;
+  --shadow:0 1px 2px rgba(11,31,58,.06), 0 10px 26px -14px rgba(11,31,58,.28);
+  /* leaderboard additions */
+  --muted:#6B7F8F; --grid:#E3ECEF;
+  --bt:#8D99A4; --bt-ink:#76838F; --bt-soft:#EEF1F3; --band:rgba(11,31,58,.055);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --heat-live-lo:#cde2fb; --heat-live-hi:#184f95; --heat-bt-lo:#F0F2F4; --heat-bt-hi:#5F6B76;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1F3A; --surface:#12294A; --raise:#0E2442;
+    --ink:#E6F0F2; --ink2:#7DAAC7; --rule:#1E3B60;
+    --blue:#7DAAC7; --blue-ink:#9CC3D9; --blue-soft:#152F52;
+    --amber:#FFC1DD; --amber-soft:#2C1A28;
+    --green:#7FCBAA; --green-soft:#12332A;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
+    --muted:#6F8DA6; --grid:#183253;
+    --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --heat-live-lo:#1A3558; --heat-live-hi:#6da7ec; --heat-bt-lo:#172C47; --heat-bt-hi:#93A1AE;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1F3A; --surface:#12294A; --raise:#0E2442;
+  --ink:#E6F0F2; --ink2:#7DAAC7; --rule:#1E3B60;
+  --blue:#7DAAC7; --blue-ink:#9CC3D9; --blue-soft:#152F52;
+  --amber:#FFC1DD; --amber-soft:#2C1A28;
+  --green:#7FCBAA; --green-soft:#12332A;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
+  --muted:#6F8DA6; --grid:#183253;
+  --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --heat-live-lo:#1A3558; --heat-live-hi:#6da7ec; --heat-bt-lo:#172C47; --heat-bt-hi:#93A1AE;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:150px}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:Archivo,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1060px; margin:0 auto; padding:0 28px}
+@media(max-width:560px){ .wrap{padding:0 16px} }
+
+h1,h2{font-family:Archivo,sans-serif; font-weight:700; text-wrap:balance; margin:0}
+h1{font-size:clamp(2.15rem,4.9vw,3.35rem); line-height:1.06; letter-spacing:-.038em}
+h2{font-size:clamp(1.6rem,3vw,2.1rem); line-height:1.14; letter-spacing:-.032em}
+h3{font-family:Archivo,sans-serif; font-size:1.08rem; font-weight:600; letter-spacing:-.018em; margin:0}
+p{margin:0}
+a{color:var(--blue-ink)}
+
+.lede{font-size:1.12rem; color:var(--ink2); line-height:1.62}
+.num{font-family:"Geist Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.mono{font-family:"Geist Mono",ui-monospace,monospace; font-size:.72rem; letter-spacing:.11em; text-transform:uppercase; color:var(--ink2)}
+.code{font-family:"Geist Mono",ui-monospace,monospace; font-size:.86em; color:var(--ink)}
+
+/* ---------- header (foretec.be) ---------- */
+header.top{border-bottom:1px solid var(--rule); background:var(--ground); position:sticky; top:0; z-index:20}
+.top-in{display:flex; align-items:center; justify-content:space-between; gap:20px; height:78px}
+.mark{
+  text-decoration:none;
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-weight:900; font-style:italic; font-size:2.05rem; letter-spacing:-.032em;
+  line-height:1; color:var(--ink);
+}
+@media(max-width:520px){ .mark{font-size:1.6rem} }
+.top-nav{display:flex; gap:24px; align-items:center}
+.top-nav a{font-size:.86rem; color:var(--ink2); text-decoration:none; border-bottom:1px solid transparent; padding-bottom:2px}
+.top-nav a:hover{color:var(--ink); border-bottom-color:var(--rule)}
+.top-nav a.cta{color:var(--ink); font-weight:500; border-bottom-color:var(--blue)}
+@media(max-width:640px){ .top-nav a.hide-sm{display:none} }
+
+/* ---------- hero ---------- */
+.hero{padding-top:78px; padding-bottom:56px}
+.hero .eyebrow{margin-bottom:16px; color:var(--blue-ink)}
+.hero .lede{margin-top:24px; max-width:62ch}
+.facts{display:grid; grid-template-columns:repeat(3,1fr); gap:26px; margin-top:44px}
+@media(max-width:760px){ .facts{grid-template-columns:1fr; gap:22px} }
+.fact hr{border:0; border-top:2px solid var(--rule); margin:0 0 14px}
+.fact .n{font-family:"Geist Mono",monospace; font-size:1.9rem; font-weight:500; letter-spacing:-.02em; color:var(--blue-ink)}
+.fact p{margin-top:8px; font-size:.94rem; color:var(--ink2); line-height:1.55}
+.updated{margin-top:34px}
+.key{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:12px; font-size:.9rem; color:var(--ink2)}
+.key b{color:var(--ink); font-weight:600}
+.key .k-bt,.key .k-live{display:inline-block; width:22px; height:3px; border-radius:2px}
+.key .k-bt{background:var(--bt); border-top:1px dashed var(--bt)}
+.key .k-live{background:linear-gradient(90deg,var(--s1),var(--s2),var(--s3)); margin-left:12px}
+
+/* ---------- filters ---------- */
+.filterbar{position:sticky; top:78px; z-index:15; background:var(--ground); border-bottom:1px solid var(--rule)}
+@media(max-width:820px){ .filterbar{position:static} html{scroll-padding-top:90px} }
+.filters{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 22px; padding-top:12px; padding-bottom:12px}
+.field{display:grid; gap:6px}
+label,.lbl{font-family:"Geist Mono",monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink2)}
+select{
+  font:inherit; font-size:.9rem; color:var(--ink); background:var(--surface); border:1px solid var(--rule); border-radius:2px;
+  padding:7px 32px 7px 10px; appearance:none; cursor:pointer; min-width:120px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234E6578' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 11px center;
+}
+select:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var(--blue)}
+.seg{display:inline-flex; border:1px solid var(--rule); border-radius:2px; background:var(--surface)}
+.seg button{
+  font:inherit; font-size:.86rem; font-weight:500; color:var(--ink2); background:none; border:0; border-left:1px solid var(--rule);
+  border-radius:0; padding:6px 13px; cursor:pointer; white-space:nowrap;
+}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink); background:var(--raise)}
+.seg button[aria-checked="true"]{background:var(--ink); color:var(--ground)}
+.seg button:disabled{opacity:.4; cursor:not-allowed; background:none}
+.seg button:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+
+/* ---------- sections (foretec.be) ---------- */
+section{padding:78px 0; border-top:1px solid var(--rule)}
+#standings{border-top:0; padding-top:40px}
+.sec-head{margin-bottom:34px}
+.sec-head .lede{margin-top:12px; max-width:66ch; font-size:1rem}
+.sec-head.row{display:flex; justify-content:space-between; align-items:flex-end; gap:18px; flex-wrap:wrap}
+.sub-h{margin-top:52px}
+.sub{margin:8px 0 18px; color:var(--ink2); font-size:.94rem; max-width:70ch}
+
+.panel{background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow)}
+.panel + .panel{margin-top:16px}
+.tablewrap{overflow-x:auto}
+.chart-panel{padding:18px 18px 12px; overflow:hidden}
+.panel-head{margin:-18px -18px 14px; padding:14px 18px; border-bottom:1px solid var(--rule); background:var(--raise)}
+.chart-box{position:relative; height:340px}
+.chart-box.tall{height:380px}
+@media(max-width:640px){ .chart-box,.chart-box.tall{height:290px} }
+.legend{display:flex; flex-wrap:wrap; gap:6px 20px; padding:12px 4px 2px; font-family:"Geist Mono",monospace; font-size:.74rem; color:var(--ink2)}
+.legend button{display:flex; align-items:center; gap:7px; background:none; border:0; padding:2px 0; color:inherit; font:inherit; cursor:pointer; border-radius:0}
+.legend button:hover{color:var(--ink); opacity:1}
+.legend button[aria-pressed="false"]{opacity:.38; text-decoration:line-through}
+.legend i{display:inline-block; width:22px; border-top:2.4px solid currentColor}
+.legend .actual i{border-top:3px solid var(--ink)}
+
+/* ---------- podium ---------- */
+.podium{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-bottom:18px}
+@media(max-width:820px){ .podium{grid-template-columns:1fr} }
+.pod{background:var(--surface); border:1px solid var(--rule); border-radius:3px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px}
+.pod.lead{border-color:var(--blue); box-shadow:var(--shadow)}
+.pod-top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.pod .place{font-family:"Geist Mono",monospace; font-size:.72rem; letter-spacing:.11em; text-transform:uppercase; color:var(--ink2)}
+.pod .name{font-weight:600; font-size:1.2rem; letter-spacing:-.018em; display:flex; align-items:center; gap:9px}
+.pod .name i{width:10px; height:10px; border-radius:50%; display:inline-block; flex:none}
+.pod .stats{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--rule); padding-top:12px}
+.pod .stat span{display:block; font-family:"Geist Mono",monospace; font-size:.64rem; letter-spacing:.11em; text-transform:uppercase; color:var(--ink2)}
+.pod .stat b{display:block; font-family:"Geist Mono",monospace; font-size:1.45rem; font-weight:500; letter-spacing:-.02em; color:var(--blue-ink); margin-top:2px}
+.is-bt .pod{background:var(--bt-soft); box-shadow:none}
+.is-bt .pod.lead{border-color:var(--bt)}
+.is-bt .pod .name,.is-bt .pod .stat b{color:var(--bt-ink)}
+.tag{font-family:"Geist Mono",monospace; font-size:.64rem; letter-spacing:.11em; text-transform:uppercase; padding:3px 7px; border-radius:2px; white-space:nowrap}
+.tag.bt{background:var(--bt-soft); color:var(--bt-ink); border:1px solid var(--rule)}
+.tag.live{background:var(--blue-soft); color:var(--blue-ink)}
+.tag.pending{color:var(--ink2); border:1px dashed var(--rule)}
+
+/* ---------- tables (foretec.be) ---------- */
+table{width:100%; border-collapse:collapse; font-size:.89rem}
+th{text-align:left; font-family:"Geist Mono",monospace; font-size:.67rem; letter-spacing:.11em; text-transform:uppercase; color:var(--ink2); font-weight:400; border-bottom:1px solid var(--rule); padding:14px 16px 10px; white-space:nowrap; background:var(--raise)}
+td{border-bottom:1px solid var(--rule); padding:11px 16px; vertical-align:middle; line-height:1.5; white-space:nowrap}
+td:first-child{font-weight:600}
+tr:last-child td{border-bottom:0}
+th.r,td.r{text-align:right}
+td.v{font-family:"Geist Mono",monospace; font-size:.85rem; font-variant-numeric:tabular-nums}
+td.v.best{color:var(--blue-ink); font-weight:500}
+td.model i{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:9px}
+td.desc{color:var(--ink2); white-space:normal; min-width:280px; font-weight:400}
+td.kind{font-family:"Geist Mono",monospace; font-size:.8rem; color:var(--ink2); font-weight:400}
+tr.is-bt td,tr.is-bt td.v.best{color:var(--bt-ink)}
+tr.is-bt td.v.best{font-weight:600}
+td.pos{font-family:"Geist Mono",monospace; font-weight:500; color:var(--ink2); width:36px}
+.bar{display:flex; align-items:center; gap:12px; min-width:190px}
+.bar span{height:6px; border-radius:1px}
+.bar b{font-family:"Geist Mono",monospace; font-weight:500; font-size:.85rem}
+td.empty{padding:28px; text-align:center; color:var(--ink2); font-weight:400; white-space:normal}
+
+.heat th,.heat td{text-align:center; padding:8px 6px}
+.heat th:first-child,.heat td:first-child{text-align:left; padding-left:16px; position:sticky; left:0; z-index:1}
+.heat td:first-child{background:var(--surface)}
+.heat td.cell{font-family:"Geist Mono",monospace; font-size:.76rem; min-width:40px; border:2px solid var(--surface)}
+.heat th.is-bt{color:var(--bt-ink)}
+.heat th.live{color:var(--blue-ink); font-weight:500}
+.heat td.avg{font-family:"Geist Mono",monospace; font-weight:500}
+
+/* ---------- explorer ---------- */
+.x-meta{display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; padding:0 4px 12px}
+.x-meta b{color:var(--ink); font-weight:500}
+#x-card.is-bt{background:var(--bt-soft)}
+#x-card.is-bt .panel-head{background:transparent}
+.x-table{margin:14px -18px -12px; border-top:1px solid var(--rule)}
+
+/* ---------- method (foretec.be steps) ---------- */
+ol.steps{list-style:none; padding:0; margin:0}
+ol.steps li{display:grid; grid-template-columns:58px 1fr; gap:20px; padding:22px 0; border-bottom:1px solid var(--rule)}
+ol.steps li:first-child{border-top:1px solid var(--rule)}
+@media(max-width:600px){ ol.steps li{grid-template-columns:40px 1fr; gap:14px} }
+ol.steps .st{font-family:"Geist Mono",monospace; font-size:.78rem; color:var(--ink2); padding-top:4px}
+ol.steps p{margin-top:6px; color:var(--ink2); font-size:.95rem; max-width:72ch}
+
+/* ---------- footer (foretec.be) ---------- */
+footer{border-top:1px solid var(--rule); padding:36px 0 60px; color:var(--ink2); font-size:.85rem}
+.foot{display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap}
+.foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink)}
+
+.tip{display:none}
+@media (prefers-reduced-motion:reduce){ *{animation:none !important; transition:none !important} html{scroll-behavior:auto} }
+
+/* compact status in the filter bar (replaces the hero) */
+.status{margin-left:auto; display:grid; gap:6px; justify-items:end; font-size:.66rem; padding-bottom:4px}
+.status .key{display:flex; align-items:center; gap:8px; margin:0; font-size:inherit; color:var(--ink2)}
+.status .key i{display:inline-block; width:18px; height:0; border-top:2px solid}
+.status .key .k-bt{border-top:2px dashed var(--bt); background:none}
+.status .key .k-live{border-image:linear-gradient(90deg,var(--s1),var(--s2),var(--s3)) 1; margin-left:6px; background:none}
+@media(max-width:820px){ .status{margin-left:0; justify-items:start} }
+
+/* top-N slider */
+.range{display:flex; align-items:center; gap:12px; height:34px}
+.range input[type=range]{width:150px; margin:0; accent-color:var(--ink)}
+.range input[type=range]:focus-visible{outline:2px solid var(--blue); outline-offset:4px}
+.range span{font-size:.68rem; min-width:7.5em; color:var(--ink)}
+
+/* inputs */
+.map-panel{padding:0; overflow:hidden}
+#map{height:460px; background:var(--raise)}
+#map .leaflet-tile-pane{filter:saturate(.35) contrast(.92)}
+.map-panel .legend{padding:10px 16px}
+.legend .dot{width:10px; height:10px; border-radius:50%; border:0; display:inline-block}
+.zone-tag{font-size:.9rem; color:var(--ink); padding-top:6px}
+.cov-note{margin:6px 4px 0; font-size:.86rem}
+td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
+.chip{display:inline-block; font-family:"Geist Mono",monospace; font-size:.64rem; letter-spacing:.06em; text-transform:uppercase;
+  padding:2px 6px; margin:1px 3px 1px 0; border:1px solid var(--rule); border-radius:2px; color:var(--ink2); background:var(--raise)}
+.chip.on{color:var(--blue-ink); background:var(--blue-soft); border-color:transparent}
+.leaflet-container{font-family:Archivo,sans-serif}
+.leaflet-tooltip{font-family:"Geist Mono",monospace; font-size:.72rem}

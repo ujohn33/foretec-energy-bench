@@ -1,0 +1,7 @@
+name: toto
+author: Foretec
+description: Datadog Toto Open Base 1.0 (151M), zero-shot, 128 sample paths.
+runner: subprocess
+env: toto
+script: forecaster.py
+family: toto

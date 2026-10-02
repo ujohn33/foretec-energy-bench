@@ -1,0 +1,50 @@
+# Foretec Live: benchmark definition. Changing anything here changes the benchmark; version it.
+timezone: Europe/Brussels
+issue_time: "11:30"          # data cut-off and model run, D-1 local time
+gate: "12:00"                # SDAC day-ahead gate closure: live forecasts must be locked before it
+resolution: 15min
+quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+context_days: 28             # history handed to every model
+baseline: naive_weekly       # reference for relative MAE (skill)
+rolling_days: 28             # leaderboard window
+backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
+
+envs_dir: ../envs             # one Python env per subprocess model family (see models/*/install.sh)
+
+covariates:                   # what covariate models may use; frozen per issue day in data/covariates/
+  centroids: geo/centroids.csv    # capacity-weighted k-means centroids per zone and bucket (see geo/README.md)
+  nwp:
+    host: https://customer-single-runs-api.open-meteo.com/v1/forecast   # OPENMETEOKEY; public host without a key
+    forecast_hours: 60
+    tilt: 35
+    # a run counts only if init <= cut-off - lag_hours (Open-Meteo publication delay plus margin)
+    models:
+      icon_eu:      {label: "ICON-EU (DWD)",     cycle_hours: 3, lag_hours: 3.5}
+      gfs_seamless: {label: "GFS (NOAA)",        cycle_hours: 6, lag_hours: 7}
+      ecmwf_ifs:    {label: "IFS HRES (ECMWF)",  cycle_hours: 6, lag_hours: 7}
+
+source: energycharts         # energycharts (no key) | entsoe (needs ENTSOE_API_KEY) | synthetic (tests)
+
+zones:
+  BE: {energycharts_bzn: BE, energycharts_country: be, entsoe: "10YBE----------2"}
+  NL: {energycharts_bzn: NL, energycharts_country: nl, entsoe: "10YNL----------L"}
+  FR: {energycharts_bzn: FR, energycharts_country: fr, entsoe: "10YFR-RTE------C"}
+
+targets:
+  price:
+    unit: EUR/MWh
+    # Day-ahead prices for D-1 are published on D-2 around 13:00, so at D-1 10:00
+    # the full price history up to the start of D is already known.
+    available_until: delivery_start
+    score_after: "14:30"     # same day as issue: D prices are out ~13:00 on D-1
+  wind:
+    unit: MW
+    # Actual generation is published with a lag; only data older than issue time minus lag may be used.
+    available_until: issue_time
+    publication_lag: 1h
+    score_after_days: 2      # actuals settle; score on D+2
+  solar:
+    unit: MW
+    available_until: issue_time
+    publication_lag: 1h
+    score_after_days: 2

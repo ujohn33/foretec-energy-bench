@@ -1,0 +1,7 @@
+name: moirai2
+author: Foretec
+description: Salesforce Moirai 2.0 small, zero-shot quantile forecasts.
+runner: subprocess
+env: moirai
+script: forecaster.py
+family: moirai

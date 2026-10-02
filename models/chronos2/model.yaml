@@ -1,0 +1,7 @@
+name: chronos2
+author: Foretec
+description: Amazon Chronos-2 (120M), zero-shot on the target's own history, native quantile head.
+runner: subprocess
+env: chronos
+script: forecaster.py
+family: chronos

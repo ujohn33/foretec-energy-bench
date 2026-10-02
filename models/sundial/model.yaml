@@ -1,0 +1,7 @@
+name: sundial
+author: Foretec
+description: Tsinghua Sundial base (128M), zero-shot generative, 50 sample paths.
+runner: subprocess
+env: sundial
+script: forecaster.py
+family: sundial

@@ -1,0 +1,214 @@
+"""Static website: copy the page template and export the data it reads.
+
+site/
+  index.html, app.js, style.css      copied from foretec_live/web/
+  data/summary.json                  every score row (live and backtest), models, config
+  data/days/<issue_date>.json        actuals + every model's forecast for one issue day
+Live results win over backtest results for the same issue day.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import json
+import logging
+import shutil
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from .config import paths
+from .registry import load_models
+from .timeutil import delivery_date, delivery_index, local_now
+
+log = logging.getLogger(__name__)
+WEB = Path(__file__).parent / "web"
+PHASES = {"backtest": "results/backtest", "live": "results"}
+BAND = ("q0.1", "q0.9")
+
+
+def _round(a, nd=1):
+    a = np.asarray(a, dtype=float)
+    return [None if not np.isfinite(v) else round(float(v), nd) for v in a]
+
+
+def _scores(cfg) -> pd.DataFrame:
+    frames = []
+    for phase, sub in PHASES.items():
+        f = paths(cfg, sub)["scores"]
+        if f.exists():
+            frames.append(pd.read_parquet(f).assign(phase=phase))
+    if not frames:
+        return pd.DataFrame()
+    s = pd.concat(frames, ignore_index=True)
+    s["issue_date"] = s["issue_date"].astype(str)
+    live_days = set(s.loc[s["phase"] == "live", "issue_date"])
+    return s[(s["phase"] == "live") | ~s["issue_date"].isin(live_days)]
+
+
+def _forecast_days(cfg) -> dict[str, tuple[str, Path]]:
+    """issue_date -> (phase, folder); live wins."""
+    days = {}
+    for phase, sub in PHASES.items():
+        root = paths(cfg, sub)["forecasts"]
+        if root.exists():
+            for d in sorted(root.iterdir()):
+                if d.is_dir():
+                    days[d.name] = (phase, d)
+    return days
+
+
+def _day_json(issue_date: str, folder: Path, cfg) -> dict:
+    p = paths(cfg)
+    idx = delivery_index(issue_date, cfg)
+    out = {"issue_date": issue_date, "delivery_date": str(delivery_date(issue_date)),
+           "t0": idx[0].isoformat() + "Z", "n": len(idx), "series": {}}
+    fcs = [pd.read_parquet(f) for f in sorted(folder.glob("*.parquet"))]
+    fc = pd.concat(fcs, ignore_index=True) if fcs else pd.DataFrame()
+    for zone in cfg["zones"]:
+        for target in cfg["targets"]:
+            key = f"{zone}_{target}"
+            a = p["actuals"] / out["delivery_date"] / f"{key}.parquet"
+            actual = pd.read_parquet(a)["value"].reindex(idx) if a.exists() else pd.Series(np.nan, index=idx)
+            entry = {"actual": _round(actual) if actual.notna().any() else None, "models": {}}
+            if not fc.empty:
+                sub = fc[(fc["zone"] == zone) & (fc["target"] == target)]
+                for model, g in sub.groupby("model"):
+                    g = g.set_index("delivery_utc").reindex(idx)
+                    m = {"p": _round(g["point"])}
+                    if all(c in g.columns for c in BAND) and g[BAND[0]].notna().any():
+                        m["lo"], m["hi"] = _round(g[BAND[0]]), _round(g[BAND[1]])
+                    entry["models"][model] = m
+            out["series"][key] = entry
+    out["inputs"] = _day_inputs(issue_date, idx, cfg)
+    return out
+
+
+# key covariates shown on the site: (label, column template, unit)
+SHOWN_COVARIATES = [
+    ("wind_on", "Wind onshore, 100 m wind speed", "{z}.wind_onshore.{m}.wind_speed_100m", "m/s"),
+    ("wind_off", "Wind offshore, 100 m wind speed", "{z}.wind_offshore.{m}.wind_speed_100m", "m/s"),
+    ("gti", "Solar, tilted irradiance", "{z}.solar.{m}.global_tilted_irradiance", "W/m²"),
+    ("cloud", "Solar, cloud cover", "{z}.solar.{m}.cloud_cover", "%"),
+    ("temp", "Load centres, temperature", "{z}.load.{m}.temperature_2m", "°C"),
+]
+
+
+def _day_inputs(issue_date: str, idx, cfg) -> dict | None:
+    """What covariate models received for this issue day, as frozen at the cut-off."""
+    d = Path(cfg["_root"]) / "data" / "covariates"
+    f, fm = d / f"{issue_date}.parquet", d / f"{issue_date}.json"
+    if not (f.exists() and fm.exists()):
+        return None
+    meta = json.loads(fm.read_text())
+    cov = pd.read_parquet(f).reindex(idx)
+    models = list(meta.get("nwp_models", {}))
+    shown = {}
+    for zone in cfg["zones"]:
+        z = {}
+        for key, label, tmpl, unit in SHOWN_COVARIATES:
+            members = {m: _round(cov[tmpl.format(z=zone, m=m)], 2) for m in models if tmpl.format(z=zone, m=m) in cov}
+            if members:
+                z[key] = {"label": label, "unit": unit, "members": members}
+        col = f"{zone}.load_fc.entsoe.load_mw"
+        if col in cov and cov[col].notna().any():
+            z["load_fc"] = {"label": "ENTSO-E day-ahead load forecast", "unit": "MW", "members": {"entsoe": _round(cov[col], 0)}}
+        if "fuel.ccgt.srmc.eur_mwh" in cov and cov["fuel.ccgt.srmc.eur_mwh"].notna().any():
+            z["fuel"] = {"label": "CCGT fuel cost (TTF/0.52 + 0.37 x EUA)", "unit": "EUR/MWh", "members": {"fuel": _round(cov["fuel.ccgt.srmc.eur_mwh"], 2)}}
+        shown[zone] = z
+    # published download: the delivery-day slice every covariate model saw for D (earlier days are in earlier files)
+    dl = Path(cfg["_root"]) / "site" / "data" / "inputs"
+    dl.mkdir(parents=True, exist_ok=True)
+    cov.to_csv(dl / f"{issue_date}_covariates.csv.gz", float_format="%.3f", compression="gzip")
+    (dl / f"{issue_date}_inputs.json").write_text(json.dumps(meta, indent=1))
+    return {
+        "cutoff_utc": meta["cutoff_utc"],
+        "runs": [r for r in meta["nwp_runs"] if r["issue_date"] == issue_date],
+        "nwp_models": meta["nwp_models"],
+        "load_forecast": meta["load_forecast"],
+        "fuel": meta["fuel"],
+        "n_columns": meta["columns"],
+        "shown": shown,
+        "download": {"covariates": f"data/inputs/{issue_date}_covariates.csv.gz", "meta": f"data/inputs/{issue_date}_inputs.json"},
+    }
+
+
+def _covariate_summary(cfg) -> dict | None:
+    ccfg = cfg.get("covariates")
+    if not ccfg:
+        return None
+    out = {"nwp_models": ccfg["nwp"]["models"], "centroids": [], "sources_doc": None}
+    f = Path(cfg["_root"]) / ccfg["centroids"]
+    if f.exists():
+        c = pd.read_csv(f)
+        out["centroids"] = [{"zone": r.zone, "bucket": r.bucket, "lat": round(r.latitude, 4), "lon": round(r.longitude, 4),
+                             "weight": round(float(r.weight), 1), "n": int(r.unit_count), "source": getattr(r, "source", "")}
+                            for r in c.itertuples()]
+        readme = f.parent / "README.md"
+        if readme.exists():   # published verbatim so every centroid source is inspectable
+            (Path(cfg["_root"]) / "site" / "data").mkdir(parents=True, exist_ok=True)
+            shutil.copy2(readme, Path(cfg["_root"]) / "site" / "data" / "centroids_README.md")
+            shutil.copy2(f, Path(cfg["_root"]) / "site" / "data" / "centroids.csv")
+            out["sources_doc"] = "data/centroids_README.md"
+    return out
+
+
+def build_site(cfg) -> Path:
+    p = paths(cfg)
+    site = p["site"]
+    (site / "data" / "days").mkdir(parents=True, exist_ok=True)
+    for f in WEB.iterdir():
+        if f.is_file():
+            shutil.copy2(f, site / f.name)
+    # cache-busting: browsers must pick up a new app.js/style.css as soon as it is deployed
+    html = (site / "index.html").read_text()
+    for name in ("app.js", "style.css"):
+        digest = hashlib.sha1((site / name).read_bytes()).hexdigest()[:10]
+        html = html.replace(f'"{name}"', f'"{name}?v={digest}"')
+    (site / "index.html").write_text(html)
+    # old single-table page: point it at the new site
+    (site / "backtest.html").write_text('<!doctype html><meta http-equiv="refresh" content="0;url=./#standings">')
+
+    s = _scores(cfg)
+    cols = ["issue_date", "phase", "model", "zone", "target", "mae", "rmse", "bias", "pinball", "rel_mae"]
+    rows = [] if s.empty else [
+        [r.issue_date, r.phase, r.model, r.zone, r.target] + _round([r.mae, r.rmse, r.bias, r.pinball], 2) + _round([r.rel_mae], 4)
+        for r in s[cols].itertuples(index=False)
+    ]
+    days = _forecast_days(cfg)
+    settled = str(local_now(cfg).date() - dt.timedelta(days=4))
+    for issue_date, (phase, folder) in days.items():
+        f = site / "data" / "days" / f"{issue_date}.json"
+        # older days rarely change: rewrite only recent ones, or when forecasts/inputs are newer than the page data
+        if f.exists() and issue_date < settled:
+            sources = list(folder.glob("*.parquet")) + list((Path(cfg["_root"]) / "data" / "covariates").glob(f"{issue_date}.*"))
+            if max((x.stat().st_mtime for x in sources), default=0) <= f.stat().st_mtime:
+                continue
+        js = _day_json(issue_date, folder, cfg)
+        js["phase"] = phase
+        f.write_text(json.dumps(js, separators=(",", ":"), allow_nan=False))
+
+    models = []
+    for spec in load_models(p["models"]):
+        r = spec.raw
+        models.append({"name": spec.name, "author": r.get("author", ""), "description": r.get("description", ""),
+                       "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
+                       "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess" else (r.get("estimator") or r.get("module", ""))})
+    summary = {
+        "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
+        "config": {
+            "zones": list(cfg["zones"]),
+            "targets": {t: {"unit": v["unit"]} for t, v in cfg["targets"].items()},
+            "issue_time": cfg["issue_time"], "gate": cfg.get("gate", cfg["issue_time"]), "timezone": cfg["timezone"], "baseline": cfg["baseline"],
+            "context_days": cfg["context_days"], "source": cfg["source"],
+        },
+        "models": models,
+        "covariates": _covariate_summary(cfg),
+        "score_columns": cols,
+        "scores": rows,
+        "days": {d: ph for d, (ph, _) in days.items()},
+    }
+    (site / "data" / "summary.json").write_text(json.dumps(summary, separators=(",", ":"), allow_nan=False))
+    log.info("site: %d score rows, %d forecast days", len(rows), len(days))
+    return site
