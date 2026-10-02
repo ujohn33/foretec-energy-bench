@@ -6,4 +6,3 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: moirai
 script: forecaster.py
-enabled: false

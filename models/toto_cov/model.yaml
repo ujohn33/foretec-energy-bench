@@ -6,4 +6,3 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: toto
 script: forecaster.py
-enabled: false

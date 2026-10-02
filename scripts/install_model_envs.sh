@@ -9,7 +9,7 @@ mkdir -p "$E/_logs"
 CPU=(--index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match)
 declare -A PKGS=(
   [chronos]="chronos-forecasting>=2.0"
-  [timesfm]="timesfm[torch] @ git+https://github.com/google-research/timesfm.git"
+  [timesfm]="timesfm[torch,xreg] @ git+https://github.com/google-research/timesfm.git"
   [moirai]="uni2ts @ git+https://github.com/SalesforceAIResearch/uni2ts.git"
   [tirex]="tirex-ts"
   [toto]="toto-ts|setuptools<81"
