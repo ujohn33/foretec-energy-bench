@@ -1,0 +1,9 @@
+name: timesfm25_cov
+author: Foretec
+description: "TimesFM 2.5 with in-context linear regression on the covariates (xreg + timesfm): a ridge fit on the history explains what the covariates can, TimesFM forecasts the rest."
+family: timesfm
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: timesfm
+script: forecaster.py
+enabled: false

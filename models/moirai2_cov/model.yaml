@@ -1,0 +1,9 @@
+name: moirai2_cov
+author: Foretec
+description: Moirai 2.0 small zero-shot with known-future covariates as feat_dynamic_real.
+family: moirai
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: moirai
+script: forecaster.py
+enabled: false

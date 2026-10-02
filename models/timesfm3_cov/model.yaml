@@ -1,0 +1,9 @@
+name: timesfm3_cov
+author: Foretec
+description: TimesFM 3.0 zero-shot with its native known-future covariates (NWP ensemble means/spreads, ENTSO-E load forecast, fuel cost).
+family: timesfm
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: timesfm
+script: forecaster.py
+enabled: false

@@ -1,0 +1,9 @@
+name: toto_cov
+author: Foretec
+description: Toto Open Base 1.0 zero-shot, covariates as extra variates with their known future values injected while decoding.
+family: toto
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: toto
+script: forecaster.py
+enabled: false

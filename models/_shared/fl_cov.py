@@ -55,3 +55,20 @@ def calendar(index: pd.DatetimeIndex, tz: str = "Europe/Brussels") -> pd.DataFra
 
 def future_index(last: pd.Timestamp, steps: int) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(last + pd.Timedelta("15min") * np.arange(1, steps + 1))
+
+
+def series_frames(req: dict, cov: pd.DataFrame, inp: pd.DataFrame, key: str):
+    """(t_hist, t_fut, past covariates [T x k], future covariates [H x k], names) for one series, gap-filled."""
+    zone, target = key.split("_")
+    t_hist = pd.DatetimeIndex(inp.loc[inp["series"] == key, "time_utc"].sort_values())
+    t_fut = future_index(t_hist[-1], req["horizon"][key])
+    cols = compact_features(cov.columns, zone, target)
+    c = cov.reindex(t_hist.append(t_fut))[cols].interpolate(limit_direction="both").fillna(0.0)
+    return t_hist, t_fut, c.loc[t_hist].to_numpy(np.float32), c.loc[t_fut].to_numpy(np.float32), cols
+
+
+def nonneg(key: str, point, q):
+    """Generation cannot be negative; prices can."""
+    if key.endswith("price"):
+        return point, q
+    return np.clip(point, 0, None), (None if q is None else np.clip(q, 0, None))
