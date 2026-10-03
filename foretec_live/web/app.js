@@ -560,7 +560,7 @@
     const order = Object.keys(runs).map(Number).sort((a, b) => a - b);
     order.forEach((u, k) => mark(3, u + off, "in", `${runs[u].join(" + ")} ${String(u).padStart(2, "0")} UTC run`, { row: k % 2 ? 50 : 22, side: k % 2 ? "left" : "right" }));
     mark(3, gate - 2, "in", `ENTSO-E load forecast, by ${hh(gate - 2)}`, { row: 50, side: "right" });
-    mark(3, -0.5, "in", "fuel: last quote dated D−2", { row: 22, side: "left" });
+    mark(3, -0.5, "in", "fuel quote ≤ D−2", { row: 22, side: "left" });
     // cut-off and gate over everything (row 2 labels)
     out.push(`<line class="cut" x1="${x(cut)}" x2="${x(cut)}" y1="${top - 34}" y2="${Hh}"/>`);
     out.push(`<line class="gate" x1="${x(gate)}" x2="${x(gate)}" y1="${top - 34}" y2="${Hh}"/>`);
