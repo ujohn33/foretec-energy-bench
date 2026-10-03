@@ -508,62 +508,64 @@
   function renderTimeline() {
     const T = D.timeline;
     if (!T) return;
-    // hours relative to D-1 00:00 Brussels; the D-1 morning around cut-off and gate gets most of the width
-    const H = [-24, 0, 7, 16, 24, 48, 72, 96], F = [0, 0.07, 0.11, 0.56, 0.62, 0.80, 0.90, 1];
-    const W = 1000, L = 128, R = 18, top = 54, laneH = 64;
+    // hours relative to D-1 00:00 Brussels; all of D-1 up to 16:00 is zoomed in (runs, cut-off, gate, auction)
+    const H = [-24, 0, 16, 24, 48, 72, 96], F = [0, 0.06, 0.58, 0.64, 0.80, 0.90, 1];
+    const W = 1000, L = 128, R = 14, top = 74, laneH = 70;
     const x = (h) => { let i = 0; while (i < H.length - 2 && h > H[i + 1]) i++; const f = F[i] + (F[i + 1] - F[i]) * (Math.min(Math.max(h, H[i]), H[i + 1]) - H[i]) / (H[i + 1] - H[i]); return L + f * (W - L - R); };
     const lanes = ["Price", "Wind", "Solar", "Inputs"];
     const y = (i) => top + i * laneH;
-    const Hh = top + lanes.length * laneH + 8;
+    const Hh = top + lanes.length * laneH + 6;
     const cut = hm(T.issue_time), gate = hm(T.gate), off = brusselsOffset();
     const sched = T.schedule || {};
     const scores = (sched.score || ["14:45"]).map(hm);
+    const hh = (h) => `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
     const out = [];
     const txt = (xx, yy, t, cls = "", anchor = "middle") => out.push(`<text x="${xx.toFixed(1)}" y="${yy}" text-anchor="${anchor}" class="${cls}">${esc(t)}</text>`);
-    // day bands
+    // day bands and labels (row 1)
     [[-24, 0, "D−2"], [0, 24, "D−1 · issue day"], [24, 48, "D · delivery"], [48, 72, "D+1"], [72, 96, "D+2"]].forEach(([a, b, lab], i) => {
-      out.push(`<rect class="band${a === 24 ? " delivery" : ""}" x="${x(a)}" y="${top - 6}" width="${x(b) - x(a)}" height="${Hh - top}" opacity="${a === 24 ? 1 : i % 2 ? 0.55 : 0}"/>`);
-      txt((x(a) + x(b)) / 2, 18, lab, "day");
+      out.push(`<rect class="band${a === 24 ? " delivery" : ""}" x="${x(a)}" y="${top - 8}" width="${x(b) - x(a)}" height="${Hh - top + 8}" opacity="${a === 24 ? 1 : i % 2 ? 0.55 : 0}"/>`);
+      txt((x(a) + x(b)) / 2, 16, lab, "day");
     });
-    // zoomed hours on D-1
-    [8, 10, 12, 14].forEach((h) => { out.push(`<line class="grid" x1="${x(h)}" x2="${x(h)}" y1="${top - 6}" y2="${Hh}" opacity=".5"/>`); txt(x(h), top - 12, `${String(h).padStart(2, "0")}:00`); });
-    [7, 16].forEach((h) => out.push(`<line class="break" x1="${x(h)}" x2="${x(h)}" y1="${top - 6}" y2="${Hh}"/>`));
-    lanes.forEach((lab, i) => { txt(16, y(i) + laneH / 2 + 4, lab, "lane", "start"); out.push(`<line class="grid" x1="${L}" x2="${W - R}" y1="${y(i) + laneH}" y2="${y(i) + laneH}"/>`); });
-    const bar = (i, a, b, cls, label, dy = 0) => {
-      const yy = y(i) + 14 + dy;
-      out.push(`<rect class="${cls}" x="${x(a)}" y="${yy}" width="${Math.max(2, x(b) - x(a))}" height="12" rx="1"/>`);
-      if (label) txt(x(a) + 6, yy + 25, label, "", "start");
+    // hour ticks inside the zoom (row 3)
+    [0, 4, 8, 12, 16].forEach((h) => { out.push(`<line class="grid" x1="${x(h)}" x2="${x(h)}" y1="${top - 8}" y2="${Hh}" opacity=".45"/>`); txt(x(h), top - 14, hh(h)); });
+    out.push(`<line class="break" x1="${x(16)}" x2="${x(16)}" y1="${top - 8}" y2="${Hh}"/>`);
+    lanes.forEach((lab, i) => { txt(14, y(i) + laneH / 2 + 4, lab, "lane", "start"); out.push(`<line class="grid" x1="${L}" x2="${W - R}" y1="${y(i) + laneH}" y2="${y(i) + laneH}"/>`); });
+    const bar = (i, a, b, cls, label) => {
+      out.push(`<rect class="${cls}" x="${x(a)}" y="${y(i) + 10}" width="${Math.max(2, x(b) - x(a))}" height="11" rx="1"/>`);
+      if (label) txt(x(a) + 4, y(i) + 35, label, "", "start");
     };
-    const mark = (i, h, cls, label, dy = 0, shape = "circle") => {
-      const yy = y(i) + 20 + dy, xx = x(h);
+    // markers on row A (y+50) or B (y+20 for inputs); label beside the marker
+    const mark = (i, h, cls, label, { row = 50, side = "right", shape = "circle" } = {}) => {
+      const yy = y(i) + row, xx = x(h);
       out.push(shape === "diamond" ? `<path class="mk ${cls}" d="M${xx} ${yy - 6} L${xx + 6} ${yy} L${xx} ${yy + 6} L${xx - 6} ${yy} Z"/>` : `<circle class="mk ${cls}" cx="${xx}" cy="${yy}" r="5"/>`);
-      if (label) txt(xx, yy + 22, label);
+      if (label) txt(side === "right" ? xx + 10 : xx - 10, yy + 4, label, "", side === "right" ? "start" : "end");
     };
     // price: everything up to the end of D-1 is known (cleared on D-2); D's prices clear just after the gate
-    bar(0, -24, 24, "hist", "history: prices to the end of D−1 (cleared on D−2)");
-    mark(0, 12.9, "pub", "D prices published ~12:55", -2);
-    scores.forEach((h, k) => mark(0, h, "score", k ? "" : `scored ${sched.score.join(" / ")}`, -2, "diamond"));
-    // wind and solar: measured up to the cut-off minus the publication lag; actuals arrive during D
+    bar(0, -24, 24, "hist", "history: all prices to the end of D−1, cleared on D−2");
+    mark(0, 12.9, "pub", "D prices published ~12:55", { side: "left" });
+    scores.forEach((h, k) => mark(0, h, "score", k === scores.length - 1 ? `scored ${(sched.score || []).join(" and ")}` : "", { shape: "diamond" }));
+    // wind and solar: metered up to the cut-off minus the publication lag; actuals arrive during D
     ["wind", "solar"].forEach((t, k) => {
-      const lag = (T.lag_hours[t] || 0), days = T.score_after_days[t] || 2;
-      bar(k + 1, -24, cut - lag, "hist", `history: metered to ${String(Math.floor(cut - lag)).padStart(2, "0")}:${String(Math.round(((cut - lag) % 1) * 60)).padStart(2, "0")} (cut-off − ${lag} h)`);
-      bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D (~${lag} h lag)`);
-      mark(k + 1, 24 * (days + 1) + scores[0], "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, -2, "diamond");
+      const lag = T.lag_hours[t] || 0, days = T.score_after_days[t] || 2;
+      bar(k + 1, -24, cut - lag, "hist", `history: metered to ${hh(cut - lag)} (cut-off − ${lag} h)`);
+      bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D, ~${lag} h lag`);
+      mark(k + 1, 24 * (days + 1) + scores[0], "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, { side: "left", shape: "diamond" });
     });
     // inputs: the runs the cut-off rule admits, the ENTSO-E load forecast and the fuel quote
     const runs = {};
-    for (const [m, v] of Object.entries(T.nwp)) {
+    for (const v of Object.values(T.nwp)) {
       const initUtc = Math.floor((cut - off - v.lag_hours) / v.cycle_hours) * v.cycle_hours;
       (runs[initUtc] ||= []).push(v.label.split(" ")[0]);
     }
-    Object.entries(runs).forEach(([u, labs], k) => mark(3, Number(u) + off, "in", `${labs.join(", ")} ${String(u).padStart(2, "0")} UTC`, k % 2 ? 20 : -2));
-    mark(3, gate - 2, "in", "ENTSO-E load fc ≤ " + `${String(gate - 2).padStart(2, "0")}:00`, 20);
-    mark(3, -1, "in", "fuel: quote dated ≤ D−2", -2);
-    // cut-off and gate on top of everything
-    out.push(`<line class="cut" x1="${x(cut)}" x2="${x(cut)}" y1="${top - 30}" y2="${Hh}"/>`);
-    out.push(`<line class="gate" x1="${x(gate)}" x2="${x(gate)}" y1="${top - 30}" y2="${Hh}"/>`);
-    txt(x(cut) - 4, top - 26, `cut-off ${T.issue_time}`, "", "end");
-    txt(x(gate) + 4, top - 26, `gate ${T.gate}`, "", "start");
+    const order = Object.keys(runs).map(Number).sort((a, b) => a - b);
+    order.forEach((u, k) => mark(3, u + off, "in", `${runs[u].join(" + ")} ${String(u).padStart(2, "0")} UTC run`, { row: k % 2 ? 50 : 22, side: k % 2 ? "left" : "right" }));
+    mark(3, gate - 2, "in", `ENTSO-E load forecast, by ${hh(gate - 2)}`, { row: 50, side: "right" });
+    mark(3, -0.5, "in", "fuel: last quote dated D−2", { row: 22, side: "left" });
+    // cut-off and gate over everything (row 2 labels)
+    out.push(`<line class="cut" x1="${x(cut)}" x2="${x(cut)}" y1="${top - 34}" y2="${Hh}"/>`);
+    out.push(`<line class="gate" x1="${x(gate)}" x2="${x(gate)}" y1="${top - 34}" y2="${Hh}"/>`);
+    txt(x(cut) - 5, top - 34, `cut-off ${T.issue_time}`, "", "end");
+    txt(x(gate) + 5, top - 34, `gate ${T.gate}`, "", "start");
     const svg = $("timeline");
     svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
     svg.innerHTML = out.join("");
@@ -573,7 +575,7 @@
       `<span><i style="border-top:2px dashed ${css("--blue-ink")}"></i>data cut-off, models run</span>`,
       `<span><i style="border-top:2px solid ${css("--amber")}"></i>day-ahead gate closure</span>`,
       `<span>○ input available · ● actuals published · ◆ scored</span>`,
-      `<span>Dashed grey lines: the axis is stretched between them. Times are Brussels local.</span>`,
+      `<span>D−1 00:00–16:00 is stretched (dashed line); times are Brussels local.</span>`,
     ].join("");
   }
 
