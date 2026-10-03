@@ -23,7 +23,7 @@ from .report import write_report
 from .site import build_site
 from .registry import load_models
 from .run import run_forecasts, take_snapshot
-from .score import locked_before_gate, score_pending
+from .score import check_revisions, locked_before_gate, score_pending
 from .timeutil import availability_cutoff, delivery_index, gate_timestamp, issue_timestamp, local_today
 
 
@@ -88,7 +88,13 @@ def cmd_forecast(cfg, args):
 
 
 def cmd_score(cfg, args):
-    s = score_pending(cfg)
+    src = get_source(cfg)
+    revised = check_revisions(cfg, source=src)
+    s = score_pending(cfg, source=src)
+    if revised:   # the backtest window shares the actuals, so re-score it too
+        score_pending(cfg, results_subdir="results/backtest", source=src)
+        write_report(cfg, results_subdir="results/backtest")
+        print(f"{len(revised)} series revised and re-scored: " + ", ".join(f"{r['delivery']} {r['series']}" for r in revised))
     print(f"{len(s)} scored rows in total")
     return 0
 

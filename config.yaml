@@ -11,6 +11,7 @@ quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 context_days: 28             # history handed to every model
 baseline: naive_weekly       # reference for relative MAE (skill)
 rolling_days: 28             # leaderboard window
+revision_check: {days: 3, threshold: 0.005}   # wind/solar actuals re-fetched for 3 days; >0.5% of daily energy -> re-frozen, re-scored
 backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
 
 envs_dir: ../envs             # one Python env per subprocess model family (see models/*/install.sh)
@@ -48,9 +49,9 @@ targets:
     # Actual generation is published with a lag; only data older than issue time minus lag may be used.
     available_until: issue_time
     publication_lag: 1h
-    score_after_days: 2      # actuals settle; score on D+2
+    score_after_days: 1      # complete on ENTSO-E by D+1; scored at the first scoring run of D+1
   solar:
     unit: MW
     available_until: issue_time
     publication_lag: 1h
-    score_after_days: 2
+    score_after_days: 1      # complete on ENTSO-E by D+1; scored at the first scoring run of D+1

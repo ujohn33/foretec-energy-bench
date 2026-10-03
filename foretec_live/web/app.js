@@ -584,7 +584,10 @@
       const lag = T.lag_hours[t] || 0, days = T.score_after_days[t] || 2;
       bar(k + 1, -24, cut - lag, "hist", `history: metered to ${hh(cut - lag)} (cut-off − ${lag} h)`);
       bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D, ~${lag} h lag`);
-      mark(k + 1, 24 * (days + 1) + scores[0], "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, { side: "left", shape: "diamond" });
+      const sc = 24 * (days + 1) + scores[0];
+      out.push(`<rect class="recheck" x="${x(sc)}" y="${y(k + 1) + 47}" width="${x(96) - x(sc)}" height="6" rx="1"/>`);
+      mark(k + 1, sc, "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, { side: "left", shape: "diamond" });
+      txt(x(96) - 2, y(k + 1) + 66, "re-checked to D+3 →", "", "end");
     });
     // inputs: the runs the cut-off rule admits, the ENTSO-E load forecast and the fuel quote
     const runs = {};
@@ -607,6 +610,7 @@
     $("l-timeline").innerHTML = [
       `<span><i class="sw" style="background:${alpha(css("--blue"), 0.4)}"></i>history a model may use</span>`,
       `<span><i class="sw" style="background:${alpha(css("--green"), 0.6)}"></i>actuals being metered</span>`,
+      `<span><i class="sw" style="background:${alpha(css("--green"), 0.25)}"></i>actuals re-checked, re-scored if revised</span>`,
       `<span><i style="border-top:2px dashed ${css("--blue-ink")}"></i>data cut-off, models run</span>`,
       `<span><i style="border-top:2px solid ${css("--amber")}"></i>day-ahead gate closure</span>`,
       `<span>○ input available · ● actuals published · ◆ scored</span>`,

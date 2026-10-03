@@ -254,6 +254,7 @@ td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
 #timeline .break{stroke:var(--ink2); stroke-width:1; stroke-dasharray:2 3}
 #timeline .hist{fill:var(--blue); opacity:.32}
 #timeline .act{fill:var(--green); opacity:.55}
+#timeline .recheck{fill:var(--green); opacity:.22}
 #timeline .cut{stroke:var(--blue-ink); stroke-width:1.6; stroke-dasharray:5 3}
 #timeline .gate{stroke:var(--amber); stroke-width:2}
 #timeline .mk{fill:var(--surface); stroke:var(--ink); stroke-width:1.6}

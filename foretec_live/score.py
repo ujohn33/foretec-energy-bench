@@ -91,6 +91,68 @@ def locked_before_gate(day_dir, cfg) -> bool:
     return True
 
 
+def check_revisions(cfg, source=None, now=None) -> list[dict]:
+    """Re-fetch wind/solar actuals frozen in the last few days and re-score a series that moved.
+
+    Every check is appended to data/actuals/<D>/_revisions.json (also the unchanged ones, so revision sizes
+    are on record). A series whose absolute change exceeds `threshold` of its daily energy is re-frozen and
+    its score rows (live and backtest) are dropped, so the next score_pending computes them again.
+    Prices are final at the auction and are never re-checked.
+    """
+    rc = cfg.get("revision_check") or {}
+    days, threshold = int(rc.get("days", 3)), float(rc.get("threshold", 0.005))
+    p = paths(cfg)
+    if now is None:
+        today = local_now(cfg).date()
+    else:
+        now = pd.Timestamp(now)
+        today = (now.tz_convert(cfg["timezone"]) if now.tzinfo else now).date()
+    source = source or get_source(cfg)
+    revised = []
+    for ddir in sorted(p["actuals"].glob("*")):
+        try:
+            delivery = dt.date.fromisoformat(ddir.name)
+        except ValueError:
+            continue
+        if not 1 <= (today - delivery).days <= days:
+            continue
+        log_f = ddir / "_revisions.json"
+        checks = json.loads(log_f.read_text()) if log_f.exists() else []
+        for f in sorted(ddir.glob("*_*.parquet")):
+            zone, target = f.stem.split("_")
+            if "score_after_days" not in cfg["targets"].get(target, {}):
+                continue
+            old = pd.read_parquet(f)["value"]
+            try:
+                new = source.fetch(zone, target, old.index[0], old.index[-1] + pd.Timedelta("15min")).reindex(old.index)
+            except Exception as e:  # noqa: BLE001 - a failed check must not stop scoring
+                log.warning("revision check %s %s failed: %s", ddir.name, f.stem, e)
+                continue
+            both = old.notna() & new.notna()
+            if both.mean() < MIN_COVERAGE:
+                continue
+            diff = (new - old)[both]
+            rel = float(diff.abs().sum() / max(float(old[both].abs().sum()), 1e-9))
+            entry = {"checked_utc": str(pd.Timestamp.now(tz="UTC")), "series": f.stem, "rel_change": round(rel, 6),
+                     "max_abs_mw": round(float(diff.abs().max()), 2), "revised": rel > threshold}
+            checks.append(entry)
+            if rel > threshold:
+                new.rename("value").to_frame().to_parquet(f)
+                record_provenance(source, zone, target, ddir)
+                issue = str(delivery - dt.timedelta(days=1))
+                for sub in ("results", "results/backtest"):
+                    sf = paths(cfg, sub)["scores"]
+                    if sf.exists():
+                        s = pd.read_parquet(sf)
+                        keep = ~((s["issue_date"].astype(str) == issue) & (s["zone"] == zone) & (s["target"] == target))
+                        if (~keep).any():
+                            s[keep].to_parquet(sf, index=False)
+                revised.append({"delivery": ddir.name, **entry})
+                log.warning("actuals %s %s revised by %.2f%%: re-frozen, will be re-scored", ddir.name, f.stem, 100 * rel)
+        log_f.write_text(json.dumps(checks, indent=1))
+    return revised
+
+
 def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.DataFrame:
     p = paths(cfg, results_subdir)
     scores = pd.read_parquet(p["scores"]) if p["scores"].exists() else pd.DataFrame(columns=KEY)

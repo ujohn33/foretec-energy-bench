@@ -244,3 +244,31 @@ def test_reference_and_live_only_models(cfg):
     assert json.loads((p["forecasts"] / d.isoformat() / "_run.json").read_text())["run_finished_utc"] == live["run_finished_utc"]
     bt = run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily", "ref_m", "live_m"])
     assert {r["model"] for r in bt["runs"]} == {"naive_daily", "ref_m"}
+
+
+def test_revision_check_refreezes_and_rescores(cfg):
+    """Wind/solar scored on D+1; a small revision is only logged, a large one re-freezes and re-scores."""
+    from foretec_live.score import check_revisions
+
+    d = dt.date(2026, 9, 20)                                   # delivery 2026-09-21
+    run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_weekly", "naive_daily"])
+    now = pd.Timestamp("2026-09-22 15:00")                     # D+1 afternoon
+    s = score_pending(cfg, results_subdir="results/backtest", now=now)
+    be_wind = (s["zone"] == "BE") & (s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")
+    assert be_wind.sum() == 2                                  # scored on D+1, not D+2
+
+    p = paths(cfg, "results/backtest")
+    f = paths(cfg)["actuals"] / "2026-09-21" / "BE_wind.parquet"
+    original = pd.read_parquet(f)
+    original.assign(value=original["value"] * 1.002).to_parquet(f)   # 0.2%: under the 0.5% threshold
+    assert check_revisions(cfg, now=now) == []
+    original.assign(value=original["value"] * 1.05).to_parquet(f)    # 5%: re-frozen from the source
+    rev = check_revisions(cfg, now=now)
+    assert [r["series"] for r in rev] == ["BE_wind"]
+    assert pd.read_parquet(f)["value"].round(6).equals(original["value"].round(6))
+    s = pd.read_parquet(p["scores"])
+    assert not ((s["zone"] == "BE") & (s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).any()
+    s = score_pending(cfg, results_subdir="results/backtest", now=now)
+    assert ((s["zone"] == "BE") & (s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == 2
+    checks = json.loads((f.parent / "_revisions.json").read_text())
+    assert [c["revised"] for c in checks if c["series"] == "BE_wind"] == [False, True]
