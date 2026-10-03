@@ -10,7 +10,7 @@
   ];
   const TARGET_LABEL = { price: "Price", wind: "Wind", solar: "Solar" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all",
+    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10,
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -514,6 +514,14 @@
     MAP.fitBounds(C.map((c) => [c.lat, c.lon]), { padding: [20, 20] });
   }
 
+  function tsoNote(models, day) {
+    if (models.some((m) => FAM[m] === "tso")) return "";
+    const why = S.x.target === "price" ? "TSOs do not forecast prices"
+      : S.x.zone === "NL" && S.x.target === "solar" ? "not comparable for NL solar (see Methodology)"
+      : day.phase === "live" ? "not published yet (TSOs have until 18:00 on D-1)" : "not available for this day";
+    return `<span class="tag pending">TSO forecast: ${esc(why)}</span>`;
+  }
+
   function actualSource(day, key) {
     const p = provenance(day.actual_sources && day.actual_sources[key]);
     return p ? p + (p.includes("+") ? " quarter-hours" : "") : "Energy-Charts";
@@ -658,6 +666,15 @@
     if (!S.days[d]) S.days[d] = fetch(`data/days/${d}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     return S.days[d];
   }
+  // explorer ranking: points over every scored day (live and backtest) for the explorer's zone and target
+  function explorerRanking() {
+    const rows = ROWS.filter((r) => !REF.has(r.model) && inField(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null);
+    const days = dayTable(rows);
+    const pts = {};
+    for (const x of days) for (const m in x.points) pts[m] = (pts[m] || 0) + x.points[m];
+    return Object.keys(pts).sort((a, b) => pts[b] - pts[a]);
+  }
+
   function renderExplorerControls() {
     if (!$("x-day")) return;
     const ds = Object.keys(D.days || {}).sort().reverse();
@@ -676,9 +693,16 @@
     const unit = D.config.targets[S.x.target].unit;
     const bt = day.phase === "backtest";
     card.classList.toggle("is-bt", bt);
-    const models = MODELS.filter((m) => shown(m) && inField(m) && ser.models[m]);
+    const ranked = explorerRanking();
+    const cands = MODELS.filter((m) => !REF.has(m) && inField(m) && ser.models[m])
+      .sort((a, b) => (ranked.indexOf(a) + 1 || 1e3) - (ranked.indexOf(b) + 1 || 1e3));
+    const top = new Set(cands.slice(0, S.xTop));
+    const models = MODELS.filter((m) => ser.models[m] && (top.has(m) || REF.has(m)));
+    const xt = $("x-top");
+    if (xt) { xt.max = String(Math.max(1, cands.length)); xt.value = String(Math.min(S.xTop, cands.length));
+      $("x-top-val").textContent = S.xTop >= cands.length ? `All ${cands.length}` : `Top ${S.xTop} of ${cands.length}`; }
     const bandModels = models.filter((m) => ser.models[m].lo);
-    if (!bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
+    if (S.x.band !== "" && !bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
     options($("x-band"), [{ k: "", label: "No band" }, ...bandModels.map((m) => ({ k: m, label: `${m} 10–90%` }))], S.x.band);
 
     const t0 = new Date(day.t0);
@@ -709,7 +733,8 @@
     $("x-meta").innerHTML = `<span>Locked <b>${day.issue_date} ${esc(D.config.issue_time)}</b></span><span>Gate <b>${esc(D.config.gate || D.config.issue_time)}</b></span><span>Delivery <b>${delivered}</b></span>
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
       ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}
-      ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}`;
+      ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
+      ${tsoNote(models, day)}`;
     legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Actual</span>` : "");
 
     renderInputs(day);
@@ -718,7 +743,7 @@
     if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored two days after delivery."}</td></tr></tbody>`; return; }
     const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
     tb.innerHTML = `<thead><tr><th>Model</th><th class="r">MAE</th><th class="r">RMSE</th><th class="r">Bias</th><th class="r">Pinball</th><th class="r">Rel. MAE</th></tr></thead><tbody>` +
-      MODELS.filter(shown).map((m) => sc.find((r) => r.model === m)).filter(Boolean).map((r) => `<tr class="${bt ? "is-bt" : ""}">
+      models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).map((r) => `<tr class="${bt ? "is-bt" : ""}">
         <td class="model"><i style="background:${color(r.model)}"></i>${esc(r.model)}</td>
         ${["mae", "rmse", "bias", "pinball", "rel_mae"].map((k) => `<td class="num ${(k === "bias" ? Math.abs(r[k]) : r[k]) === best(k) ? "best" : ""}">${fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
       </tr>`).join("") + `</tbody>`;
@@ -801,6 +826,7 @@
       on("x-zone", "onchange", (e) => { S.x.zone = e.target.value; sync(); renderExplorerChart(); });
       on("x-target", "onchange", (e) => { S.x.target = e.target.value; sync(); renderExplorerChart(); });
       on("x-band", "onchange", (e) => { S.x.band = e.target.value; renderExplorerChart(); });
+      on("x-top", "oninput", (e) => { S.xTop = +e.target.value; renderExplorerChart(); });
       on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
       renderExplorerControls();
       renderExplorerChart();
