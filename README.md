@@ -145,6 +145,14 @@ On Ubuntu (tested on 26.04, Python 3.14) a script installs everything under `/sr
 sudo bash scripts/setup_server.sh [--foundation] [--web]
 ```
 
+To deploy changes, pull on the server and re-run the script; it keeps `data/` and `results/`:
+
+```bash
+cd /root/foretec-live && git pull && sudo bash scripts/setup_server.sh --web   # add --foundation when model envs change
+```
+
+API keys (`ENTSOE_TOKEN`, `OPENMETEOKEY`, `OIL_PRICE_KEY`) live in `/root/.env` on the server, never in the repo.
+
 ## Layout
 
 ```
