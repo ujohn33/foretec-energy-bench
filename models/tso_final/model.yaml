@@ -1,10 +1,12 @@
 name: tso_final
 author: ENTSO-E / TSOs
-description: "Reference, not ranked: the TSOs' final day-ahead wind and solar forecast (ENTSO-E A69), which may be published until 18:00 on D-1, after the 12:00 gate. Fetched at the afternoon scoring runs; backtest uses the published version."
+description: "Reference, not ranked: the TSOs' final day-ahead wind and solar forecast (ENTSO-E A69), which may be published until 18:00 on D-1, after the 12:00 gate. Fetched at the afternoon scoring runs; backtest uses the published version. NL solar is left out: TenneT forecasts national output, but its published actual covers metered plants only."
 family: tso
 inputs: [tso_forecast]
 targets: [wind, solar]
 reference: true
+# TenneT forecasts national solar, but its published actual covers metered plants only (~200 vs ~3,000 MW peak)
+exclude: [NL_solar]
 runner: subprocess
 env: _self
 script: forecaster.py

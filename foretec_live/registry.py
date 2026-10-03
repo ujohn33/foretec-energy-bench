@@ -59,7 +59,9 @@ class ModelSpec:
     enabled: bool = True
 
     def applies(self, zone: str, target: str) -> bool:
-        return (self.targets is None or target in self.targets) and (self.zones is None or zone in self.zones)
+        # exclude: [NL_solar] leaves out single series, e.g. where the published actual is not what the model forecasts
+        return ((self.targets is None or target in self.targets) and (self.zones is None or zone in self.zones)
+                and f"{zone}_{target}" not in (self.raw.get("exclude") or []))
 
     def build(self, target: str, zone: str):
         if "module" in self.raw:
