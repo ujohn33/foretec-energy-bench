@@ -163,6 +163,8 @@ def _tracker(cfg) -> dict:
     for day, (phase, folder) in sorted(_forecast_days(cfg).items()):
         f = folder / "_run.json"
         meta = json.loads(f.read_text()) if f.exists() else {}
+        fr = folder / "_reference.json"   # references published after the gate, logged separately
+        ref_runs = json.loads(fr.read_text()).get("runs", []) if fr.exists() else []
         finished = meta.get("run_finished_utc")
         gate = gate_timestamp(day, cfg)
         on_time = None
@@ -170,7 +172,7 @@ def _tracker(cfg) -> dict:
             on_time = bool(pd.Timestamp(finished).tz_convert("UTC").tz_localize(None) <= gate)
         due = {(z, t) for z in cfg["zones"] for t in cfg["targets"] if scorable(day, t, cfg)}
         per = {}
-        for r in meta.get("runs", []):
+        for r in meta.get("runs", []) + ref_runs:
             c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "sec": 0.0, "msgs": []})
             if r["status"] == "ok":
                 c["ok"] += 1
@@ -257,6 +259,7 @@ def build_site(cfg) -> Path:
         models.append({"name": spec.name, "author": r.get("author", ""), "description": r.get("description", ""),
                        "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
                        "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
+                       "reference": bool(r.get("reference")), "live_only": bool(r.get("live_only")),
                        "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess" else (r.get("estimator") or r.get("module", ""))})
     summary = {
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),

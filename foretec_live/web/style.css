@@ -293,3 +293,7 @@ section.first{border-top:0; padding-top:48px}
   .top-nav a{font-size:.76rem}
   .filterbar{top:64px}
 }
+
+/* reference entries: listed below the ranking, never ranked */
+tr.ref td{color:var(--ink2); background:var(--raise)}
+tr.ref td.pos{font-size:.7rem; letter-spacing:.08em}

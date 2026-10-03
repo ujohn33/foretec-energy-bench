@@ -37,6 +37,7 @@
     const k = Math.max(0, members.indexOf(m));
     let base;
     if (fam === "baseline") base = css("--ink");
+    else if (fam === "tso") base = css("--ink2");
     else {
       const i = FAMILY_ORDER.indexOf(fam);
       base = i >= 0 ? css(`--s${i + 1}`) : css("--s8");
@@ -61,9 +62,10 @@
   // a model "uses covariates" when it takes anything beyond its own history and the calendar
   const COVARIATE_INPUTS = ["nwp", "load_forecast", "fuel"];
   let USES_COV = {};
-  const inField = (m) => S.covFilter === "all" || (S.covFilter === "with") === !!USES_COV[m];
-  function filteredRows(metric = S.metric) {
-    return ROWS.filter((r) => inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+  let REF = new Set();   // reference entries (published after the gate): shown, never ranked
+  const inField = (m) => REF.has(m) || S.covFilter === "all" || (S.covFilter === "with") === !!USES_COV[m];
+  function filteredRows(metric = S.metric, refs = false) {
+    return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
@@ -291,6 +293,21 @@
         <td><div class="bar"><span style="width:${Math.round(140 * s.pts / maxPts)}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${s.pts}</b></div></td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
+    const set = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
+    const refRel = filteredRows("rel_mae", true).filter((r) => set.has(r.issue_date));
+    const refMet = filteredRows(S.metric, true).filter((r) => set.has(r.issue_date));
+    const refs = [...REF].filter((m) => refRel.some((r) => r.model === m));
+    if (refs.length && st.length) {
+      const only = S.target === "all" ? " (wind and solar only)" : "";
+      t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
+        const mine = refRel.filter((r) => r.model === m);
+        return `<tr class="ref"><td class="pos">REF</td><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>
+          <td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
+          ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(mean(refMet.filter((r) => r.model === m).map((r) => r[S.metric])), md.d)}</td>` : ""}
+          <td class="r v">–</td><td class="r v">–</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td>
+          <td class="wrap">Reference, not ranked: published after the gate${only}</td></tr>`;
+      }).join(""));
+    }
   }
 
   function renderCharts() {
@@ -355,17 +372,18 @@
   function renderDetails() {
     const md = metricDef();
     const set = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
-    const rows = filteredRows().filter((r) => set.has(r.issue_date));
-    const models = MODELS.filter((m) => shown(m) && rows.some((r) => r.model === m));
+    const ranked = filteredRows().filter((r) => set.has(r.issue_date));
+    const rows = ranked.concat(filteredRows(S.metric, true).filter((r) => set.has(r.issue_date)));
+    const models = MODELS.filter((m) => (REF.has(m) || shown(m)) && rows.some((r) => r.model === m));
     const series = [];
     for (const t of Object.keys(D.config.targets)) for (const z of D.config.zones)
       if ((S.zone === "all" || S.zone === z) && (S.target === "all" || S.target === t)) series.push([z, t]);
     $("details-sub").textContent = `${md.label}, mean over ${set.size} issue day${set.size === 1 ? "" : "s"} (${S.phase === "all" ? "live and backtest" : S.phase}). Best per row in bold.`;
     const bt = S.phase === "backtest";
-    $("details-table").innerHTML = `<thead><tr><th>Series</th><th>Unit</th>${models.map((m) => `<th class="r">${esc(m)}</th>`).join("")}</tr></thead><tbody>` +
+    $("details-table").innerHTML = `<thead><tr><th>Series</th><th>Unit</th>${models.map((m) => `<th class="r">${esc(m)}${REF.has(m) ? " (ref)" : ""}</th>`).join("")}</tr></thead><tbody>` +
       series.map(([z, t]) => {
         const vals = models.map((m) => mean(rows.filter((r) => r.model === m && r.zone === z && r.target === t).map((r) => r[S.metric])));
-        const best = Math.min(...vals.filter((v) => v != null));
+        const best = Math.min(...vals.filter((v, j) => v != null && !REF.has(models[j])));   // references never count as best
         return `<tr class="${bt ? "is-bt" : ""}"><td class="model">${z} ${TARGET_LABEL[t] || t}</td><td>${md.unitless ? "ratio" : esc(D.config.targets[t].unit)}</td>` +
           vals.map((v) => `<td class="num ${v === best ? "best" : ""}">${fmt(v, md.d)}</td>`).join("") + "</tr>";
       }).join("") + "</tbody>";
@@ -376,7 +394,7 @@
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
       D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${esc(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}</td>
-        <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
+        <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : m.reference ? '<span class="tag bt">Reference, not ranked</span>' : m.live_only ? '<span class="tag live">Live only</span>' : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
   const INPUT_LABEL = { history: "Own history", nwp: "NWP ensemble", load_forecast: "ENTSO-E load fc", fuel: "Fuel cost", calendar: "Calendar" };
@@ -675,7 +693,8 @@
     if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: css("--ink"), backgroundColor: css("--ink"), borderWidth: 2.5, pointRadius: 0, tension: 0.15, endLabel: "Actual", endColor: css("--ink"), order: -1 });
     for (const m of models) {
       const c = color(m);
-      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 4, tension: 0.15, endLabel: m, endColor: c });
+      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
+        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0.15, endLabel: REF.has(m) ? `${m} (ref)` : m, endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
@@ -746,7 +765,8 @@
     MODELS = D.models.map((m) => m.name);
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
-    const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "baseline" ? 99 : i < 0 ? 50 : i; };
+    REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
+    const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
     S.phase = ROWS.some((r) => r.phase === "live") ? "live" : "backtest";

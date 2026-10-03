@@ -108,7 +108,7 @@ class EntsoeSource(Source):
         key = (kind, zone, psr, a)
         if key in self._mem:
             return self._mem[key]
-        settled = b <= dt.date.today() - dt.timedelta(days=SETTLED_DAYS)
+        settled = b <= dt.date.today() - dt.timedelta(days=SETTLED_DAYS)   # TSO forecasts too: re-fetched until settled
         f = self._disk / f"{kind}_{zone}_{psr or 'all'}_{a}.parquet" if self._disk is not None else None
         if f is not None and settled and f.exists():
             s = pd.read_parquet(f)["value"]
@@ -119,6 +119,9 @@ class EntsoeSource(Source):
         if kind == "price":
             xml = self._get({"documentType": "A44", "in_Domain": eic, "out_Domain": eic,
                              "contract_MarketAgreement.type": "A01", **period})
+            parts = [] if "No matching data" in xml else parse_timeseries(xml)
+        elif kind == "tso":
+            xml = self._get({"documentType": "A69", "processType": "A01", "in_Domain": eic, "psrType": psr, **period})
             parts = [] if "No matching data" in xml else parse_timeseries(xml)
         else:
             xml = self._get({"documentType": "A75", "processType": "A16", "in_Domain": eic, "psrType": psr, **period})
@@ -138,6 +141,20 @@ class EntsoeSource(Source):
         while d0 < last:
             yield d0, d0 + dt.timedelta(days=CHUNK_DAYS)
             d0 += dt.timedelta(days=CHUNK_DAYS)
+
+    def tso_forecast(self, zone: str, target: str, start, end) -> pd.Series:
+        """TSO day-ahead forecast (A69) for wind or solar, as published at the time of the call."""
+        comps = []
+        for psr in PSR[target]:
+            parts = [self._chunk("tso", zone, psr, a, b) for a, b in self._chunks(start, end)]
+            parts = [p for p in parts if not p.empty]
+            if parts:
+                c = pd.concat(parts).sort_index()
+                comps.append(c[~c.index.duplicated(keep="last")])
+        if not comps:
+            return pd.Series(dtype=float)
+        s = pd.concat(comps, axis=1).sum(axis=1, min_count=len(comps))
+        return s[(s.index >= start) & (s.index < end)]
 
     def fetch(self, zone, target, start, end):
         parts = []

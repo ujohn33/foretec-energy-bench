@@ -120,13 +120,15 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
             if r.returncode != 0:
                 raise RuntimeError(f"exit {r.returncode}: {r.stderr.strip()[-600:]}")
             res = pd.read_parquet(tmp / "output.parquet")
+            ef = tmp / "output.parquet.errors.json"
+            reasons = json.loads(ef.read_text()) if ef.exists() else {}
         except Exception as e:  # whole model failed: every series gets the error
             return {k: e for k, _ in items}
         for (zone, target), _ in items:
             key = f"{zone}_{target}"
             g = res[res["series"] == key]
             if g.empty:
-                out[(zone, target)] = RuntimeError("no output for this series")
+                out[(zone, target)] = RuntimeError(reasons.get(key, "no output for this series"))
                 continue
             g = g.assign(delivery_utc=last[key] + g["step"] * step).set_index("delivery_utc").reindex(fh_index)
             cols = ["point"] + [c for c in g.columns if c.startswith("q")]
@@ -138,7 +140,9 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
     return out
 
 
-def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, snapshots=None, source=None):
+def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, snapshots=None, source=None, reference_run=False):
+    """reference_run: run only `reference: true` models (after the gate) and log to _reference.json, so the
+    gate check on _run.json is untouched. In the live run reference models are left out; in backtests they run."""
     p = paths(cfg, results_subdir)
     started = str(pd.Timestamp.now(tz="UTC"))
     snaps = snapshots if snapshots is not None else take_snapshot(issue_date, cfg, source=source)
@@ -147,7 +151,13 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
     outdir.mkdir(parents=True, exist_ok=True)
     log_rows = []
     covariates = None   # built once per issue day, only if some model asks for more than its own history
+    live = results_subdir == "results"
     for spec in load_models(p["models"], only_models):
+        is_ref = bool(spec.raw.get("reference"))
+        if live and is_ref != reference_run:
+            continue
+        if not live and spec.raw.get("live_only"):   # e.g. "as published at the cut-off": unverifiable after the fact
+            continue
         external = spec.raw.get("runner") == "subprocess"
         if external:
             py = external_python(spec, cfg)
@@ -210,9 +220,10 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         "series": [f"{z}_{t}" for z, t in snaps],
         "runs": log_rows,
     }
-    f = outdir / "_run.json"
-    if only_models and f.exists():  # partial re-run: keep the log entries of the other models
+    f = outdir / ("_reference.json" if reference_run else "_run.json")
+    if (only_models or reference_run) and f.exists():  # partial re-run: keep the log entries of the other models
         old = json.loads(f.read_text())
-        meta["runs"] = [r for r in old.get("runs", []) if r["model"] not in set(only_models)] + meta["runs"]
+        rerun = {r["model"] for r in meta["runs"]}
+        meta["runs"] = [r for r in old.get("runs", []) if r["model"] not in rerun] + meta["runs"]
     f.write_text(json.dumps(meta, indent=1))
     return meta

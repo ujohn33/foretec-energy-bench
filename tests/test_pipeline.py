@@ -226,3 +226,21 @@ def test_schedule_matches_systemd_timers():
     assert times("foretec-forecast.timer") == [sched["forecast"]]
     assert times("foretec-score.timer") == sorted(sched["score"])
     assert times("foretec-catchup.timer") == [sched["catchup"]]
+
+
+def test_reference_and_live_only_models(cfg):
+    """Reference models stay out of the live run and log separately; live-only models never backtest."""
+    root = Path(cfg["_root"])
+    for name, flags in (("ref_m", "reference: true\n"), ("live_m", "live_only: true\n")):
+        d = root / "models" / name
+        d.mkdir()
+        (d / "model.yaml").write_text(f"name: {name}\nestimator: NaiveForecaster\nparams: {{strategy: last, sp: 96}}\n{flags}")
+    d = dt.date(2026, 9, 20)
+    live = run_forecasts(d, cfg, only_models=["naive_daily", "ref_m", "live_m"])
+    assert {r["model"] for r in live["runs"]} == {"naive_daily", "live_m"}
+    ref = run_forecasts(d, cfg, only_models=["naive_daily", "ref_m", "live_m"], reference_run=True)
+    assert {r["model"] for r in ref["runs"]} == {"ref_m"}
+    p = paths(cfg)
+    assert json.loads((p["forecasts"] / d.isoformat() / "_run.json").read_text())["run_finished_utc"] == live["run_finished_utc"]
+    bt = run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily", "ref_m", "live_m"])
+    assert {r["model"] for r in bt["runs"]} == {"naive_daily", "ref_m"}

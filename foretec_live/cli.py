@@ -109,7 +109,7 @@ def cmd_catchup(cfg, args):
         return 0
     start, end = dt.date.fromisoformat(str(bt["start"])), dt.date.fromisoformat(str(bt["end"]))
     p = paths(cfg, "results/backtest")
-    names = [s.name for s in load_models(p["models"])]
+    names = [s.name for s in load_models(p["models"]) if not s.raw.get("live_only")]
     src = get_source(cfg)
     ran = []
     d = start
@@ -125,6 +125,20 @@ def cmd_catchup(cfg, args):
         write_report(cfg, results_subdir="results/backtest")
         _site(cfg)
     print("\n".join(ran) if ran else "backtest complete for every model")
+    return 0
+
+
+def cmd_reference(cfg, args):
+    """Reference forecasts published after the gate (e.g. the TSO's final day-ahead forecast) for today's issue.
+    Runs before each scoring; never touches the live run log, so the gate check is unaffected."""
+    d = args.date or local_today(cfg)
+    if not (paths(cfg)["forecasts"] / str(d)).exists():
+        print(f"no live run for {d}; nothing to add references to")
+        return 0
+    # the frozen 11:30 snapshot stays as it is: take a fresh one without saving it
+    meta = run_forecasts(d, cfg, reference_run=True, snapshots=take_snapshot(d, cfg, save=False))
+    ok = sum(r["status"] == "ok" for r in meta["runs"])
+    print(f"{d}: {ok} reference series ok, {len(meta['runs']) - ok} not")
     return 0
 
 
@@ -156,6 +170,7 @@ def main(argv=None):
     sub.add_parser("report")
     sub.add_parser("site")
     sub.add_parser("catchup")
+    p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
     p.add_argument("--end", type=_date, required=True); p.add_argument("--models", nargs="*")
     args = ap.parse_args(argv)
@@ -168,7 +183,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

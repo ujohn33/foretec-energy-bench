@@ -27,7 +27,13 @@ def read_request(argv=None) -> tuple[dict, dict[str, np.ndarray]]:
     return req, series
 
 
-def write_output(req: dict, results: dict[str, tuple]) -> None:
+def write_output(req: dict, results: dict[str, tuple], errors: dict[str, str] | None = None) -> None:
+    """errors: why a series has no forecast (shown in the run tracker instead of a generic message)."""
+    if errors:
+        with open(req["output"] + ".errors.json", "w") as f:
+            json.dump(errors, f)
+    if not results:
+        raise SystemExit("no series forecast: " + "; ".join(f"{k}: {v}" for k, v in (errors or {}).items()))
     frames = []
     for key, (point, q) in results.items():
         point = np.asarray(point, dtype=float).reshape(-1)

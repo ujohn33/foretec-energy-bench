@@ -13,6 +13,8 @@ Environment=PYTHONWARNINGS=ignore::FutureWarning
 EnvironmentFile=-/srv/foretec/foretec.env
 # API keys (OPENMETEOKEY, ENTSOE_TOKEN, OIL_PRICE_KEY), read by systemd as root before dropping to User=
 EnvironmentFile=-/root/.env
+# references published after the gate (TSO final day-ahead forecast) first, so they are scored too
+ExecStart=-/srv/foretec/venv/bin/foretec-live reference
 ExecStart=/srv/foretec/venv/bin/foretec-live score
 ExecStart=/srv/foretec/venv/bin/foretec-live report
 TimeoutStartSec=30min

@@ -1,0 +1,10 @@
+name: tso_final
+author: ENTSO-E / TSOs
+description: "Reference, not ranked: the TSOs' final day-ahead wind and solar forecast (ENTSO-E A69), which may be published until 18:00 on D-1, after the 12:00 gate. Fetched at the afternoon scoring runs; backtest uses the published version."
+family: tso
+inputs: [tso_forecast]
+targets: [wind, solar]
+reference: true
+runner: subprocess
+env: _self
+script: forecaster.py
