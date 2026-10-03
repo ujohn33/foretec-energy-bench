@@ -23,7 +23,9 @@ covariates:                   # what covariate models may use; frozen per issue 
       gfs_seamless: {label: "GFS (NOAA)",        cycle_hours: 6, lag_hours: 7}
       ecmwf_ifs:    {label: "IFS HRES (ECMWF)",  cycle_hours: 6, lag_hours: 7}
 
-source: energycharts         # energycharts (no key) | entsoe (needs ENTSOE_API_KEY) | synthetic (tests)
+source: entsoe               # ENTSO-E Transparency Platform (ENTSOE_TOKEN), parsed from XML
+fallback_source: energycharts # fills quarter-hours ENTSO-E does not deliver; provenance per series in _sources.json
+# (energycharts | entsoe | synthetic for tests)
 
 zones:
   BE: {energycharts_bzn: BE, energycharts_country: be, entsoe: "10YBE----------2"}

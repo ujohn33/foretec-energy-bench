@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .config import paths
-from .data import get_source
+from .data import get_source, record_provenance
 from .timeutil import as_date, delivery_date, delivery_index, gate_timestamp, local_now
 
 log = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ def actuals(issue_date, zone, target, cfg, source=None) -> pd.Series | None:
         return None
     f.parent.mkdir(parents=True, exist_ok=True)
     s.rename("value").to_frame().to_parquet(f)
+    record_provenance(source, zone, target, f.parent)
     return s
 
 

@@ -178,3 +178,38 @@ def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     pd.DataFrame({"time_utc": pd.to_datetime(["2026-09-18", "2026-09-19"]), "code": "TTF_EUR", "price": [70.0, 99.0]}).to_parquet(cache)
     q = fuel_quotes(cfg, pd.Timestamp("2026-09-19 09:30"))      # cut-off of issue day 2026-09-19
     assert q["price"].tolist() == [70.0]
+
+
+def test_entsoe_parser_and_fallback(cfg):
+    """A75: generation kept, consumption dropped, A03 gaps repeat; the fallback fills only what the primary lacks."""
+    from foretec_live.data.base import FallbackSource, Source
+    from foretec_live.data.entsoe import _finest, parse_timeseries
+
+    xml = ('<GL_MarketDocument xmlns="urn:x">'
+           '<TimeSeries><curveType>A03</curveType><inBiddingZone_Domain.mRID>10YBE----------2</inBiddingZone_Domain.mRID>'
+           '<MktPSRType><psrType>B16</psrType></MktPSRType><Period><timeInterval><start>2026-09-20T22:00Z</start>'
+           '<end>2026-09-20T23:00Z</end></timeInterval><resolution>PT15M</resolution>'
+           '<Point><position>1</position><quantity>5</quantity></Point><Point><position>4</position><quantity>8</quantity></Point>'
+           '</Period></TimeSeries>'
+           '<TimeSeries><curveType>A01</curveType><outBiddingZone_Domain.mRID>10YBE----------2</outBiddingZone_Domain.mRID>'
+           '<MktPSRType><psrType>B16</psrType></MktPSRType><Period><timeInterval><start>2026-09-20T22:00Z</start>'
+           '<end>2026-09-20T22:15Z</end></timeInterval><resolution>PT15M</resolution>'
+           '<Point><position>1</position><quantity>999</quantity></Point></Period></TimeSeries></GL_MarketDocument>')
+    parts = parse_timeseries(xml)
+    gen = [p for p in parts if p[0]["in_domain"] and not p[0]["out_domain"]]
+    assert len(parts) == 2 and len(gen) == 1
+    assert _finest(gen).tolist() == [5, 5, 5, 8]
+
+    idx = pd.date_range("2026-09-20 22:00", periods=4, freq="15min")
+
+    class Fake(Source):
+        def __init__(self, name, values):
+            super().__init__(cfg); self.name = name; self.values = values
+
+        def fetch(self, zone, target, start, end):
+            return pd.Series(self.values, index=idx).dropna()
+
+    src = FallbackSource(cfg, Fake("entsoe", [1.0, None, 3.0, None]), Fake("energycharts", [9.0, 2.0, 9.0, 4.0]))
+    out = src.fetch("BE", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
+    assert out.tolist() == [1.0, 2.0, 3.0, 4.0]                 # primary wins wherever it has a value
+    assert src.provenance[("BE", "wind")] == {"entsoe": 2, "energycharts": 2, "missing": 0}

@@ -23,7 +23,6 @@ dependencies = [
 # Foundation models pull heavy, sometimes conflicting deps (torch, transformers).
 # Install one family per environment; see README.
 chronos = ["chronos-forecasting>=2.0.0"]
-entsoe = ["entsoe-py"]
 dev = ["pytest"]
 
 [project.scripts]

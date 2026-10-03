@@ -389,7 +389,7 @@
     const bt = day.phase === "backtest";
     const lagNote = (m) => `init ≤ cut-off − ${D.covariates.nwp_models[m].lag_hours} h`;
     const rows = [
-      ["Target history", "Energy-Charts (Fraunhofer ISE)", "prices through the end of D-1; wind and solar through the cut-off minus 1 h", "–"],
+      ["Target history", "ENTSO-E Transparency Platform; gaps from Energy-Charts", "prices through the end of D-1; wind and solar through the cut-off minus 1 h", "–"],
       ...inp.runs.map((r) => [inp.nwp_models[r.model].label, `run ${fmtUtc(r.run_utc)}`, r.status === "ok" ? lagNote(r.model) : `<b>${esc(r.status)}</b>`,
         r.fetched_utc ? fmtUtc(r.fetched_utc) + (bt ? " (archive)" : "") : "–"]),
       ["Load forecast", esc(inp.load_forecast), bt ? "backtest: currently published version" : "fetched at the cut-off", "–"],
@@ -466,6 +466,14 @@
     MAP.fitBounds(C.map((c) => [c.lat, c.lon]), { padding: [20, 20] });
   }
 
+  function actualSource(day, key) {
+    const p = day.actual_sources && day.actual_sources[key];
+    if (!p) return "Energy-Charts";
+    const parts = Object.entries(p).filter(([k, n]) => k !== "missing" && n > 0);
+    const name = { entsoe: "ENTSO-E", energycharts: "Energy-Charts" };
+    return parts.length === 1 ? name[parts[0][0]] || parts[0][0] : parts.map(([k, n]) => `${name[k] || k} ${n}`).join(" + ") + " quarter-hours";
+  }
+
   // ---------- forecast explorer ----------
   async function loadDay(d) {
     if (!S.days[d]) S.days[d] = fetch(`data/days/${d}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -518,7 +526,8 @@
     const delivered = addDays(day.issue_date, 1);
     $("x-meta").innerHTML = `<span>Locked <b>${day.issue_date} ${esc(D.config.issue_time)}</b></span><span>Gate <b>${esc(D.config.gate || D.config.issue_time)}</b></span><span>Delivery <b>${delivered}</b></span>
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
-      ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}`;
+      ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}
+      ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}`;
     legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Actual</span>` : "");
 
     renderInputs(day);

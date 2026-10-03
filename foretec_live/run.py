@@ -16,7 +16,7 @@ import pandas as pd
 from sktime.forecasting.base import ForecastingHorizon
 
 from .config import paths
-from .data import get_source
+from .data import get_source, record_provenance
 from .registry import load_models
 from .timeutil import FREQ, availability_cutoff, delivery_index, issue_timestamp
 
@@ -53,6 +53,7 @@ def take_snapshot(issue_date, cfg, source=None, save=True) -> dict[tuple[str, st
                 d = p["snapshots"] / str(issue_date)
                 d.mkdir(parents=True, exist_ok=True)
                 s.to_frame().to_parquet(d / f"{zone}_{target}.parquet")
+                record_provenance(source, zone, target, d)
     return out
 
 
