@@ -213,3 +213,16 @@ def test_entsoe_parser_and_fallback(cfg):
     out = src.fetch("BE", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
     assert out.tolist() == [1.0, 2.0, 3.0, 4.0]                 # primary wins wherever it has a value
     assert src.provenance[("BE", "wind")] == {"entsoe": 2, "energycharts": 2, "missing": 0}
+
+
+def test_schedule_matches_systemd_timers():
+    """The website draws the schedule from config.yaml; the timers must say the same."""
+    import re
+
+    import yaml
+    sched = yaml.safe_load((REPO / "config.yaml").read_text())["schedule"]
+    def times(unit):
+        return sorted(re.findall(r"OnCalendar=\*-\*-\* (\d\d:\d\d):00 Europe/Brussels", (REPO / "scripts/systemd" / unit).read_text()))
+    assert times("foretec-forecast.timer") == [sched["forecast"]]
+    assert times("foretec-score.timer") == sorted(sched["score"])
+    assert times("foretec-catchup.timer") == [sched["catchup"]]

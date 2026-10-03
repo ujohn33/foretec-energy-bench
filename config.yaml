@@ -2,6 +2,10 @@
 timezone: Europe/Brussels
 issue_time: "11:30"          # data cut-off and model run, D-1 local time
 gate: "12:00"                # SDAC day-ahead gate closure: live forecasts must be locked before it
+schedule:                     # Brussels time; must match scripts/systemd/*.timer (a test checks it)
+  forecast: "11:30"
+  score: ["14:45", "20:45"]
+  catchup: "03:30"
 resolution: 15min
 quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 context_days: 28             # history handed to every model

@@ -497,6 +497,135 @@
     return p ? p + (p.includes("+") ? " quarter-hours" : "") : "Energy-Charts";
   }
 
+  // ---------- pipeline: timeline diagram ----------
+  function hm(t) { const [h, m] = String(t).split(":").map(Number); return h + m / 60; }
+  function brusselsOffset() {
+    const now = new Date();
+    const loc = new Date(now.toLocaleString("en-US", { timeZone: D.config.timezone }));
+    const utc = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
+    return Math.round((loc - utc) / 36e5);
+  }
+  function renderTimeline() {
+    const T = D.timeline;
+    if (!T) return;
+    // hours relative to D-1 00:00 Brussels; the D-1 morning around cut-off and gate gets most of the width
+    const H = [-24, 0, 7, 16, 24, 48, 72, 96], F = [0, 0.07, 0.11, 0.56, 0.62, 0.80, 0.90, 1];
+    const W = 1000, L = 128, R = 18, top = 54, laneH = 64;
+    const x = (h) => { let i = 0; while (i < H.length - 2 && h > H[i + 1]) i++; const f = F[i] + (F[i + 1] - F[i]) * (Math.min(Math.max(h, H[i]), H[i + 1]) - H[i]) / (H[i + 1] - H[i]); return L + f * (W - L - R); };
+    const lanes = ["Price", "Wind", "Solar", "Inputs"];
+    const y = (i) => top + i * laneH;
+    const Hh = top + lanes.length * laneH + 8;
+    const cut = hm(T.issue_time), gate = hm(T.gate), off = brusselsOffset();
+    const sched = T.schedule || {};
+    const scores = (sched.score || ["14:45"]).map(hm);
+    const out = [];
+    const txt = (xx, yy, t, cls = "", anchor = "middle") => out.push(`<text x="${xx.toFixed(1)}" y="${yy}" text-anchor="${anchor}" class="${cls}">${esc(t)}</text>`);
+    // day bands
+    [[-24, 0, "D−2"], [0, 24, "D−1 · issue day"], [24, 48, "D · delivery"], [48, 72, "D+1"], [72, 96, "D+2"]].forEach(([a, b, lab], i) => {
+      out.push(`<rect class="band${a === 24 ? " delivery" : ""}" x="${x(a)}" y="${top - 6}" width="${x(b) - x(a)}" height="${Hh - top}" opacity="${a === 24 ? 1 : i % 2 ? 0.55 : 0}"/>`);
+      txt((x(a) + x(b)) / 2, 18, lab, "day");
+    });
+    // zoomed hours on D-1
+    [8, 10, 12, 14].forEach((h) => { out.push(`<line class="grid" x1="${x(h)}" x2="${x(h)}" y1="${top - 6}" y2="${Hh}" opacity=".5"/>`); txt(x(h), top - 12, `${String(h).padStart(2, "0")}:00`); });
+    [7, 16].forEach((h) => out.push(`<line class="break" x1="${x(h)}" x2="${x(h)}" y1="${top - 6}" y2="${Hh}"/>`));
+    lanes.forEach((lab, i) => { txt(16, y(i) + laneH / 2 + 4, lab, "lane", "start"); out.push(`<line class="grid" x1="${L}" x2="${W - R}" y1="${y(i) + laneH}" y2="${y(i) + laneH}"/>`); });
+    const bar = (i, a, b, cls, label, dy = 0) => {
+      const yy = y(i) + 14 + dy;
+      out.push(`<rect class="${cls}" x="${x(a)}" y="${yy}" width="${Math.max(2, x(b) - x(a))}" height="12" rx="1"/>`);
+      if (label) txt(x(a) + 6, yy + 25, label, "", "start");
+    };
+    const mark = (i, h, cls, label, dy = 0, shape = "circle") => {
+      const yy = y(i) + 20 + dy, xx = x(h);
+      out.push(shape === "diamond" ? `<path class="mk ${cls}" d="M${xx} ${yy - 6} L${xx + 6} ${yy} L${xx} ${yy + 6} L${xx - 6} ${yy} Z"/>` : `<circle class="mk ${cls}" cx="${xx}" cy="${yy}" r="5"/>`);
+      if (label) txt(xx, yy + 22, label);
+    };
+    // price: everything up to the end of D-1 is known (cleared on D-2); D's prices clear just after the gate
+    bar(0, -24, 24, "hist", "history: prices to the end of D−1 (cleared on D−2)");
+    mark(0, 12.9, "pub", "D prices published ~12:55", -2);
+    scores.forEach((h, k) => mark(0, h, "score", k ? "" : `scored ${sched.score.join(" / ")}`, -2, "diamond"));
+    // wind and solar: measured up to the cut-off minus the publication lag; actuals arrive during D
+    ["wind", "solar"].forEach((t, k) => {
+      const lag = (T.lag_hours[t] || 0), days = T.score_after_days[t] || 2;
+      bar(k + 1, -24, cut - lag, "hist", `history: metered to ${String(Math.floor(cut - lag)).padStart(2, "0")}:${String(Math.round(((cut - lag) % 1) * 60)).padStart(2, "0")} (cut-off − ${lag} h)`);
+      bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D (~${lag} h lag)`);
+      mark(k + 1, 24 * (days + 1) + scores[0], "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, -2, "diamond");
+    });
+    // inputs: the runs the cut-off rule admits, the ENTSO-E load forecast and the fuel quote
+    const runs = {};
+    for (const [m, v] of Object.entries(T.nwp)) {
+      const initUtc = Math.floor((cut - off - v.lag_hours) / v.cycle_hours) * v.cycle_hours;
+      (runs[initUtc] ||= []).push(v.label.split(" ")[0]);
+    }
+    Object.entries(runs).forEach(([u, labs], k) => mark(3, Number(u) + off, "in", `${labs.join(", ")} ${String(u).padStart(2, "0")} UTC`, k % 2 ? 20 : -2));
+    mark(3, gate - 2, "in", "ENTSO-E load fc ≤ " + `${String(gate - 2).padStart(2, "0")}:00`, 20);
+    mark(3, -1, "in", "fuel: quote dated ≤ D−2", -2);
+    // cut-off and gate on top of everything
+    out.push(`<line class="cut" x1="${x(cut)}" x2="${x(cut)}" y1="${top - 30}" y2="${Hh}"/>`);
+    out.push(`<line class="gate" x1="${x(gate)}" x2="${x(gate)}" y1="${top - 30}" y2="${Hh}"/>`);
+    txt(x(cut) - 4, top - 26, `cut-off ${T.issue_time}`, "", "end");
+    txt(x(gate) + 4, top - 26, `gate ${T.gate}`, "", "start");
+    const svg = $("timeline");
+    svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+    svg.innerHTML = out.join("");
+    $("l-timeline").innerHTML = [
+      `<span><i class="sw" style="background:${alpha(css("--blue"), 0.4)}"></i>history a model may use</span>`,
+      `<span><i class="sw" style="background:${alpha(css("--green"), 0.6)}"></i>actuals being metered</span>`,
+      `<span><i style="border-top:2px dashed ${css("--blue-ink")}"></i>data cut-off, models run</span>`,
+      `<span><i style="border-top:2px solid ${css("--amber")}"></i>day-ahead gate closure</span>`,
+      `<span>○ input available · ● actuals published · ◆ scored</span>`,
+      `<span>Dashed grey lines: the axis is stretched between them. Times are Brussels local.</span>`,
+    ].join("");
+  }
+
+  // ---------- pipeline: run tracker ----------
+  function cellStatus(c, day) {
+    if (!c) return null;
+    if (c.err || c.skip) return { k: "err", icon: "✕", label: `error: ${c.err} failed, ${c.skip} skipped` };
+    if (day.phase === "live" && day.on_time === false) return { k: "late", icon: "⏱", label: "finished after the gate, not scored" };
+    if (c.due === 0) return { k: "wait", icon: "…", label: "forecasts generated, scoring not due yet" };
+    if (c.scored < c.due) return { k: "miss", icon: "!", label: `scored ${c.scored} of ${c.due} due series (awaiting actuals)` };
+    if (c.due < c.ok) return { k: "part", icon: "◐", label: `scored ${c.scored} of ${c.ok}; the rest is not due yet` };
+    return { k: "ok", icon: "✓", label: `all ${c.ok} series forecast and scored` };
+  }
+  const localTime = (u) => (u ? new Date(String(u).replace(" ", "T").replace(/\+00:00$/, "Z").replace(/(\d)$/, "$1Z"))
+    .toLocaleTimeString("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" }) : "–");
+  function renderTracker() {
+    const T = D.tracker;
+    if (!T || !T.days.length) { $("tracker").innerHTML = `<tbody><tr><td class="empty">No runs yet.</td></tr></tbody>`; return; }
+    const hasLive = T.days.some((d) => d.phase === "live");
+    if (!S.trk) S.trk = hasLive ? "live" : "backtest";
+    seg($("trk-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }], S.trk,
+      (k) => { S.trk = k; S.trkSel = null; renderTracker(); });
+    const days = T.days.filter((d) => d.phase === S.trk).slice(-21);
+    const models = MODELS.filter((m) => days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
+    const head = `<thead><tr><th>Model</th>${days.map((d) => {
+      const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
+      return `<th title="${d.d} · run ${localTime(d.started)}–${localTime(d.finished)} Brussels">${esc(shortDate(d.d))}${b}</th>`;
+    }).join("")}</tr></thead>`;
+    const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>${days.map((d) => {
+      const st = cellStatus(T.cells[d.d] && T.cells[d.d][m], d);
+      if (!st) return `<td></td>`;
+      const sel = S.trkSel && S.trkSel.d === d.d && S.trkSel.m === m;
+      return `<td><button type="button" class="trk ${st.k}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${!!sel}" title="${esc(m)} · ${d.d}: ${esc(st.label)}">${st.icon}</button></td>`;
+    }).join("")}</tr>`).join("");
+    $("tracker").innerHTML = head + `<tbody>${body}</tbody>`;
+    $("tracker").onclick = (e) => { const b = e.target.closest("button.trk"); if (!b) return; S.trkSel = { d: b.dataset.d, m: b.dataset.m }; renderTracker(); };
+    $("l-tracker").innerHTML = [["ok", "✓", "forecast and fully scored"], ["part", "◐", "scored so far, rest not due"], ["wait", "…", "forecast, scoring not due"],
+      ["miss", "!", "due but actuals missing"], ["late", "⏱", "after the gate"], ["err", "✕", "error or skipped"]]
+      .map(([k, i, l]) => `<span style="display:flex;align-items:center;gap:7px"><span class="trk ${k}" style="display:inline-grid;place-items:center;cursor:default">${i}</span>${l}</span>`).join("");
+    const det = $("trk-detail");
+    if (!S.trkSel) { det.hidden = true; return; }
+    const d = T.days.find((x) => x.d === S.trkSel.d), c = T.cells[S.trkSel.d] && T.cells[S.trkSel.d][S.trkSel.m];
+    if (!d || !c) { det.hidden = true; return; }
+    const st = cellStatus(c, d);
+    det.hidden = false;
+    det.innerHTML = `<h4>${esc(S.trkSel.m)} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase}</span></h4>
+      <p>${st.icon} ${esc(st.label)}.</p>
+      <p class="mono">run ${localTime(d.started)}–${localTime(d.finished)} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
+        forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
+      ${c.msgs.length ? `<ul>${c.msgs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+  }
+
   // ---------- forecast explorer ----------
   async function loadDay(d) {
     if (!S.days[d]) S.days[d] = fetch(`data/days/${d}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -619,7 +748,7 @@
     $("x-zone").onchange = (e) => { S.x.zone = e.target.value; renderExplorerChart(); };
     $("x-target").onchange = (e) => { S.x.target = e.target.value; renderExplorerChart(); };
     $("x-band").onchange = (e) => { S.x.band = e.target.value; renderExplorerChart(); };
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); renderModels(); renderExplorerChart(); });
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); renderModels(); renderExplorerChart(); renderTimeline(); renderTracker(); });
     let wasNarrow = narrow();
     window.addEventListener("resize", () => { if (narrow() !== wasNarrow) { wasNarrow = narrow(); renderCharts(); renderExplorerChart(); } });
 
@@ -627,6 +756,8 @@
     renderAll();
     renderModels();
     renderCentroids();
+    renderTimeline();
+    renderTracker();
     $("cov-var").onchange = (e) => { S.cov = e.target.value; renderExplorerChart(); };
     renderExplorerControls();
     renderExplorerChart();

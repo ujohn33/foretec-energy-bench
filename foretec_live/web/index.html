@@ -118,6 +118,28 @@
   </div>
 </section>
 
+<section id="pipeline">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Pipeline</h2>
+      <p class="lede">When each piece of information exists, relative to delivery day D. Prices are known the moment the day-ahead auction clears, the afternoon before delivery; wind and solar only once they have been produced and metered.</p>
+    </div>
+    <div class="panel timeline-panel"><div class="timeline-scroll"><svg id="timeline" role="img" aria-label="Timeline of data cut-off, gate, delivery, publication of actuals and scoring for price, wind and solar"></svg></div>
+      <div class="legend" id="l-timeline"></div></div>
+
+    <div class="sec-head row tracker-head">
+      <div>
+        <h3 class="sub-h">Run tracker</h3>
+        <p class="sub">Every issue day and model: forecasts generated, locked before the gate, scored. Click a cell for details.</p>
+      </div>
+      <div class="seg" id="trk-phase" role="radiogroup" aria-label="Tracker period"></div>
+    </div>
+    <div class="panel tablewrap"><table class="tracker" id="tracker"></table></div>
+    <div class="legend" id="l-tracker"></div>
+    <div class="panel trk-detail" id="trk-detail" hidden></div>
+  </div>
+</section>
+
 <section id="details">
   <div class="wrap">
     <div class="sec-head">

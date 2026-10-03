@@ -140,6 +140,7 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
 
 def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, snapshots=None, source=None):
     p = paths(cfg, results_subdir)
+    started = str(pd.Timestamp.now(tz="UTC"))
     snaps = snapshots if snapshots is not None else take_snapshot(issue_date, cfg, source=source)
     fh_index = delivery_index(issue_date, cfg)
     outdir = p["forecasts"] / str(issue_date)
@@ -203,6 +204,7 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             out.to_parquet(outdir / f"{spec.name}.parquet", index=False)
     meta = {
         "issue_date": str(issue_date),
+        "run_started_utc": started,
         "issue_time_utc": str(issue_timestamp(issue_date, cfg)),
         "run_finished_utc": str(pd.Timestamp.now(tz="UTC")),
         "series": [f"{z}_{t}" for z, t in snaps],

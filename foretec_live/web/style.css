@@ -240,3 +240,45 @@ td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
 .chip.on{color:var(--blue-ink); background:var(--blue-soft); border-color:transparent}
 .leaflet-container{font-family:Archivo,sans-serif}
 .leaflet-tooltip{font-family:"Geist Mono",monospace; font-size:.72rem}
+
+/* pipeline timeline */
+.timeline-panel{padding:14px 10px 8px}
+.timeline-scroll{overflow-x:auto}
+#timeline{display:block; width:100%; min-width:780px; height:auto}
+#timeline text{font-family:"Geist Mono",monospace; font-size:11px; fill:var(--ink2)}
+#timeline text.lane{font-family:Archivo,sans-serif; font-size:13px; font-weight:600; fill:var(--ink)}
+#timeline text.day{font-size:11px; fill:var(--ink); letter-spacing:.06em}
+#timeline .band{fill:var(--raise)}
+#timeline .band.delivery{fill:var(--blue-soft)}
+#timeline .grid{stroke:var(--rule); stroke-width:1}
+#timeline .break{stroke:var(--ink2); stroke-width:1; stroke-dasharray:2 3}
+#timeline .hist{fill:var(--blue); opacity:.32}
+#timeline .act{fill:var(--green); opacity:.55}
+#timeline .cut{stroke:var(--blue-ink); stroke-width:1.6; stroke-dasharray:5 3}
+#timeline .gate{stroke:var(--amber); stroke-width:2}
+#timeline .mk{fill:var(--surface); stroke:var(--ink); stroke-width:1.6}
+#timeline .mk.score{fill:var(--ink)}
+#timeline .mk.pub{fill:var(--green); stroke:var(--green)}
+#timeline .mk.in{fill:var(--surface); stroke:var(--blue-ink)}
+.legend .sw{display:inline-block; width:22px; height:9px; border-radius:1px}
+
+/* run tracker */
+.tracker-head{margin:52px 0 0}
+.tracker-head .sub-h{margin-top:0}
+.tracker th,.tracker td{text-align:center; padding:6px 4px}
+.tracker th:first-child,.tracker td:first-child{text-align:left; padding-left:16px; position:sticky; left:0; background:var(--surface); z-index:1}
+.tracker th:first-child{background:var(--raise)}
+.tracker th small{display:block; font-size:.6rem; letter-spacing:.04em; text-transform:none; margin-top:2px}
+.tracker th small.late{color:#d03b3b} .tracker th small.ok{color:var(--green)}
+.trk{font:600 .82rem "Geist Mono",monospace; width:30px; height:26px; border-radius:2px; border:1px solid transparent; cursor:pointer; padding:0; line-height:1}
+.trk.ok{background:rgba(12,163,12,.14); color:#0a7a0a; border-color:rgba(12,163,12,.35)}
+.trk.part{background:var(--blue-soft); color:var(--blue-ink)}
+.trk.wait{background:var(--raise); color:var(--ink2); border-color:var(--rule)}
+.trk.miss{background:rgba(250,178,25,.18); color:#8a5a00; border-color:rgba(250,178,25,.5)}
+.trk.late{background:rgba(236,131,90,.18); color:#a4461f; border-color:rgba(236,131,90,.5)}
+.trk.err{background:rgba(208,59,59,.14); color:#b02a2a; border-color:rgba(208,59,59,.45)}
+.trk[aria-pressed="true"]{outline:2px solid var(--ink); outline-offset:1px}
+.trk-detail{margin-top:12px; padding:14px 18px; font-size:.9rem}
+.trk-detail h4{margin:0 0 6px; font-size:1rem}
+.trk-detail ul{margin:6px 0 0; padding-left:18px; color:var(--ink2); font-family:"Geist Mono",monospace; font-size:.78rem}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .trk.ok{color:#7fe07f} :root:not([data-theme="light"]) .trk.miss{color:#ffd27a} :root:not([data-theme="light"]) .trk.late{color:#ffb090} :root:not([data-theme="light"]) .trk.err{color:#ff9a9a} }

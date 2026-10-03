@@ -139,6 +139,60 @@ def _day_inputs(issue_date: str, idx, cfg) -> dict | None:
     }
 
 
+def _timeline(cfg) -> dict:
+    """What the pipeline diagram draws, straight from the config (Brussels times, days relative to D)."""
+    t = cfg["targets"]
+    nwp = (cfg.get("covariates") or {}).get("nwp", {}).get("models", {})
+    return {
+        "issue_time": cfg["issue_time"], "gate": cfg.get("gate", cfg["issue_time"]), "schedule": cfg.get("schedule", {}),
+        "price_score_after": t["price"].get("score_after"),
+        "lag_hours": {k: float(str(v.get("publication_lag", "0h")).rstrip("h") or 0) for k, v in t.items()},
+        "score_after_days": {k: v.get("score_after_days") for k, v in t.items()},
+        "nwp": {m: {"label": v["label"], "lag_hours": v["lag_hours"], "cycle_hours": v["cycle_hours"]} for m, v in nwp.items()},
+    }
+
+
+def _tracker(cfg) -> dict:
+    """Per issue day and model: forecasts generated, on time, scored. Built from the run logs and scores."""
+    from .score import scorable
+    from .timeutil import gate_timestamp
+
+    s = _scores(cfg)
+    scored = set() if s.empty else set(zip(s["issue_date"], s["model"], s["zone"], s["target"]))
+    days, cells = [], {}
+    for day, (phase, folder) in sorted(_forecast_days(cfg).items()):
+        f = folder / "_run.json"
+        meta = json.loads(f.read_text()) if f.exists() else {}
+        finished = meta.get("run_finished_utc")
+        gate = gate_timestamp(day, cfg)
+        on_time = None
+        if phase == "live" and finished:
+            on_time = bool(pd.Timestamp(finished).tz_convert("UTC").tz_localize(None) <= gate)
+        due = {(z, t) for z in cfg["zones"] for t in cfg["targets"] if scorable(day, t, cfg)}
+        per = {}
+        for r in meta.get("runs", []):
+            c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "sec": 0.0, "msgs": []})
+            if r["status"] == "ok":
+                c["ok"] += 1
+                if (r.get("zone"), r.get("target")) in due:
+                    c["due"] += 1
+                    c["scored"] += (day, r["model"], r["zone"], r["target"]) in scored
+            elif r["status"] == "skipped":
+                c["skip"] += 1
+                c["msgs"].append(f"skipped: {r.get('detail', '')}"[:240])
+            else:
+                c["err"] += 1
+                c["msgs"].append(f"{r.get('zone', '')} {r.get('target', '')}: {r.get('detail', '')}"[:240])
+            c["sec"] += float(r.get("seconds") or 0)
+        for c in per.values():
+            c["sec"] = round(c["sec"], 1)
+            c["msgs"] = c["msgs"][:6]
+        cells[day] = per
+        days.append({"d": day, "phase": phase, "started": meta.get("run_started_utc"), "finished": finished,
+                     "gate_utc": str(gate), "on_time": on_time, "n_series": len(meta.get("series", [])), "n_due": len(due)})
+    return {"days": days, "cells": cells}
+
+
 def _covariate_summary(cfg) -> dict | None:
     ccfg = cfg.get("covariates")
     if not ccfg:
@@ -213,6 +267,8 @@ def build_site(cfg) -> Path:
         },
         "models": models,
         "covariates": _covariate_summary(cfg),
+        "timeline": _timeline(cfg),
+        "tracker": _tracker(cfg),
         "score_columns": cols,
         "scores": rows,
         "days": {d: ph for d, (ph, _) in days.items()},
