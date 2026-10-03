@@ -85,6 +85,8 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
     out["inputs"] = _day_inputs(issue_date, idx, cfg)
     srcf = p["actuals"] / out["delivery_date"] / "_sources.json"
     out["actual_sources"] = json.loads(srcf.read_text()) if srcf.exists() else None
+    hist = p["snapshots"] / issue_date / "_sources.json"   # live days only; backtests do not store snapshots
+    out["history_sources"] = json.loads(hist.read_text()) if hist.exists() else None
     return out
 
 

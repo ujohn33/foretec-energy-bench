@@ -10,7 +10,7 @@
   ];
   const TARGET_LABEL = { price: "Price", wind: "Wind", solar: "Solar" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10,
+    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all",
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -57,8 +57,12 @@
   const btColor = (m) => mix(color(m), css("--bt"), 0.62);
 
   // ---------- data ----------
+  // a model "uses covariates" when it takes anything beyond its own history and the calendar
+  const COVARIATE_INPUTS = ["nwp", "load_forecast", "fuel"];
+  let USES_COV = {};
+  const inField = (m) => S.covFilter === "all" || (S.covFilter === "with") === !!USES_COV[m];
   function filteredRows(metric = S.metric) {
-    return ROWS.filter((r) => (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+    return ROWS.filter((r) => inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
@@ -142,6 +146,11 @@
       { k: "backtest", label: "Backtest" },
       { k: "all", label: "All" },
     ], S.phase, (k) => { S.phase = k; renderAll(); });
+    seg($("f-cov"), [
+      { k: "all", label: "All" },
+      { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost" },
+      { k: "without", label: "Without", title: "Models that only see the target's own history" },
+    ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
     seg($("f-view"), [
       { k: "rank", label: "Avg rank" },
       { k: "value", label: "Value", disabled: !rawAllowed(), title: rawAllowed() ? "" : "Pick one zone and one target to compare raw values across days" },
@@ -376,12 +385,29 @@
   // ---------- inputs: what the models knew ----------
   const NWP_STYLE = { icon_eu: [], gfs_seamless: [6, 4], ecmwf_ifs: [2, 3] };
   function fmtUtc(s) { return s ? String(s).replace("T", " ").slice(0, 16) + " UTC" : "–"; }
+  const SRC_NAME = { entsoe: "ENTSO-E", energycharts: "Energy-Charts" };
+  function provenance(p) {
+    if (!p) return null;
+    const parts = Object.entries(p).filter(([k, n]) => k !== "missing" && n > 0);
+    return parts.length === 1 ? SRC_NAME[parts[0][0]] || parts[0][0] : parts.map(([k, n]) => `${SRC_NAME[k] || k} ${n.toLocaleString("en-GB")}`).join(" + ");
+  }
+  function historyRow(day) {
+    const hs = day.history_sources;
+    const lines = Object.keys(D.config.targets).map((t) => {
+      const p = provenance(hs && hs[`${S.x.zone}_${t}`]);
+      return `${TARGET_LABEL[t] || t}: ${p ? esc(p) + (p.includes("+") ? " quarter-hours" : "") : day.phase === "backtest" || !hs ? "Energy-Charts" : "–"}`;
+    }).join("<br>");
+    const note = hs ? "ENTSO-E Transparency Platform (A44 prices, A75 generation per type); gaps from Energy-Charts"
+                    : "Energy-Charts (issue days up to 3 Oct 2026, and backtests, which do not store their snapshots)";
+    return `<tr><td>Target history</td><td class="wrap">${note}</td><td class="wrap">prices through the end of D-1; wind and solar through the cut-off minus 1 h</td><td class="wrap">${lines}</td></tr>`;
+  }
   function renderInputs(day) {
     const inp = day && day.inputs;
     const t = $("inputs-table");
     $("cov-zone").textContent = S.x.zone;
+    const head = `<thead><tr><th>Input</th><th>Vintage used</th><th>Why it is admissible</th><th>Fetched / source</th></tr></thead>`;
     if (!inp) {
-      t.innerHTML = `<tbody><tr><td class="empty">No covariate model ran for this issue day, so there are no frozen inputs to show. Models using only their own history saw the target series up to the cut-off.</td></tr></tbody>`;
+      t.innerHTML = head + `<tbody>${day ? historyRow(day) : ""}<tr><td colspan="4" class="empty">No covariate model ran for this issue day, so there are no frozen covariates to show.</td></tr></tbody>`;
       $("cov-card").style.display = "none";
       return;
     }
@@ -389,15 +415,15 @@
     const bt = day.phase === "backtest";
     const lagNote = (m) => `init ≤ cut-off − ${D.covariates.nwp_models[m].lag_hours} h`;
     const rows = [
-      ["Target history", "ENTSO-E Transparency Platform; gaps from Energy-Charts", "prices through the end of D-1; wind and solar through the cut-off minus 1 h", "–"],
       ...inp.runs.map((r) => [inp.nwp_models[r.model].label, `run ${fmtUtc(r.run_utc)}`, r.status === "ok" ? lagNote(r.model) : `<b>${esc(r.status)}</b>`,
         r.fetched_utc ? fmtUtc(r.fetched_utc) + (bt ? " (archive)" : "") : "–"]),
-      ["Load forecast", esc(inp.load_forecast), bt ? "backtest: currently published version" : "fetched at the cut-off", "–"],
-      ["Fuel cost", esc(inp.fuel), "–", "–"],
+      ["Load forecast", esc(inp.load_forecast), bt ? "backtest: currently published version" : "fetched at the cut-off", "ENTSO-E A65"],
+      ["Fuel cost", esc(inp.fuel), "quotes count from the end of their date", "oilpriceapi"],
     ];
-    t.innerHTML = `<thead><tr><th>Input</th><th>Vintage used</th><th>Why it is admissible</th><th>Fetched</th></tr></thead><tbody>` +
+    t.innerHTML = head + `<tbody>` +
       `<tr><td>Cut-off / gate</td><td class="wrap">${fmtUtc(inp.cutoff_utc)} · gate ${esc(D.config.gate)} Brussels</td><td class="wrap">${inp.n_columns} covariate columns frozen at the cut-off</td>` +
       `<td class="wrap"><a href="${inp.download.covariates}">covariates (CSV)</a> · <a href="${inp.download.meta}">run log (JSON)</a></td></tr>` +
+      historyRow(day) +
       rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? "wrap" : ""}">${c}</td>`).join("")}</tr>`).join("") + "</tbody>";
 
     const shown = inp.shown[S.x.zone] || {};
@@ -467,11 +493,8 @@
   }
 
   function actualSource(day, key) {
-    const p = day.actual_sources && day.actual_sources[key];
-    if (!p) return "Energy-Charts";
-    const parts = Object.entries(p).filter(([k, n]) => k !== "missing" && n > 0);
-    const name = { entsoe: "ENTSO-E", energycharts: "Energy-Charts" };
-    return parts.length === 1 ? name[parts[0][0]] || parts[0][0] : parts.map(([k, n]) => `${name[k] || k} ${n}`).join(" + ") + " quarter-hours";
+    const p = provenance(day.actual_sources && day.actual_sources[key]);
+    return p ? p + (p.includes("+") ? " quarter-hours" : "") : "Energy-Charts";
   }
 
   // ---------- forecast explorer ----------
@@ -495,7 +518,7 @@
     const unit = D.config.targets[S.x.target].unit;
     const bt = day.phase === "backtest";
     card.classList.toggle("is-bt", bt);
-    const models = MODELS.filter((m) => shown(m) && ser.models[m]);
+    const models = MODELS.filter((m) => shown(m) && inField(m) && ser.models[m]);
     const bandModels = models.filter((m) => ser.models[m].lo);
     if (!bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
     options($("x-band"), [{ k: "", label: "No band" }, ...bandModels.map((m) => ({ k: m, label: `${m} 10–90%` }))], S.x.band);
@@ -549,7 +572,7 @@
     let st = standings(DAYS, S.phase);
     if (!st.length) st = standings(DAYS, "all");
     const ranked = st.map((x) => x.model);
-    const rest = MODELS.filter((m) => !ranked.includes(m));
+    const rest = MODELS.filter((m) => !ranked.includes(m) && inField(m));
     SHOWN = new Set([...ranked, ...rest].slice(0, S.topN));
     const total = new Set([...ranked, ...rest]).size;
     const el = $("f-top");
@@ -579,6 +602,7 @@
     ROWS = D.scores.map((a) => Object.fromEntries(cols.map((c, i) => [c, a[i]])));
     MODELS = D.models.map((m) => m.name);
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
+    USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
