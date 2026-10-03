@@ -642,7 +642,8 @@
     const models = MODELS.filter((m) => days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
     const head = `<thead><tr><th>Model</th>${days.map((d) => {
       const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
-      return `<th title="${d.d} · ${d.started ? `run ${localTime(d.started)}–` : "finished "}${localTime(d.finished)} Brussels">${esc(shortDate(d.d))}${b}</th>`;
+      const rv = (d.revised || []).length ? `<small title="actuals revised and re-scored: ${esc(d.revised.join(", "))}">↻ ${d.revised.length} revised</small>` : "";
+      return `<th title="${d.d} · ${d.started ? `run ${localTime(d.started)}–` : "finished "}${localTime(d.finished)} Brussels">${esc(shortDate(d.d))}${b}${rv}</th>`;
     }).join("")}</tr></thead>`;
     const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>${days.map((d) => {
       const st = cellStatus(T.cells[d.d] && T.cells[d.d][m], d);
@@ -666,6 +667,7 @@
       <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
       ${c.msgs.length ? `<ul>${c.msgs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${(d.revised || []).length ? `<p>Actuals revised after first scoring, re-scored: ${esc(d.revised.join(", "))}.</p>` : ""}
       <p><a href="explorer.html?day=${d.d}">Open ${d.d} in the Forecast Explorer →</a></p>`;
   }
 
@@ -742,6 +744,7 @@
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
       ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}
       ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
+      ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
     legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Actual</span>` : "");
 

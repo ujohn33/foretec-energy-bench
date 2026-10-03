@@ -85,6 +85,8 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
     out["inputs"] = _day_inputs(issue_date, idx, cfg)
     srcf = p["actuals"] / out["delivery_date"] / "_sources.json"
     out["actual_sources"] = json.loads(srcf.read_text()) if srcf.exists() else None
+    revf = p["actuals"] / out["delivery_date"] / "_revisions.json"
+    out["revisions"] = [c for c in json.loads(revf.read_text()) if c.get("revised")] if revf.exists() else []
     hist = p["snapshots"] / issue_date / "_sources.json"   # live days only; backtests do not store snapshots
     out["history_sources"] = json.loads(hist.read_text()) if hist.exists() else None
     return out
@@ -190,7 +192,9 @@ def _tracker(cfg) -> dict:
             c["sec"] = round(c["sec"], 1)
             c["msgs"] = c["msgs"][:6]
         cells[day] = per
-        days.append({"d": day, "phase": phase, "started": meta.get("run_started_utc"), "finished": finished,
+        revf = paths(cfg)["actuals"] / str(delivery_date(day)) / "_revisions.json"
+        revised = sorted({c["series"] for c in json.loads(revf.read_text()) if c.get("revised")}) if revf.exists() else []
+        days.append({"d": day, "phase": phase, "revised": revised, "started": meta.get("run_started_utc"), "finished": finished,
                      "gate_utc": str(gate), "on_time": on_time, "n_series": len(meta.get("series", [])), "n_due": len(due)})
     return {"days": days, "cells": cells}
 
