@@ -31,13 +31,17 @@
   // lighter shades for variants within a family, navy ink shades for the classical baselines.
   const FAMILY_ORDER = ["chronos", "timesfm", "moirai", "tirex", "toto", "sundial", "ttm"];
   let FAM = {};
+  // One colour per model, on every page: it depends only on the model's family and its place in the
+  // full model list (D.models), never on filters, rank or page. Full-strength ink is reserved for the
+  // observed values (Actual), so no model ever uses it.
+  const actualColor = () => css("--ink");
   function color(m) {
     const fam = FAM[m] || m;
     const members = MODELS.filter((x) => (FAM[x] || x) === fam);
     const k = Math.max(0, members.indexOf(m));
     let base;
-    if (fam === "baseline") base = css("--ink");
-    else if (fam === "tso") base = css("--ink2");
+    if (fam === "baseline") return mix(css("--ink"), css("--surface"), Math.min(0.32 + 0.09 * k, 0.7));
+    if (fam === "tso") base = css("--ink2");
     else {
       const i = FAMILY_ORDER.indexOf(fam);
       base = i >= 0 ? css(`--s${i + 1}`) : css("--s8");
@@ -714,7 +718,7 @@
       datasets.push({ label: "_lo", data: ser.models[S.x.band].lo, borderWidth: 0, pointRadius: 0, fill: false });
       datasets.push({ label: "_hi", data: ser.models[S.x.band].hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(c, 0.16) });
     }
-    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: css("--ink"), backgroundColor: css("--ink"), borderWidth: 2.5, pointRadius: 0, tension: 0.15, endLabel: "Actual", endColor: css("--ink"), order: -1 });
+    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0.15, endLabel: "Actual", endColor: actualColor(), order: -1 });
     for (const m of models) {
       const c = color(m);
       datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
