@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forecast Explorer · Foretec Transparency</title>
+<meta name="description" content="Every model's forecast for any delivery day against what happened, and the exact inputs each model had at the cut-off.">
+<meta name="theme-color" content="#E6F0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1F3A" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://transparency.foretec.co/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Foretec">
+<meta property="og:title" content="Foretec Transparency: an open forecasting leaderboard">
+<meta property="og:description" content="Every model forecasts the next delivery day from the same public data at the same time, and is scored against what actually happened.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Inter:ital,wght@1,900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="explorer">
+<header class="top">
+  <div class="wrap top-in">
+    <a href="https://foretec.be/" class="mark">Foretec</a>
+    <nav class="top-nav" aria-label="Pages">
+      <a href="index.html">Leaderboard</a>
+      <a href="explorer.html" class="on" aria-current="page">Forecast Explorer</a>
+      <a href="methodology.html">Methodology</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section id="forecasts" class="first">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Forecast explorer</h2>
+      <p class="lede">What each model forecast for one delivery day, against the actual outcome. Times are Brussels local time.</p>
+    </div>
+    <div class="panel chart-panel" id="x-card">
+      <div class="panel-head filters">
+        <div class="field"><label for="x-day">Issue day</label><select id="x-day"></select></div>
+        <div class="field"><label for="x-zone">Zone</label><select id="x-zone"></select></div>
+        <div class="field"><label for="x-target">Target</label><select id="x-target"></select></div>
+        <div class="field"><label for="x-band">Band</label><select id="x-band"></select></div>
+        <div class="field"><span class="lbl">Covariates</span><div class="seg" id="x-cov" role="radiogroup" aria-label="Covariates"></div></div>
+      </div>
+      <div class="x-meta mono" id="x-meta"></div>
+      <div class="chart-box tall"><canvas id="c-day" aria-label="Forecasts against actuals for one delivery day"></canvas></div>
+      <div class="legend" id="l-day"></div>
+      <div class="tablewrap x-table"><table id="x-table"></table></div>
+    </div>
+  </div>
+</section>
+
+
+<section id="inputs">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Inputs</h2>
+      <p class="lede">What the covariate models knew at the cut-off, for the issue day and zone picked in the explorer: which weather runs, which documents, and the values themselves. Every value can be downloaded.</p>
+    </div>
+    <div class="panel tablewrap"><table id="inputs-table"></table></div>
+    <div class="panel chart-panel" id="cov-card">
+      <div class="panel-head filters">
+        <div class="field"><label for="cov-var">Covariate</label><select id="cov-var"></select></div>
+        <div class="field"><span class="lbl">Zone</span><span class="mono zone-tag" id="cov-zone"></span></div>
+      </div>
+      <div class="chart-box"><canvas id="c-cov" aria-label="Covariate values per weather model for the delivery day"></canvas></div>
+      <div class="legend" id="l-cov"></div>
+      <p class="sub cov-note" id="cov-note"></p>
+    </div>
+
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span class="foot-mark">Foretec</span>
+    <span>Brussels</span>
+    <span>Data: <a href="https://transparency.entsoe.eu" rel="noopener">ENTSO-E Transparency Platform</a>; gaps from <a href="https://energy-charts.info" rel="noopener">Energy-Charts</a> (Fraunhofer ISE, CC BY 4.0)</span>
+    <span><a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a></span>
+  </div>
+</footer>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -221,11 +221,12 @@ def build_site(cfg) -> Path:
         if f.is_file():
             shutil.copy2(f, site / f.name)
     # cache-busting: browsers must pick up a new app.js/style.css as soon as it is deployed
-    html = (site / "index.html").read_text()
-    for name in ("app.js", "style.css"):
-        digest = hashlib.sha1((site / name).read_bytes()).hexdigest()[:10]
-        html = html.replace(f'"{name}"', f'"{name}?v={digest}"')
-    (site / "index.html").write_text(html)
+    digests = {name: hashlib.sha1((site / name).read_bytes()).hexdigest()[:10] for name in ("app.js", "style.css")}
+    for page in WEB.glob("*.html"):
+        html = (site / page.name).read_text()
+        for name, digest in digests.items():
+            html = html.replace(f'"{name}"', f'"{name}?v={digest}"')
+        (site / page.name).write_text(html)
     # old single-table page: point it at the new site
     (site / "backtest.html").write_text('<!doctype html><meta http-equiv="refresh" content="0;url=./#standings">')
 

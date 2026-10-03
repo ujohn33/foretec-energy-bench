@@ -17,6 +17,7 @@
   let ROWS = [];       // score rows as objects
   let MODELS = [];     // model names in fixed colour order
   const $ = (id) => document.getElementById(id);
+  const PAGE = document.body.dataset.page || "leaderboard";
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
@@ -371,6 +372,7 @@
   }
 
   function renderModels() {
+    if (!$("models-table")) return;
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
       D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${esc(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}</td>
@@ -402,6 +404,7 @@
     return `<tr><td>Target history</td><td class="wrap">${note}</td><td class="wrap">prices through the end of D-1; wind and solar through the cut-off minus 1 h</td><td class="wrap">${lines}</td></tr>`;
   }
   function renderInputs(day) {
+    if (!$("inputs-table")) return;
     const inp = day && day.inputs;
     const t = $("inputs-table");
     $("cov-zone").textContent = S.x.zone;
@@ -458,13 +461,14 @@
     $("l-cov").innerHTML = (members.length > 1 ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Ensemble mean</span>
       <span style="display:flex;align-items:center;gap:7px"><i style="border-top:8px solid ${alpha(css("--blue"), 0.25)}"></i>Min–max across models (disagreement)</span>` : "") +
       members.map((m) => `<span style="display:flex;align-items:center;gap:7px"><i style="border-top:2px ${m === "gfs_seamless" ? "dashed" : m === "ecmwf_ifs" ? "dotted" : "solid"} ${css("--blue-ink")}"></i>${esc((inp.nwp_models[m] && inp.nwp_models[m].label) || m)}</span>`).join("");
-    $("cov-note").textContent = `Delivery day ${addDays(day.issue_date, 1)}, ${S.x.zone}, capacity-weighted over the centroids below. Values exactly as frozen at the cut-off.`;
+    $("cov-note").textContent = `Delivery day ${addDays(day.issue_date, 1)}, ${S.x.zone}, capacity-weighted over the centroids on the Methodology page. Values exactly as frozen at the cut-off.`;
   }
 
   const BUCKET_LABEL = { wind_onshore: "Wind onshore", wind_offshore: "Wind offshore", solar: "Solar", load: "Load centres (population)" };
   const BUCKET_SLOT = { wind_onshore: "--s1", wind_offshore: "--s3", solar: "--s4", load: "--ink2" };
   let MAP = null;
   function renderCentroids() {
+    if (!$("centroid-table")) return;
     const C = D.covariates && D.covariates.centroids;
     if (!C || !C.length) {
       $("map").outerHTML = `<p class="empty">Centroids are not published yet.</p>`;
@@ -506,6 +510,7 @@
     return Math.round((loc - utc) / 36e5);
   }
   function renderTimeline() {
+    if (!$("timeline")) return;
     const T = D.timeline;
     if (!T) return;
     // hours relative to D-1 00:00 Brussels; all of D-1 up to 16:00 is zoomed in (runs, cut-off, gate, auction)
@@ -592,6 +597,7 @@
   const localTime = (u) => (u ? new Date(String(u).replace(" ", "T").replace(/\+00:00$/, "Z").replace(/(\d)$/, "$1Z"))
     .toLocaleTimeString("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" }) : "–");
   function renderTracker() {
+    if (!$("tracker")) return;
     const T = D.tracker;
     if (!T || !T.days.length) { $("tracker").innerHTML = `<tbody><tr><td class="empty">No runs yet.</td></tr></tbody>`; return; }
     const hasLive = T.days.some((d) => d.phase === "live");
@@ -625,7 +631,8 @@
       <p>${st.icon} ${esc(st.label)}.</p>
       <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
-      ${c.msgs.length ? `<ul>${c.msgs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+      ${c.msgs.length ? `<ul>${c.msgs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      <p><a href="explorer.html?day=${d.d}">Open ${d.d} in the Forecast Explorer →</a></p>`;
   }
 
   // ---------- forecast explorer ----------
@@ -634,6 +641,7 @@
     return S.days[d];
   }
   function renderExplorerControls() {
+    if (!$("x-day")) return;
     const ds = Object.keys(D.days || {}).sort().reverse();
     if (!S.x.day) S.x.day = ds[0];
     options($("x-day"), ds.map((d) => ({ k: d, label: `${d} → ${addDays(d, 1)} · ${D.days[d]}` })), S.x.day);
@@ -641,6 +649,7 @@
     options($("x-target"), Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t })), S.x.target);
   }
   async function renderExplorerChart() {
+    if (!$("x-day")) return;
     const day = await loadDay(S.x.day);
     const card = $("x-card");
     if (!day) { $("x-meta").innerHTML = "No forecasts stored for this day."; return; }
@@ -698,7 +707,8 @@
 
   // ---------- wiring ----------
   let SHOWN = new Set();
-  const shown = (m) => SHOWN.has(m);
+  // the top-N slider lives on the leaderboard; elsewhere every model is shown
+  const shown = (m) => PAGE !== "leaderboard" || SHOWN.has(m);
   function updateShown() {
     let st = standings(DAYS, S.phase);
     if (!st.length) st = standings(DAYS, "all");
@@ -713,6 +723,7 @@
   }
 
   function renderAll() {
+    if (!$("standings")) return;
     DAYS = dayTable(filteredRows());
     updateShown();
     renderControls();
@@ -726,7 +737,8 @@
     try {
       D = await (await fetch("data/summary.json", { cache: "no-cache" })).json();
     } catch (e) {
-      document.querySelector("#standings .wrap").insertAdjacentHTML("afterbegin", '<p class="lede">Leaderboard data is not available yet.</p>');
+      const host = document.querySelector("main section .wrap");
+      if (host) host.insertAdjacentHTML("afterbegin", '<p class="lede">Data is not available yet.</p>');
       return;
     }
     const cols = D.score_columns;
@@ -739,33 +751,52 @@
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
     S.phase = ROWS.some((r) => r.phase === "live") ? "live" : "backtest";
 
-    const up = new Date(D.generated_utc.replace("Z", ":00Z"));
-    $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
-
-    $("f-zone").onchange = (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; if (S.zone !== "all") S.x.zone = S.zone; renderAll(); renderExplorerControls(); renderExplorerChart(); };
-    $("f-target").onchange = (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; if (S.target !== "all") S.x.target = S.target; renderAll(); renderExplorerControls(); renderExplorerChart(); };
-    $("f-top").oninput = (e) => { S.topN = +e.target.value; renderAll(); renderExplorerChart(); };
-    $("x-day").onchange = (e) => { S.x.day = e.target.value; renderExplorerChart(); };
-    $("x-zone").onchange = (e) => { S.x.zone = e.target.value; renderExplorerChart(); };
-    $("x-target").onchange = (e) => { S.x.target = e.target.value; renderExplorerChart(); };
-    $("x-band").onchange = (e) => { S.x.band = e.target.value; renderExplorerChart(); };
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); renderModels(); renderExplorerChart(); renderTimeline(); renderTracker(); });
+    const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
+    Chart.defaults && (Chart.defaults.font.family = "Archivo, -apple-system, sans-serif");
+    const rerender = () => { renderAll(); renderModels(); renderExplorerChart(); renderTimeline(); renderTracker(); };
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
     let wasNarrow = narrow();
-    window.addEventListener("resize", () => { if (narrow() !== wasNarrow) { wasNarrow = narrow(); renderCharts(); renderExplorerChart(); } });
+    window.addEventListener("resize", () => { if (narrow() !== wasNarrow) { wasNarrow = narrow(); if ($("standings")) renderCharts(); renderExplorerChart(); } });
 
-    Chart.defaults.font.family = "Archivo, -apple-system, sans-serif";
-    renderAll();
-    renderModels();
-    renderCentroids();
-    renderTimeline();
-    renderTracker();
-    $("cov-var").onchange = (e) => { S.cov = e.target.value; renderExplorerChart(); };
-    renderExplorerControls();
-    renderExplorerChart();
+    if (PAGE === "leaderboard") {
+      const up = new Date(D.generated_utc.replace("Z", ":00Z"));
+      $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      on("f-zone", "onchange", (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
+      on("f-target", "onchange", (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
+      on("f-top", "oninput", (e) => { S.topN = +e.target.value; renderAll(); });
+      renderAll();
+      renderTracker();
+    }
+    if (PAGE === "explorer") {
+      const q = new URLSearchParams(location.search);   // deep links: explorer.html?day=2026-10-03&zone=BE&target=wind
+      if (q.get("day") && D.days && D.days[q.get("day")]) S.x.day = q.get("day");
+      if (D.config.zones.includes(q.get("zone"))) S.x.zone = q.get("zone");
+      if (q.get("target") in D.config.targets) S.x.target = q.get("target");
+      const covSeg = () => seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
+        (k) => { S.covFilter = k; covSeg(); renderExplorerChart(); });
+      covSeg();
+      const sync = () => history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`);
+      on("x-day", "onchange", (e) => { S.x.day = e.target.value; sync(); renderExplorerChart(); });
+      on("x-zone", "onchange", (e) => { S.x.zone = e.target.value; sync(); renderExplorerChart(); });
+      on("x-target", "onchange", (e) => { S.x.target = e.target.value; sync(); renderExplorerChart(); });
+      on("x-band", "onchange", (e) => { S.x.band = e.target.value; renderExplorerChart(); });
+      on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
+      renderExplorerControls();
+      renderExplorerChart();
+    }
+    if (PAGE === "methodology") {
+      renderTimeline();
+      renderCentroids();
+      renderModels();
+    }
     // content renders after load, so redo the jump to a #section link
     if (location.hash.length > 1) { const el = document.getElementById(location.hash.slice(1)); if (el) el.scrollIntoView(); }
   }
+
+  // links to sections that moved off the one-page site
+  const MOVED = { forecasts: "explorer.html", inputs: "explorer.html", pipeline: "methodology.html", method: "methodology.html", submit: "methodology.html", models: "methodology.html", centroids: "methodology.html" };
+  if (PAGE === "leaderboard" && MOVED[location.hash.slice(1)]) location.replace(MOVED[location.hash.slice(1)] + location.hash);
 
   document.fonts && document.fonts.ready ? document.fonts.ready.then(init) : init();
 })();

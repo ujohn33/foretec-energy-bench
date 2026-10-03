@@ -65,7 +65,7 @@ def test_forecast_score_report(cfg):
     assert {r[1] for r in summary["scores"]} == {"backtest"} and summary["days"] == {d.isoformat(): "backtest"}
     day = json.loads((site / "data" / "days" / f"{d.isoformat()}.json").read_text())
     assert len(day["series"]["BE_price"]["models"]["naive_daily"]["p"]) == 96
-    assert all((site / f).exists() for f in ["index.html", "app.js", "style.css"])
+    assert all((site / f).exists() for f in ["index.html", "explorer.html", "methodology.html", "app.js", "style.css"])
 
 
 def test_subprocess_model(cfg, tmp_path):

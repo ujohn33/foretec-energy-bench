@@ -282,3 +282,14 @@ td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
 .trk-detail h4{margin:0 0 6px; font-size:1rem}
 .trk-detail ul{margin:6px 0 0; padding-left:18px; color:var(--ink2); font-family:"Geist Mono",monospace; font-size:.78rem}
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .trk.ok{color:#7fe07f} :root:not([data-theme="light"]) .trk.miss{color:#ffd27a} :root:not([data-theme="light"]) .trk.late{color:#ffb090} :root:not([data-theme="light"]) .trk.err{color:#ff9a9a} }
+
+/* multi-page: active page in the nav, first section without a rule */
+.top-nav a.on{color:var(--ink); font-weight:500; border-bottom-color:var(--ink)}
+section.first{border-top:0; padding-top:48px}
+@media(max-width:600px){
+  .top-in{height:64px; gap:12px}
+  .mark{font-size:1.45rem}
+  .top-nav{gap:12px}
+  .top-nav a{font-size:.76rem}
+  .filterbar{top:64px}
+}
