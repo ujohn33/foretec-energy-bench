@@ -42,7 +42,6 @@
   <div class="wrap">
     <div class="sec-head">
       <h2>When everything happens</h2>
-      <p class="lede">When each piece of information exists, relative to delivery day D. Prices are known the moment the day-ahead auction clears, the afternoon before delivery; wind and solar only once they have been produced and metered.</p>
     </div>
     <div class="panel timeline-panel"><div class="timeline-scroll"><svg id="timeline" role="img" aria-label="Timeline of data cut-off, gate, delivery, publication of actuals and scoring for price, wind and solar"></svg></div>
       <div class="legend" id="l-timeline"></div></div>
@@ -69,7 +68,6 @@
 <section id="centroids">
   <div class="wrap">
     <div class="sec-head"><h2>Where the weather is sampled</h2></div>
-    <p class="sub">Each weather model is read at capacity-weighted centroids: installations are grouped with a weighted k-means and every centroid carries the capacity of its group (people for the load centres). Zone values are capacity-weighted means; across the weather models we add the ensemble mean, spread, range and pairwise differences. <a id="centroid-doc" href="data/centroids_README.md">Sources and method</a> · <a href="data/centroids.csv">centroids.csv</a></p>
     <div class="panel map-panel"><div id="map" role="img" aria-label="Map of centroids"></div><div class="legend" id="l-map"></div></div>
     <div class="panel tablewrap"><table id="centroid-table"></table></div>
   </div>
@@ -78,7 +76,6 @@
 <section id="models">
   <div class="wrap">
     <div class="sec-head"><h2>Models in the field</h2>
-    <p class="lede" id="submit">A model is a folder with a <span class="code">model.yaml</span>: any sktime forecaster by name, or your own <span class="code">forecaster.py</span>. It runs on the same schedule and data as everyone else. To enter one, write to <a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a>.</p>
     </div>
     <div class="panel tablewrap"><table id="models-table"></table></div>
   </div>

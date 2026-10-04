@@ -142,8 +142,8 @@ section{padding:78px 0; border-top:1px solid var(--rule)}
 #standings{border-top:0; padding-top:40px}
 .sec-head{margin-bottom:34px}
 .sec-head .lede{margin-top:12px; max-width:66ch; font-size:1rem}
-.sec-head.row{display:flex; justify-content:space-between; align-items:flex-end; gap:18px; flex-wrap:wrap}
-.sub-h{margin-top:52px}
+.sec-head.row{display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap}
+.sub-h{margin-top:52px; margin-bottom:16px}
 .sub{margin:8px 0 18px; color:var(--ink2); font-size:.94rem; max-width:70ch}
 
 .panel{background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow)}

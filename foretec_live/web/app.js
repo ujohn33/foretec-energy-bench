@@ -434,9 +434,6 @@
     const rank = S.view === "rank";
     const models = MODELS.filter((m) => shown(m) && DAYS.some((x) => x.avgRank[m] != null));
     const phaseNote = (i) => (DAYS[i] && DAYS[i].phase === "backtest" ? " · backtest" : " · live");
-    $("perf-sub").textContent = rank
-      ? "Average rank per issue day across the selected series; lower is better (1 = best)."
-      : `Mean ${md.label}${unitSuffix()} per issue day; lower is better.`;
 
     draw("c-perf", {
       type: "line",
@@ -495,7 +492,6 @@
     const series = [];
     for (const t of Object.keys(D.config.targets)) for (const z of D.config.zones)
       if ((S.zone === "all" || S.zone === z) && (S.target === "all" || S.target === t)) series.push([z, t]);
-    $("details-sub").textContent = `${md.label}, mean over ${set.size} issue day${set.size === 1 ? "" : "s"} (${S.phase === "all" ? "live and backtest" : S.phase}). Best per row in bold.`;
     const bt = S.phase === "backtest";
     $("details-table").innerHTML = `<thead><tr><th>Series</th><th>Unit</th>${models.map((m) => `<th class="r">${esc(m)}${REF.has(m) ? " (ref)" : ""}</th>`).join("")}</tr></thead><tbody>` +
       series.map(([z, t]) => {
@@ -596,7 +592,6 @@
     $("l-cov").innerHTML = (members.length > 1 ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Ensemble mean</span>
       <span style="display:flex;align-items:center;gap:7px"><i style="border-top:8px solid ${alpha(css("--blue"), 0.25)}"></i>Min–max across models (disagreement)</span>` : "") +
       members.map((m) => `<span style="display:flex;align-items:center;gap:7px"><i style="border-top:2px ${m === "gfs_seamless" ? "dashed" : m === "ecmwf_ifs" ? "dotted" : "solid"} ${css("--blue-ink")}"></i>${esc((inp.nwp_models[m] && inp.nwp_models[m].label) || m)}</span>`).join("");
-    $("cov-note").textContent = `Delivery day ${addDays(day.issue_date, 1)}, ${S.x.zone}, capacity-weighted over the centroids on the Methodology page. Values exactly as frozen at the cut-off.`;
   }
 
   const BUCKET_LABEL = { wind_onshore: "Wind onshore", wind_offshore: "Wind offshore", solar: "Solar", load: "Load centres (population)" };
