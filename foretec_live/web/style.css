@@ -4,6 +4,8 @@
   --sans:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
   --mono:"Source Code Pro",ui-monospace,monospace;
+  /* the Foretec wordmark face: titles lean forward like the logo */
+  --brand:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   /* display faces, subset via the Google Fonts text= parameter: wide heavy for the LIVE bug,
      Futura (Jost where Futura is not installed) for the podium numerals */
   --display:"Archivo","Arial Black",sans-serif;
@@ -58,10 +60,10 @@ body{
 .wrap{max-width:1060px; margin:0 auto; padding:0 28px}
 @media(max-width:560px){ .wrap{padding:0 16px} }
 
-h1,h2{font-family:var(--serif); font-weight:600; text-wrap:balance; margin:0; font-optical-sizing:auto}
-h1{font-size:clamp(2.1rem,4.6vw,3.1rem); line-height:1.1; letter-spacing:-.012em}
-h2{font-size:clamp(1.55rem,2.8vw,1.95rem); line-height:1.18; letter-spacing:-.008em}
-h3{font-family:var(--sans); font-size:1.08rem; font-weight:700; margin:0}
+h1,h2,h3{font-family:var(--brand); font-style:italic; text-wrap:balance; margin:0}
+h1{font-size:clamp(2.1rem,4.6vw,3.1rem); font-weight:900; line-height:1.08; letter-spacing:-.034em}
+h2{font-size:clamp(1.6rem,2.9vw,2rem); font-weight:800; line-height:1.15; letter-spacing:-.03em}
+h3{font-size:1.08rem; font-weight:800; letter-spacing:-.018em}
 p{margin:0}
 a{color:var(--blue-ink)}
 
@@ -83,9 +85,9 @@ header.top{border-bottom:1px solid var(--rule); background:var(--ground); positi
 /* logo lockup: the Foretec wordmark, a hairline, then the product name in the serif */
 .brand{display:flex; align-items:baseline; gap:14px; min-width:0}
 .brand-rule{align-self:center; width:1.5px; height:1.7rem; background:var(--ink); opacity:.28; flex:none}
-.product{font-family:var(--serif); font-size:1.6rem; font-weight:600; font-variation-settings:"opsz" 40; letter-spacing:-.012em;
+.product{font-family:var(--brand); font-size:1.5rem; font-weight:600; letter-spacing:-.03em; word-spacing:-.06em;
   line-height:1; color:var(--ink); text-decoration:none; white-space:nowrap}
-.product i{font-weight:400; font-style:italic; color:var(--blue-ink)}
+.product b{font-weight:800; color:var(--blue-ink); text-decoration:underline; text-decoration-thickness:.14em; text-underline-offset:.16em; text-decoration-color:var(--blue)}
 /* broadcast "on air" bug next to the product name */
 .onair{align-self:center; display:inline-flex; align-items:center; gap:6px; padding:4px 8px 4px 7px; border-radius:2px; background:var(--onair); color:#fff;
   font-family:var(--display); font-stretch:125%; font-weight:800; font-size:.66rem; letter-spacing:.06em; line-height:1; white-space:nowrap; flex:none}
@@ -234,8 +236,8 @@ ol.steps p{margin-top:6px; color:var(--ink2); font-size:.95rem; max-width:72ch}
 footer{border-top:1px solid var(--rule); padding:36px 0 60px; color:var(--ink2); font-size:.85rem}
 .foot{display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap}
 .foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink)}
-.foot-mark span{font-family:var(--serif); font-style:normal; font-weight:600; letter-spacing:-.01em; margin-left:6px; padding-left:10px; border-left:1.5px solid var(--rule)}
-.foot-mark span i{font-weight:400; color:var(--blue-ink)}
+.foot-mark span{font-family:var(--brand); font-style:normal; font-weight:600; letter-spacing:-.03em; word-spacing:-.06em; margin-left:6px; padding-left:10px; border-left:1.5px solid var(--rule)}
+.foot-mark span b{font-weight:800; color:var(--blue-ink); text-decoration:underline; text-decoration-thickness:.14em; text-underline-offset:.16em; text-decoration-color:var(--blue)}
 
 /* explanations on hover / focus / tap */
 .tip{display:none; position:fixed; z-index:60; max-width:min(320px, calc(100vw - 16px)); padding:10px 12px 11px; background:var(--ink); color:var(--ground);
@@ -334,7 +336,7 @@ section.first{border-top:0; padding-top:48px}
   .mark{font-size:1.45rem}
   .brand{gap:11px}
   .brand-rule{height:1.35rem}
-  .product{font-size:1.3rem}
+  .product{font-size:1.25rem}
   .onair{font-size:.6rem; padding:3px 6px; gap:5px}
   .top-nav{width:100%; gap:20px}
   .top-nav a{font-size:.86rem}
