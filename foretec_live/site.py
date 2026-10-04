@@ -12,6 +12,7 @@ import datetime as dt
 import hashlib
 import json
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -27,6 +28,19 @@ log = logging.getLogger(__name__)
 WEB = Path(__file__).parent / "web"
 PHASES = {"backtest": "results/backtest", "live": "results"}
 BAND = ("q0.1", "q0.9")
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write next to the target, then rename: a visitor never gets a half-written file during a rebuild."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def _atomic_copy(src: Path, dst: Path) -> None:
+    tmp = dst.with_name(f".{dst.name}.tmp")
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dst)
 
 
 def _round(a, nd=1):
@@ -225,14 +239,18 @@ def build_site(cfg) -> Path:
     (site / "data" / "days").mkdir(parents=True, exist_ok=True)
     for f in WEB.iterdir():
         if f.is_file():
-            shutil.copy2(f, site / f.name)
+            _atomic_copy(f, site / f.name)
+        elif f.is_dir():          # vendor/: self-hosted Chart.js and Leaflet, no third-party CDN at page load
+            (site / f.name).mkdir(exist_ok=True)
+            for g in f.iterdir():
+                _atomic_copy(g, site / f.name / g.name)
     # cache-busting: browsers must pick up a new app.js/style.css as soon as it is deployed
     digests = {name: hashlib.sha1((site / name).read_bytes()).hexdigest()[:10] for name in ("app.js", "style.css")}
     for page in WEB.glob("*.html"):
         html = (site / page.name).read_text()
         for name, digest in digests.items():
             html = html.replace(f'"{name}"', f'"{name}?v={digest}"')
-        (site / page.name).write_text(html)
+        _atomic_write(site / page.name, html)
     # old single-table page: point it at the new site
     (site / "backtest.html").write_text('<!doctype html><meta http-equiv="refresh" content="0;url=./#standings">')
 
@@ -253,7 +271,7 @@ def build_site(cfg) -> Path:
                 continue
         js = _day_json(issue_date, folder, cfg)
         js["phase"] = phase
-        f.write_text(json.dumps(js, separators=(",", ":"), allow_nan=False))
+        _atomic_write(f, json.dumps(js, separators=(",", ":"), allow_nan=False))
 
     models = []
     # every model folder, including retired ones: their backtest stays public, with the reason
@@ -281,6 +299,6 @@ def build_site(cfg) -> Path:
         "scores": rows,
         "days": {d: ph for d, (ph, _) in days.items()},
     }
-    (site / "data" / "summary.json").write_text(json.dumps(summary, separators=(",", ":"), allow_nan=False))
+    _atomic_write(site / "data" / "summary.json", json.dumps(summary, separators=(",", ":"), allow_nan=False))
     log.info("site: %d score rows, %d forecast days", len(rows), len(days))
     return site

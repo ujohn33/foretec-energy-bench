@@ -835,8 +835,9 @@
 
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
     const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
-    Chart.defaults && (Chart.defaults.font.family = "Archivo, -apple-system, sans-serif");
+    if (typeof Chart !== "undefined") Chart.defaults.font.family = "Archivo, -apple-system, sans-serif";
     const rerender = () => { renderAll(); renderModels(); renderExplorerChart(); renderTimeline(); renderTracker(); };
+    afterFonts = rerender;
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
     let wasNarrow = narrow();
     window.addEventListener("resize", () => { if (narrow() !== wasNarrow) { wasNarrow = narrow(); if ($("standings")) renderCharts(); renderExplorerChart(); } });
@@ -893,5 +894,7 @@
   const MOVED = { forecasts: "explorer.html", inputs: "explorer.html", pipeline: "methodology.html", method: "methodology.html", submit: "methodology.html", models: "methodology.html", centroids: "methodology.html" };
   if (PAGE === "leaderboard" && MOVED[location.hash.slice(1)]) location.replace(MOVED[location.hash.slice(1)] + location.hash);
 
-  document.fonts && document.fonts.ready ? document.fonts.ready.then(init) : init();
+  // draw at once; when the web fonts arrive, draw the canvases again with the right text metrics
+  let afterFonts = null;
+  init().then(() => { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => afterFonts && afterFonts()); });
 })();
