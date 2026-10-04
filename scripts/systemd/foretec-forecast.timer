@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Live: daily forecast run at the 11:30 data cut-off, locked before the 12:00 day-ahead gate
+Description=Foretec Energy Open: daily forecast run at the 11:30 data cut-off, locked before the 12:00 day-ahead gate
 
 [Timer]
 OnCalendar=*-*-* 11:30:00 Europe/Brussels

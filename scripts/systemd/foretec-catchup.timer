@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Live: nightly backtest of newly added models
+Description=Foretec Energy Open: nightly backtest of newly added models
 
 [Timer]
 OnCalendar=*-*-* 03:30:00 Europe/Brussels

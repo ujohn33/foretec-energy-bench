@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Live: daily scoring after day-ahead prices are published
+Description=Foretec Energy Open: daily scoring after day-ahead prices are published
 
 [Timer]
 # day-ahead results are out ~12:45-13:00; the evening pass catches late publications

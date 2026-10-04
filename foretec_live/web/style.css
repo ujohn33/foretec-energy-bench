@@ -1,4 +1,4 @@
-/* Foretec Transparency: foretec.be colours and logo; type set like a research publication
+/* Foretec Energy Open: foretec.be colours and logo; type set like a research publication
    (Source Serif 4 headings and figures, Source Sans 3 text and tables with tabular numerals) */
 :root{
   --sans:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -75,6 +75,12 @@ header.top{border-bottom:1px solid var(--rule); background:var(--ground); positi
   line-height:1; color:var(--ink);
 }
 @media(max-width:520px){ .mark{font-size:1.6rem} }
+/* logo lockup: the Foretec wordmark, a hairline, then the product name in the serif */
+.brand{display:flex; align-items:baseline; gap:14px; min-width:0}
+.brand-rule{align-self:center; width:1.5px; height:1.7rem; background:var(--ink); opacity:.28; flex:none}
+.product{font-family:var(--serif); font-size:1.6rem; font-weight:600; font-variation-settings:"opsz" 40; letter-spacing:-.012em;
+  line-height:1; color:var(--ink); text-decoration:none; white-space:nowrap}
+.product i{font-weight:400; font-style:italic; color:var(--blue-ink)}
 .top-nav{display:flex; gap:24px; align-items:center}
 .top-nav a{font-size:.86rem; color:var(--ink2); text-decoration:none; border-bottom:1px solid transparent; padding-bottom:2px}
 .top-nav a:hover{color:var(--ink); border-bottom-color:var(--rule)}
@@ -218,6 +224,8 @@ ol.steps p{margin-top:6px; color:var(--ink2); font-size:.95rem; max-width:72ch}
 footer{border-top:1px solid var(--rule); padding:36px 0 60px; color:var(--ink2); font-size:.85rem}
 .foot{display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap}
 .foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink)}
+.foot-mark span{font-family:var(--serif); font-style:normal; font-weight:600; letter-spacing:-.01em; margin-left:6px; padding-left:10px; border-left:1.5px solid var(--rule)}
+.foot-mark span i{font-weight:400; color:var(--blue-ink)}
 
 /* explanations on hover / focus / tap */
 .tip{display:none; position:fixed; z-index:60; max-width:min(320px, calc(100vw - 16px)); padding:10px 12px 11px; background:var(--ink); color:var(--ground);
@@ -311,11 +319,14 @@ td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
 .top-nav a.on{color:var(--ink); font-weight:500; border-bottom-color:var(--ink)}
 section.first{border-top:0; padding-top:48px}
 @media(max-width:600px){
-  .top-in{height:64px; gap:12px}
+  /* phones: logo on the first row, the page links on a second row */
+  .top-in{height:auto; flex-wrap:wrap; row-gap:8px; padding-top:12px; padding-bottom:10px}
   .mark{font-size:1.45rem}
-  .top-nav{gap:12px}
-  .top-nav a{font-size:.76rem}
-  .filterbar{top:64px}
+  .brand{gap:11px}
+  .brand-rule{height:1.35rem}
+  .product{font-size:1.3rem}
+  .top-nav{width:100%; gap:20px}
+  .top-nav a{font-size:.86rem}
 }
 
 /* reference entries: listed below the ranking, never ranked */

@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Live: score finished forecasts and rebuild the leaderboard
+Description=Foretec Energy Open: score finished forecasts and rebuild the leaderboard
 Wants=network-online.target
 After=network-online.target
 

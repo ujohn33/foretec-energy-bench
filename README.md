@@ -1,6 +1,6 @@
-# Foretec Live
+# Foretec Energy Open
 
-An open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2.
+The live bench for energy forecasts: an open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2. Live at **https://energyopen.foretec.co**. (The Python package and command keep their working names, `foretec_live` and `foretec-live`.)
 
 Every day at 11:30 Brussels time, before the 12:00 SDAC day-ahead gate closure, each model in `models/` forecasts the next delivery day for:
 
@@ -151,10 +151,10 @@ To deploy changes, pull on the server and re-run the script; it keeps `data/` an
 cd /root/foretec-live && git pull && sudo bash scripts/setup_server.sh --web   # add --foundation when model envs change
 ```
 
-The first time, pass the domain for HTTPS (`--domain=transparency.foretec.co`); it is remembered, so later `--web` runs keep HTTPS and the plain-IP address redirects to it.
+The first time, pass the domain for HTTPS and any extra names that should redirect to it (`--domain=energyopen.foretec.co --alias=open.foretec.co,transparency.foretec.co`); both are remembered, so later `--web` runs keep HTTPS and the plain-IP address redirects too. A name is only configured once its DNS points at this server, so add the DNS record first and re-run `--web` afterwards; until the main domain resolves, the site is served on the aliases that do.
 
 ```bash
-sudo bash scripts/setup_server.sh --domain=transparency.foretec.co
+sudo bash scripts/setup_server.sh --domain=energyopen.foretec.co --alias=open.foretec.co,transparency.foretec.co
 ```
 
 API keys (`ENTSOE_TOKEN`, `OPENMETEOKEY`, `OIL_PRICE_KEY`) live in `/root/.env` on the server, never in the repo.

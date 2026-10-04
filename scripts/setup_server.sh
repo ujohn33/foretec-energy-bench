@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Set up Foretec Live on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
+# Set up Foretec Energy Open on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
 #   sudo bash scripts/setup_server.sh            # core models only
 #   sudo bash scripts/setup_server.sh --foundation  # also the foundation-model envs (~5 GB, see install_model_envs.sh)
 #   sudo bash scripts/setup_server.sh --web      # also serve site/ with Caddy (plain HTTP on :80)
-#   sudo bash scripts/setup_server.sh --domain=transparency.foretec.co   # HTTPS on that domain, remembered for later runs
+#   sudo bash scripts/setup_server.sh --domain=energyopen.foretec.co --alias=open.foretec.co,transparency.foretec.co
+#       HTTPS on that domain, the aliases redirect to it; both remembered for later runs
 # Safe to re-run: it updates the code and venv in place and keeps data/ and results/.
 set -euo pipefail
 
-FOUNDATION=0; WEB=0; DOMAIN=
+FOUNDATION=0; WEB=0; DOMAIN=; ALIASES=
 for a in "$@"; do
   case "$a" in --domain=*) DOMAIN="${a#--domain=}"; WEB=1; continue ;; esac
+  case "$a" in --alias=*) ALIASES="${a#--alias=}"; WEB=1; continue ;; esac
   case "$a" in
     --foundation|--chronos) FOUNDATION=1 ;;
     --web) WEB=1 ;;
@@ -63,15 +65,30 @@ if [ $WEB -eq 1 ]; then
   # pages and data revalidate on every load (app.js/style.css are cache-busted by name, vendor/ never changes)
   FRESH=$(printf '  @fresh path / *.html /data/*\n  header @fresh Cache-Control "no-cache"\n')
   FRESH="$FRESH"$'\n'
-  # the domain is remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
+  # the domain and aliases are remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
   [ -n "$DOMAIN" ] && echo "$DOMAIN" > $BASE/site_domain
   [ -z "$DOMAIN" ] && [ -f $BASE/site_domain ] && DOMAIN=$(cat $BASE/site_domain)
+  [ -n "$ALIASES" ] && echo "$ALIASES" > $BASE/site_aliases
+  [ -z "$ALIASES" ] && [ -f $BASE/site_aliases ] && ALIASES=$(cat $BASE/site_aliases)
   if [ -n "$DOMAIN" ]; then
-    echo "== web (Caddy, https://$DOMAIN; plain http on the server IP redirects there)"
     IP=$(curl -4 -s --max-time 10 https://api.ipify.org || true)
+    # only names whose DNS already points here: Caddy would otherwise keep failing certificate orders for them
+    points_here() { [ -z "$IP" ] || getent ahostsv4 "$1" | awk '{print $1}' | grep -qx "$IP"; }
+    LIVE=(); for h in ${ALIASES//,/ }; do points_here "$h" && LIVE+=("$h") || echo "   $h: no DNS record to $IP yet, skipped"; done
+    if points_here "$DOMAIN"; then
+      SERVE="$DOMAIN"; REDIR=("${LIVE[@]}")
+    else
+      # main domain not in DNS yet: keep serving on the aliases that are, re-run --web once it is
+      echo "   $DOMAIN: no DNS record to $IP yet; serving on ${LIVE[*]:-nothing} until it has one"
+      SERVE=$(IFS=,; echo "${LIVE[*]}"); REDIR=()
+    fi
+    [ -n "$SERVE" ] || { echo "no configured name points at this server"; exit 1; }
+    TARGET=${SERVE%%,*}
+    echo "== web (Caddy, https://$TARGET${REDIR:+; ${REDIR[*]} redirect there}; plain http on the server IP too)"
     {
-      printf '%s {\n  root * %s/site\n  encode gzip\n%s  file_server\n}\n' "$DOMAIN" "$APP" "$FRESH"
-      if [ -n "$IP" ]; then printf '\nhttp://%s {\n  redir https://%s{uri} permanent\n}\n' "$IP" "$DOMAIN"; fi
+      printf '%s {\n  root * %s/site\n  encode gzip\n%s  file_server\n}\n' "${SERVE//,/, }" "$APP" "$FRESH"
+      for h in "${REDIR[@]}"; do printf '\n%s {\n  redir https://%s{uri} permanent\n}\n' "$h" "$TARGET"; done
+      if [ -n "$IP" ]; then printf '\nhttp://%s {\n  redir https://%s{uri} permanent\n}\n' "$IP" "$TARGET"; fi
     } > /etc/caddy/Caddyfile
   else
     echo "== web (Caddy on :80, no domain: pass --domain=example.org for HTTPS)"
