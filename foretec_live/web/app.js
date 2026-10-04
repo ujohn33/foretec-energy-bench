@@ -578,7 +578,12 @@
       if (label) txt(side === "right" ? xx + 10 : xx - 10, yy + 4, label, "", side === "right" ? "start" : "end");
     };
     // price: everything up to the end of D-1 is known (cleared on D-2); D's prices clear just after the gate
-    bar(0, -24, 24, "hist", "history: all prices to the end of D−1, cleared on D−2");
+    // The x-axis is clock time. Up to the cut-off the model knows every price for delivery until 23:45 on D-1,
+    // because that auction cleared on D-2: solid bar to the cut-off, hatched for the later hours already published.
+    bar(0, -24, cut, "hist", "");
+    out.push(`<rect class="hist-pub" x="${x(cut)}" y="${y(0) + 10}" width="${x(24) - x(cut)}" height="11" rx="1" fill="url(#hatch)"/>`);
+    txt(x(-24) + 4, y(0) + 35, "known at the cut-off: every price to 23:45 on D−1, cleared on D−2 ●", "", "start");
+    out.push(`<circle class="mk pub" cx="${x(12.9 - 24)}" cy="${y(0) + 15.5}" r="4"/>`);
     mark(0, 12.9, "pub", "D prices published ~12:55", { side: "left" });
     scores.forEach((h, k) => mark(0, h, "score", k === scores.length - 1 ? `scored ${(sched.score || []).join(" and ")}` : "", { shape: "diamond" }));
     // wind and solar: metered up to the cut-off minus the publication lag; actuals arrive during D
@@ -608,9 +613,12 @@
     txt(x(gate) + 5, top - 34, `gate ${T.gate}`, "", "start");
     const svg = $("timeline");
     svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
-    svg.innerHTML = out.join("");
+    const hatch = `<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill="${alpha(css("--blue"), 0.12)}"/><line x1="0" y1="0" x2="0" y2="6" stroke="${alpha(css("--blue"), 0.55)}" stroke-width="2"/></pattern></defs>`;
+    svg.innerHTML = hatch + out.join("");
     $("l-timeline").innerHTML = [
-      `<span><i class="sw" style="background:${alpha(css("--blue"), 0.4)}"></i>history a model may use</span>`,
+      `<span><i class="sw" style="background:${alpha(css("--blue"), 0.4)}"></i>history a model may use, up to the cut-off</span>`,
+      `<span><i class="sw" style="background:repeating-linear-gradient(45deg, ${alpha(css("--blue"), 0.55)} 0 2px, ${alpha(css("--blue"), 0.12)} 2px 6px)"></i>prices for later hours of D−1, already published on D−2</span>`,
       `<span><i class="sw" style="background:${alpha(css("--green"), 0.6)}"></i>actuals being metered</span>`,
       `<span><i class="sw" style="background:${alpha(css("--green"), 0.25)}"></i>actuals re-checked, re-scored if revised</span>`,
       `<span><i style="border-top:2px dashed ${css("--blue-ink")}"></i>data cut-off, models run</span>`,
