@@ -8,7 +8,7 @@
     { k: "rmse", label: "RMSE", d: 1 },
     { k: "pinball", label: "Pinball", d: 2 },
   ];
-  const TARGET_LABEL = { price: "Price", wind: "Wind", solar: "Solar" };
+  const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar" };
   const S = {
     zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10,
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
@@ -547,7 +547,7 @@
     const H = [-24, 0, 16, 24, 48, 72, 96], F = [0, 0.06, 0.58, 0.64, 0.80, 0.90, 1];
     const W = 1000, L = 128, R = 14, top = 74, laneH = 70;
     const x = (h) => { let i = 0; while (i < H.length - 2 && h > H[i + 1]) i++; const f = F[i] + (F[i + 1] - F[i]) * (Math.min(Math.max(h, H[i]), H[i + 1]) - H[i]) / (H[i + 1] - H[i]); return L + f * (W - L - R); };
-    const lanes = ["Price", "Wind", "Solar", "Inputs"];
+    const lanes = ["Day-ahead price", "Wind", "Solar", "Inputs"];
     const y = (i) => top + i * laneH;
     const Hh = top + lanes.length * laneH + 6;
     const cut = hm(T.issue_time), gate = hm(T.gate), off = brusselsOffset();
@@ -678,7 +678,8 @@
   }
   // explorer ranking: points over every scored day (live and backtest) for the explorer's zone and target
   function explorerRanking() {
-    const rows = ROWS.filter((r) => !REF.has(r.model) && inField(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null);
+    const rows = ROWS.filter((r) => !REF.has(r.model) && inField(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
+      && (S.phase === "all" || r.phase === S.phase));
     const days = dayTable(rows);
     const pts = {};
     for (const x of days) for (const m in x.points) pts[m] = (pts[m] || 0) + x.points[m];
@@ -687,8 +688,9 @@
 
   function renderExplorerControls() {
     if (!$("x-day")) return;
-    const ds = Object.keys(D.days || {}).sort().reverse();
-    if (!S.x.day) S.x.day = ds[0];
+    let ds = Object.keys(D.days || {}).sort().reverse();
+    if (S.phase !== "all") ds = ds.filter((d) => D.days[d] === S.phase);
+    if (!ds.includes(S.x.day)) S.x.day = ds[0];
     options($("x-day"), ds.map((d) => ({ k: d, label: `${d} → ${addDays(d, 1)} · ${D.days[d]}` })), S.x.day);
     options($("x-zone"), D.config.zones.map((z) => ({ k: z, label: z })), S.x.zone);
     options($("x-target"), Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t })), S.x.target);
@@ -779,6 +781,7 @@
 
   function renderAll() {
     if (!$("standings")) return;
+    saveFilters();
     DAYS = dayTable(filteredRows());
     updateShown();
     renderControls();
@@ -786,6 +789,15 @@
     renderCharts();
     renderHeatmap();
     renderDetails();
+  }
+
+  const FILTER_KEYS = ["zone", "target", "metric", "phase", "covFilter", "topN"];
+  function loadFilters() {
+    try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
+    catch (e) { return {}; }
+  }
+  function saveFilters() {
+    try { localStorage.setItem("ft-filters", JSON.stringify(Object.fromEntries(FILTER_KEYS.map((k) => [k, S[k]])))); } catch (e) { /* storage unavailable */ }
   }
 
   async function init() {
@@ -805,7 +817,11 @@
     const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
-    S.phase = ROWS.some((r) => r.phase === "live") ? "live" : "backtest";
+    const hasLive = ROWS.some((r) => r.phase === "live");
+    S.phase = hasLive ? "live" : "backtest";
+    loadFilters();
+    if (!["live", "backtest", "all"].includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
+    if (!METRICS.some((m) => m.k === S.metric)) S.metric = "rel_mae";
 
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
     const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
@@ -815,9 +831,11 @@
     let wasNarrow = narrow();
     window.addEventListener("resize", () => { if (narrow() !== wasNarrow) { wasNarrow = narrow(); if ($("standings")) renderCharts(); renderExplorerChart(); } });
 
-    if (PAGE === "leaderboard") {
+    if ($("updated")) {
       const up = new Date(D.generated_utc.replace("Z", ":00Z"));
       $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    }
+    if (PAGE === "leaderboard") {
       on("f-zone", "onchange", (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-target", "onchange", (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-top", "oninput", (e) => { S.topN = +e.target.value; renderAll(); });
@@ -825,21 +843,31 @@
       renderTracker();
     }
     if (PAGE === "explorer") {
+      if (S.zone !== "all" && D.config.zones.includes(S.zone)) S.x.zone = S.zone;
+      if (S.target !== "all" && S.target in D.config.targets) S.x.target = S.target;
+      S.xTop = S.topN;
       const q = new URLSearchParams(location.search);   // deep links: explorer.html?day=2026-10-03&zone=BE&target=wind
-      if (q.get("day") && D.days && D.days[q.get("day")]) S.x.day = q.get("day");
+      if (q.get("day") && D.days && D.days[q.get("day")]) { S.x.day = q.get("day"); if (S.phase !== "all" && D.days[S.x.day] !== S.phase) S.phase = "all"; }
       if (D.config.zones.includes(q.get("zone"))) S.x.zone = q.get("zone");
       if (q.get("target") in D.config.targets) S.x.target = q.get("target");
-      const covSeg = () => seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
-        (k) => { S.covFilter = k; covSeg(); renderExplorerChart(); });
-      covSeg();
-      const sync = () => history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`);
-      on("x-day", "onchange", (e) => { S.x.day = e.target.value; sync(); renderExplorerChart(); });
-      on("x-zone", "onchange", (e) => { S.x.zone = e.target.value; sync(); renderExplorerChart(); });
-      on("x-target", "onchange", (e) => { S.x.target = e.target.value; sync(); renderExplorerChart(); });
+      const changed = () => { S.zone = S.x.zone; S.target = S.x.target; S.topN = S.xTop; saveFilters();
+        history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
+      const segs = () => {
+        seg($("x-metric"), METRICS.map((m) => ({ k: m.k, label: m.label })), S.metric, (k) => { S.metric = k; segs(); changed(); renderExplorerChart(); });
+        seg($("x-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
+          (k) => { S.phase = k; segs(); renderExplorerControls(); changed(); renderExplorerChart(); });
+        seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
+          (k) => { S.covFilter = k; segs(); changed(); renderExplorerChart(); });
+      };
+      segs();
+      on("x-day", "onchange", (e) => { S.x.day = e.target.value; changed(); renderExplorerChart(); });
+      on("x-zone", "onchange", (e) => { S.x.zone = e.target.value; changed(); renderExplorerChart(); });
+      on("x-target", "onchange", (e) => { S.x.target = e.target.value; changed(); renderExplorerChart(); });
       on("x-band", "onchange", (e) => { S.x.band = e.target.value; renderExplorerChart(); });
-      on("x-top", "oninput", (e) => { S.xTop = +e.target.value; renderExplorerChart(); });
+      on("x-top", "oninput", (e) => { S.xTop = +e.target.value; changed(); renderExplorerChart(); });
       on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
       renderExplorerControls();
+      changed();
       renderExplorerChart();
     }
     if (PAGE === "methodology") {

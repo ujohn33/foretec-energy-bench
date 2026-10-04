@@ -30,6 +30,23 @@
 </header>
 
 <main>
+<div class="filterbar">
+  <div class="wrap filters" role="group" aria-label="Filters">
+    <div class="field"><label for="x-zone">Zone</label><select id="x-zone"></select></div>
+    <div class="field"><label for="x-target">Target</label><select id="x-target"></select></div>
+    <div class="field"><span class="lbl">Metric</span><div class="seg" id="x-metric" role="radiogroup" aria-label="Metric"></div></div>
+    <div class="field"><span class="lbl">Period</span><div class="seg" id="x-phase" role="radiogroup" aria-label="Period"></div></div>
+    <div class="field"><span class="lbl">Covariates</span><div class="seg" id="x-cov" role="radiogroup" aria-label="Covariates"></div></div>
+    <div class="field"><label for="x-top">Models</label><div class="range"><input type="range" id="x-top" min="1" max="20" value="10" step="1"><span id="x-top-val" class="mono">Top 10</span></div></div>
+    <div class="field"><label for="x-day">Issue day</label><select id="x-day"></select></div>
+    <div class="field"><label for="x-band">Band</label><select id="x-band"></select></div>
+    <div class="status mono">
+      <span>Updated <span id="updated">–</span> · data ENTSO-E</span>
+      <span class="key"><i class="k-bt"></i>Backtest <i class="k-live"></i>Live</span>
+    </div>
+  </div>
+</div>
+
 <section id="forecasts" class="first">
   <div class="wrap">
     <div class="sec-head">
@@ -37,14 +54,6 @@
       <p class="lede">What each model forecast for one delivery day, against the actual outcome. Times are Brussels local time.</p>
     </div>
     <div class="panel chart-panel" id="x-card">
-      <div class="panel-head filters">
-        <div class="field"><label for="x-day">Issue day</label><select id="x-day"></select></div>
-        <div class="field"><label for="x-zone">Zone</label><select id="x-zone"></select></div>
-        <div class="field"><label for="x-target">Target</label><select id="x-target"></select></div>
-        <div class="field"><label for="x-band">Band</label><select id="x-band"></select></div>
-        <div class="field"><span class="lbl">Covariates</span><div class="seg" id="x-cov" role="radiogroup" aria-label="Covariates"></div></div>
-        <div class="field"><label for="x-top">Models</label><div class="range"><input type="range" id="x-top" min="1" max="20" value="10" step="1"><span id="x-top-val" class="mono">Top 10</span></div></div>
-      </div>
       <div class="x-meta mono" id="x-meta"></div>
       <div class="chart-box tall"><canvas id="c-day" aria-label="Forecasts against actuals for one delivery day"></canvas></div>
       <div class="legend" id="l-day"></div>
