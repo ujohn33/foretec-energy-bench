@@ -41,7 +41,7 @@
 <section id="pipeline" class="first">
   <div class="wrap">
     <div class="sec-head">
-      <h2>When everything happens</h2>
+      <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8.5"/><path d="M12 8.5V13l3 2"/><path class="as" d="M12 1.2v3.2"/></svg>When everything happens</h2>
     </div>
     <div class="panel timeline-panel"><div class="timeline-scroll"><svg id="timeline" role="img" aria-label="Timeline of data cut-off, gate, delivery, publication of actuals and scoring for price, wind and solar"></svg></div>
       <div class="legend" id="l-timeline"></div></div>
@@ -52,7 +52,7 @@
 
 <section id="method">
   <div class="wrap">
-    <div class="sec-head"><h2>The rules</h2></div>
+    <div class="sec-head"><h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8.5"/><path d="M8 8h8M8 12h8M8 16h4"/><circle class="a" cx="18" cy="18.5" r="3"/></svg>The rules</h2></div>
     <ol class="steps">
       <li><span class="st">01</span><div><h3>One task, one clock</h3><p>On each issue day D-1, every model forecasts all quarter-hours of delivery day D from data public at <span data-k="issue_time">11:30</span> Brussels time, and the forecast is locked before the <span data-k="gate">12:00</span> SDAC day-ahead gate closure, exactly when a day-ahead bid would be due. A live run that finishes after the gate is never scored. The forecast covers 96 values, or 92 and 100 on clock-change days. Targets are day-ahead price (EUR/MWh), wind generation (on- plus offshore, MW) and solar generation (MW) for BE, NL and FR.</p></div></li>
       <li><span class="st">02</span><div><h3>Data: ENTSO-E Transparency Platform</h3><p>Prices and actual generation come from the <a href="https://transparency.entsoe.eu" rel="noopener">ENTSO-E Transparency Platform</a>, parsed directly from its XML: day-ahead prices (document A44, the 15-minute SDAC prices), and actual generation per production type (A75), wind as onshore (B19) plus offshore (B18) and solar (B16). Quarter-hours ENTSO-E has not published are filled from the TSOs' own open data: <a href="https://opendata.elia.be" rel="noopener">Elia Open Data</a> for Belgium and <a href="https://odre.opendatasoft.com" rel="noopener">RTE éCO2mix</a> for France, then <a href="https://energy-charts.info" rel="noopener">Energy-Charts</a> (Fraunhofer ISE) as a last resort; the Netherlands has no TSO service without registration. ENTSO-E alone lacked 12% of Belgian wind quarter-hours (13 of 27 days below the 95% needed to score) and 2.6% of French wind; Elia and RTE fill all of them and agree with ENTSO-E without bias (mean difference +0.2 MW for Belgian wind). Every snapshot and every set of actuals records how many points came from each source; the explorer and the Inputs table show it. The ENTSO-E day-ahead total load forecast (A65) is one of the covariates. Issue days up to and including 3 Oct 2026 used Energy-Charts only.</p></div></li>
@@ -67,7 +67,7 @@
 
 <section id="centroids">
   <div class="wrap">
-    <div class="sec-head"><h2>Where the weather is sampled</h2></div>
+    <div class="sec-head"><h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-6-5.4-6-10.3a6 6 0 0 1 12 0c0 4.9-6 10.3-6 10.3z"/><circle class="a" cx="12" cy="10.2" r="2.2"/><circle cx="3.6" cy="19.5" r="1.3" class="f9"/><circle cx="20.4" cy="18.5" r="1.3" class="f9"/></svg>Where the weather is sampled</h2></div>
     <div class="panel map-panel"><div id="map" role="img" aria-label="Map of centroids"></div><div class="legend" id="l-map"></div></div>
     <div class="panel tablewrap"><table id="centroid-table"></table></div>
   </div>
@@ -75,7 +75,7 @@
 
 <section id="models">
   <div class="wrap">
-    <div class="sec-head"><h2>Models in the field</h2>
+    <div class="sec-head"><h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="5.5" r="2.5"/><circle cx="18.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/><path d="M7.6 7.6l2.6 2.6M16.4 7.6l-2.6 2.6M7.6 16.4l2.6-2.6M16.4 16.4l-2.6-2.6"/><circle class="a" cx="12" cy="12" r="2.4"/></svg>Models in the field</h2>
     </div>
     <div class="panel tablewrap"><table id="models-table"></table></div>
   </div>
