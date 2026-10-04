@@ -29,7 +29,9 @@ covariates:                   # what covariate models may use; frozen per issue 
       ecmwf_ifs:    {label: "IFS HRES (ECMWF)",  cycle_hours: 6, lag_hours: 7}
 
 source: entsoe               # ENTSO-E Transparency Platform (ENTSOE_TOKEN), parsed from XML
-fallback_source: energycharts # fills quarter-hours ENTSO-E does not deliver; provenance per series in _sources.json
+# quarter-hours ENTSO-E does not deliver come from the TSOs' own open data (Elia for BE, RTE for FR), then
+# Energy-Charts as last resort (NL has no keyless TSO service); provenance per series in _sources.json
+fallback_source: [elia, rte, energycharts]
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

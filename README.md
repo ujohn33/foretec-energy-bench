@@ -39,7 +39,7 @@ These metrics are computed per model, day, zone and target:
 
 The leaderboard is the mean `rel_mae` over all 9 series across the last 28 scored days, alongside coverage (the share of days the model actually ran).
 
-Data comes from the [ENTSO-E Transparency Platform](https://transparency.entsoe.eu) (`ENTSOE_TOKEN`; day-ahead prices A44, actual generation per type A75), parsed from the XML. Quarter-hours ENTSO-E does not deliver are filled from [Energy-Charts](https://energy-charts.info) by Fraunhofer ISE (CC BY 4.0), which republishes the same data: over 7 Sep to 2 Oct 2026 the two agree to rounding wherever both have a value, while ENTSO-E missed 12% of BE wind and 2.6% of FR wind. Which source delivered each point is logged per series in `_sources.json` next to every snapshot and every set of actuals.
+Data comes from the [ENTSO-E Transparency Platform](https://transparency.entsoe.eu) (`ENTSOE_TOKEN`; day-ahead prices A44, actual generation per type A75), parsed from the XML. Quarter-hours ENTSO-E does not deliver are filled from the TSOs' own open data, [Elia Open Data](https://opendata.elia.be) for BE and [RTE éCO2mix](https://odre.opendatasoft.com) for FR (no keys), then from [Energy-Charts](https://energy-charts.info) by Fraunhofer ISE (CC BY 4.0) as a last resort. Energy-Charts republishes ENTSO-E: over 7 Sep to 2 Oct 2026 the two agree to rounding wherever both have a value, while ENTSO-E missed 12% of BE wind and 2.6% of FR wind. Which source delivered each point is logged per series in `_sources.json` next to every snapshot and every set of actuals.
 
 ## Adding a model
 

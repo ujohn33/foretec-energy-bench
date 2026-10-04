@@ -297,3 +297,23 @@ def test_fallback_circuit_breaker(cfg):
         out = src.fetch(z, "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
         assert out.tolist() == [1.0, 3.0, 4.0]
     assert calls == ["BE"]
+
+
+def test_fallback_chain_order(cfg):
+    """Fallbacks fill in order: the first that has a quarter-hour wins, later ones only fill what is left."""
+    from foretec_live.data.base import FallbackSource, Source
+
+    idx = pd.date_range("2026-09-20 22:00", periods=4, freq="15min")
+
+    def src(name, values):
+        class S(Source):
+            def fetch(self, zone, target, start, end):
+                return pd.Series(values, index=idx).dropna()
+        s = S(cfg); s.name = name
+        return s
+
+    chain = FallbackSource(cfg, src("entsoe", [1.0, None, None, None]), src("elia", [9.0, 2.0, None, None]),
+                           src("rte", [None, None, None, None]), src("energycharts", [9.0, 9.0, 3.0, None]))
+    out = chain.fetch("BE", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
+    assert out.tolist() == [1.0, 2.0, 3.0]
+    assert chain.provenance[("BE", "wind")] == {"entsoe": 1, "elia": 1, "rte": 0, "energycharts": 1, "missing": 1}

@@ -411,7 +411,7 @@
   // ---------- inputs: what the models knew ----------
   const NWP_STYLE = { icon_eu: [], gfs_seamless: [6, 4], ecmwf_ifs: [2, 3] };
   function fmtUtc(s) { return s ? String(s).replace("T", " ").slice(0, 16) + " UTC" : "–"; }
-  const SRC_NAME = { entsoe: "ENTSO-E", energycharts: "Energy-Charts" };
+  const SRC_NAME = { entsoe: "ENTSO-E", elia: "Elia", rte: "RTE", energycharts: "Energy-Charts" };
   function provenance(p) {
     if (!p) return null;
     const parts = Object.entries(p).filter(([k, n]) => k !== "missing" && n > 0);
@@ -423,7 +423,7 @@
       const p = provenance(hs && hs[`${S.x.zone}_${t}`]);
       return `${TARGET_LABEL[t] || t}: ${p ? esc(p) + (p.includes("+") ? " quarter-hours" : "") : day.phase === "backtest" || !hs ? "Energy-Charts" : "–"}`;
     }).join("<br>");
-    const note = hs ? "ENTSO-E Transparency Platform (A44 prices, A75 generation per type); gaps from Energy-Charts"
+    const note = hs ? "ENTSO-E Transparency Platform (A44 prices, A75 generation per type); gaps from the TSOs' own open data (Elia, RTE), then Energy-Charts"
                     : "Energy-Charts (issue days up to 3 Oct 2026, and backtests, which do not store their snapshots)";
     return `<tr><td>Target history</td><td class="wrap">${note}</td><td class="wrap">prices through the end of D-1; wind and solar through the cut-off minus 1 h</td><td class="wrap">${lines}</td></tr>`;
   }
