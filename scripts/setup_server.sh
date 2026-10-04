@@ -60,6 +60,9 @@ fi
 
 if [ $WEB -eq 1 ]; then
   apt-get install -y -qq caddy >/dev/null
+  # pages and data revalidate on every load (app.js/style.css are cache-busted by name, vendor/ never changes)
+  FRESH=$(printf '  @fresh path / *.html /data/*\n  header @fresh Cache-Control "no-cache"\n')
+  FRESH="$FRESH"$'\n'
   # the domain is remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
   [ -n "$DOMAIN" ] && echo "$DOMAIN" > $BASE/site_domain
   [ -z "$DOMAIN" ] && [ -f $BASE/site_domain ] && DOMAIN=$(cat $BASE/site_domain)
@@ -67,12 +70,12 @@ if [ $WEB -eq 1 ]; then
     echo "== web (Caddy, https://$DOMAIN; plain http on the server IP redirects there)"
     IP=$(curl -4 -s --max-time 10 https://api.ipify.org || true)
     {
-      printf '%s {\n  root * %s/site\n  encode gzip\n  file_server\n}\n' "$DOMAIN" "$APP"
+      printf '%s {\n  root * %s/site\n  encode gzip\n%s  file_server\n}\n' "$DOMAIN" "$APP" "$FRESH"
       if [ -n "$IP" ]; then printf '\nhttp://%s {\n  redir https://%s{uri} permanent\n}\n' "$IP" "$DOMAIN"; fi
     } > /etc/caddy/Caddyfile
   else
     echo "== web (Caddy on :80, no domain: pass --domain=example.org for HTTPS)"
-    printf ':80 {\n  root * %s/site\n  file_server\n}\n' "$APP" > /etc/caddy/Caddyfile
+    printf ':80 {\n  root * %s/site\n%s  file_server\n}\n' "$APP" "$FRESH" > /etc/caddy/Caddyfile
   fi
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
   systemctl reload caddy || systemctl restart caddy
