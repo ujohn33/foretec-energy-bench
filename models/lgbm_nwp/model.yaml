@@ -6,3 +6,4 @@ inputs: [history, nwp, load_forecast, fuel, calendar]
 runner: subprocess
 env: _self
 script: forecaster.py
+caveat: "Trained only on the 28-day window every model gets (one LightGBM per quantile). A production NWP model would be trained on years of history, so this understates what the approach can do."

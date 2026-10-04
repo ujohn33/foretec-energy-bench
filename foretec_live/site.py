@@ -201,17 +201,28 @@ def _tracker(cfg) -> dict:
         due = {(z, t) for z in cfg["zones"] for t in cfg["targets"] if scorable(day, t, cfg)}
         per = {}
         for r in meta.get("runs", []) + ref_runs:
-            c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "sec": 0.0, "msgs": []})
+            c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "sec": 0.0, "msgs": [],
+                                            "s": {}, "why": {}})
+            key = f"{r.get('zone', '')}_{r.get('target', '')}"
+            # per series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped
             if r["status"] == "ok":
                 c["ok"] += 1
                 if (r.get("zone"), r.get("target")) in due:
                     c["due"] += 1
-                    c["scored"] += (day, r["model"], r["zone"], r["target"]) in scored
+                    hit = (day, r["model"], r["zone"], r["target"]) in scored
+                    c["scored"] += hit
+                    c["s"][key] = "S" if hit else "M"
+                else:
+                    c["s"][key] = "W"
             elif r["status"] == "skipped":
                 c["skip"] += 1
+                c["s"][key] = "K"
+                c["why"][key] = str(r.get("detail", ""))[:200]
                 c["msgs"].append(f"skipped: {r.get('detail', '')}"[:240])
             else:
                 c["err"] += 1
+                c["s"][key] = "F"
+                c["why"][key] = str(r.get("detail", ""))[:200]
                 c["msgs"].append(f"{r.get('zone', '')} {r.get('target', '')}: {r.get('detail', '')}"[:240])
             c["sec"] += float(r.get("seconds") or 0)
         for c in per.values():
@@ -220,8 +231,14 @@ def _tracker(cfg) -> dict:
         cells[day] = per
         revf = paths(cfg)["actuals"] / str(delivery_date(day)) / "_revisions.json"
         revised = sorted({c["series"] for c in json.loads(revf.read_text()) if c.get("revised")}) if revf.exists() else []
+        # actuals per series for the delivery day: frozen (scored from), provisional (metered so far), or none
+        act = {}
+        for kind, root in (("prov", paths(cfg)["actuals_provisional"]), ("frozen", paths(cfg)["actuals"])):
+            for f in (root / str(delivery_date(day))).glob("*_*.parquet"):
+                act[f.stem] = kind
         days.append({"d": day, "phase": phase, "revised": revised, "started": meta.get("run_started_utc"), "finished": finished,
-                     "gate_utc": str(gate), "on_time": on_time, "n_series": len(meta.get("series", [])), "n_due": len(due)})
+                     "gate_utc": str(gate), "on_time": on_time, "n_series": len(meta.get("series", [])), "n_due": len(due),
+                     "act": act})
     return {"days": days, "cells": cells}
 
 
@@ -294,6 +311,7 @@ def build_site(cfg) -> Path:
                        "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
                        "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
                        "reference": bool(r.get("reference")), "live_only": bool(r.get("live_only")),
+                       "caveat": r.get("caveat", ""),
                        "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess" else (r.get("estimator") or r.get("module", ""))})
     summary = {
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),

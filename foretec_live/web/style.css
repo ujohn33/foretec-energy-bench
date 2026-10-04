@@ -323,6 +323,18 @@ td.wrap{white-space:normal; min-width:240px; font-weight:400; color:var(--ink2)}
 .trk.late{background:rgba(236,131,90,.18); color:#a4461f; border-color:rgba(236,131,90,.5)}
 .trk.err{background:rgba(208,59,59,.14); color:#b02a2a; border-color:rgba(208,59,59,.45)}
 .trk[aria-pressed="true"]{outline:2px solid var(--ink); outline-offset:1px}
+/* several series in one cell: a small square per series (zones in rows, targets in columns) */
+.trk.grid{display:inline-grid; grid-template-columns:repeat(var(--c),9px); gap:2px; width:auto; height:auto; padding:3px; background:var(--surface); border-color:var(--rule); vertical-align:middle}
+.trk.grid i{display:block; width:9px; height:9px; border-radius:1px}
+.trk.grid i.ok{background:#2e9e4f} .trk.grid i.wait{background:var(--rule)} .trk.grid i.miss{background:#e0a100}
+.trk.grid i.err{background:#d03b3b} .trk.grid i.late{background:#e0703a} .trk.grid i.na{background:none; box-shadow:inset 0 0 0 1px var(--rule)}
+.trk-na{color:var(--ink2)}
+.trk.mini{display:inline-grid; place-items:center; width:20px; height:18px; font-size:.72rem; cursor:default; vertical-align:-3px}
+table.trk-series{margin-top:10px; font-size:.86rem} table.trk-series td{white-space:normal; vertical-align:top; padding:8px 12px; font-weight:400}
+table.trk-series td.model{font-weight:600} table.trk-series td.na{color:var(--ink2)} table.trk-series small{color:var(--ink2)} table.trk-series small.why{font-family:var(--mono); font-size:.72rem}
+/* a model with a caveat: star after the name, explained on hover/tap */
+sup.caveat{color:var(--onair); font-weight:700; margin-left:1px; cursor:help}
+.st-notes{margin-top:10px; font-size:.82rem; color:var(--ink2)} .st-notes span{font-weight:600; color:var(--ink)}
 .trk-detail{margin-top:12px; padding:14px 18px; font-size:.9rem}
 .trk-detail h4{margin:0 0 6px; font-size:1rem}
 .trk-detail ul{margin:6px 0 0; padding-left:18px; color:var(--ink2); font-family:var(--mono); font-size:.78rem}

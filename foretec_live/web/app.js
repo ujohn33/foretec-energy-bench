@@ -69,6 +69,8 @@
   const COVARIATE_INPUTS = ["nwp", "load_forecast", "fuel"];
   let USES_COV = {};
   let REF = new Set();   // reference entries (published after the gate): shown, never ranked
+  let CAVEAT = {};       // model -> caveat from model.yaml: the name gets a star that explains it
+  const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "");
   const inField = (m) => REF.has(m) || S.covFilter === "all" || (S.covFilter === "with") === !!USES_COV[m];
   function filteredRows(metric = S.metric, refs = false) {
     return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
@@ -242,7 +244,7 @@
   }
   function legend(el, models, extra = "") {
     el.innerHTML = extra + models.map((m) =>
-      `<button type="button" data-m="${esc(m)}" aria-pressed="${!S.hidden.has(m)}"><i style="border-top-color:${color(m)}"></i>${esc(m)}</button>`).join("");
+      `<button type="button" data-m="${esc(m)}" aria-pressed="${!S.hidden.has(m)}"><i style="border-top-color:${color(m)}"></i>${nm(m)}</button>`).join("");
     el.onclick = (e) => {
       const b = e.target.closest("button[data-m]"); if (!b) return;
       const m = b.dataset.m; S.hidden.has(m) ? S.hidden.delete(m) : S.hidden.add(m);
@@ -257,7 +259,7 @@
     const isBt = (i) => days[i] && days[i].phase === "backtest";
     const c = color(m), g = btColor(m);
     return {
-      label: m, data, hidden: S.hidden.has(m), endLabel: m, endColor: c,
+      label: m, data, hidden: S.hidden.has(m), endLabel: CAVEAT[m] ? m + "*" : m, endColor: c,
       borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0, spanGaps: true,
       pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 2, pointBorderColor: css("--surface"),
       pointBackgroundColor: data.map((_, i) => (isBt(i) ? g : c)),
@@ -289,7 +291,8 @@
   };
   let tipAnchor = null, tipTimer = null, lastPointer = "mouse";
   function showTip(el) {
-    const tip = $("tip"), g = el && GLOSS[el.dataset.tip];
+    const key = el && el.dataset.tip, cav = key && key.startsWith("caveat:") && key.slice(7);
+    const tip = $("tip"), g = el && (GLOSS[key] || (cav && CAVEAT[cav] ? () => [`${cav} *`, CAVEAT[cav]] : null));
     if (!tip || !g || !D) return;
     const [title, body] = g();
     tip.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
@@ -377,7 +380,7 @@
     $("podium").innerHTML = top.length ? top.map((s, i) => `
       <div class="pod ${i === 0 ? "lead" : ""}">
         <div class="pod-top"><span class="place" aria-label="${["1st", "2nd", "3rd"][i]} place">${i + 1}</span>
-          <div class="name"><i style="background:${color(s.model)}"></i>${esc(s.model)}</div>
+          <div class="name"><i style="background:${color(s.model)}"></i>${nm(s.model)}</div>
           ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="stats">
           <div class="stat"><span data-tip="pts">Points</span><b>${s.pts}</b></div>
@@ -393,13 +396,15 @@
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("days", "Days", "days")}<th><span class="lbl" data-tip="bar">Points</span></th></tr></thead><tbody>` +
       sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}">
         <td class="pos">${s.pos}</td>
-        <td class="model"><i style="background:${color(s.model)}"></i>${esc(s.model)}</td>
+        <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td class="r v">${s.pts}</td><td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
         ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
         <td class="r v">${s.best}</td><td class="r v">${s.worst}</td><td class="r v">${s.days}</td>
         <td><div class="bar"><span style="width:${Math.round(140 * s.pts / maxPts)}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${s.pts}</b></div></td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
+    const starred = st.filter((x) => CAVEAT[x.model]);
+    $("st-notes").innerHTML = starred.map((x) => `<span>${esc(x.model)}*</span> ${esc(CAVEAT[x.model])}`).join("<br>");
     t.onclick = (e) => {
       const b = e.target.closest("button[data-sort]");
       if (!b) return;
@@ -418,7 +423,7 @@
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m);
-        return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>
+        return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
           <td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
           ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(mean(refMet.filter((r) => r.model === m).map((r) => r[S.metric])), md.d)}</td>` : ""}
           <td class="r v">–</td><td class="r v">–</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td>
@@ -478,7 +483,7 @@
         const fg = (dark ? w < 0.55 : w > 0.55) ? "#FFFFFF" : "#0B1F3A";
         return `<td class="cell" style="background:${bg};color:${fg}" title="${esc(s.model)} · ${x.d} (${x.phase}): avg rank ${fmt(r, 2)} of ${x.n}">${fmt(r, 1)}</td>`;
       }).join("");
-      return `<tr><td class="model"><i style="background:${color(s.model)}"></i>${esc(s.model)}</td>${cells}<td class="avg">${fmt(s.avgRank, 1)}</td></tr>`;
+      return `<tr><td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>${cells}<td class="avg">${fmt(s.avgRank, 1)}</td></tr>`;
     }).join("");
     t.innerHTML = head + "<tbody>" + body + "</tbody>";
   }
@@ -487,7 +492,7 @@
     if (!$("models-table")) return;
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
-      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${esc(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}</td>
+      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${nm(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}${m.caveat ? `<br><small>* ${esc(m.caveat)}</small>` : ""}</td>
         <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : m.reference ? '<span class="tag bt">Reference, not ranked</span>' : m.live_only ? '<span class="tag live">Live only</span>' : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
@@ -724,6 +729,15 @@
   }
 
   // ---------- pipeline: run tracker ----------
+  // one series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped
+  const SER = {
+    S: { k: "ok", icon: "✓", label: "forecast and scored" }, W: { k: "wait", icon: "…", label: "forecast, scoring not due yet" },
+    M: { k: "miss", icon: "!", label: "due, actuals missing" }, F: { k: "err", icon: "✕", label: "forecast failed" },
+    K: { k: "err", icon: "✕", label: "skipped" }, L: { k: "late", icon: "⏱", label: "finished after the gate, not scored" },
+  };
+  const trkZones = () => (S.zone === "all" ? D.config.zones : [S.zone]);
+  const trkTargets = () => (S.target === "all" ? Object.keys(D.config.targets) : [S.target]);
+  const serCode = (c, day, key) => { const x = c && c.s && c.s[key]; return x && day.phase === "live" && day.on_time === false && x !== "F" && x !== "K" ? "L" : x; };
   function cellStatus(c, day) {
     if (!c) return null;
     if (c.err || c.skip) return { k: "err", icon: "✕", label: `error: ${c.err} failed, ${c.skip} skipped` };
@@ -750,17 +764,30 @@
       const rv = (d.revised || []).length ? `<small title="actuals revised and re-scored: ${esc(d.revised.join(", "))}">↻ ${d.revised.length} revised</small>` : "";
       return `<th title="${d.d} · ${d.started ? `run ${localTime(d.started)}–` : "finished "}${localTime(d.finished)} Brussels">${esc(shortDate(d.d))}${b}${rv}</th>`;
     }).join("")}</tr></thead>`;
-    const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>${days.map((d) => {
-      const st = cellStatus(T.cells[d.d] && T.cells[d.d][m], d);
-      if (!st) return `<td></td>`;
+    const zs = trkZones(), ts = trkTargets(), keys = zs.flatMap((z) => ts.map((t) => `${z}_${t}`));
+    const cell = (c, d, m) => {
+      if (!c) return null;
+      const codes = keys.map((k) => serCode(c, d, k));
       const sel = S.trkSel && S.trkSel.d === d.d && S.trkSel.m === m;
-      return `<td><button type="button" class="trk ${st.k}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${!!sel}" title="${esc(m)} · ${d.d}: ${esc(st.label)}">${st.icon}</button></td>`;
-    }).join("")}</tr>`).join("");
+      if (!codes.some(Boolean)) return `<span class="trk-na" title="${esc(m)} does not forecast this selection">·</span>`;
+      if (keys.length === 1) {
+        const st = SER[codes[0]];
+        return `<button type="button" class="trk ${st.k}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(m)} · ${keys[0].replace("_", " ")} · ${d.d}: ${esc(st.label)}">${st.icon}</button>`;
+      }
+      // several series: one small square per series, zones in rows and targets in columns
+      const counts = {};
+      codes.forEach((x) => { if (x) counts[SER[x].label] = (counts[SER[x].label] || 0) + 1; });
+      const tip = Object.entries(counts).map(([l, n]) => `${n} ${l}`).join(", ");
+      return `<button type="button" class="trk grid" style="--c:${ts.length}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(m)} · ${d.d}: ${esc(tip)}">` +
+        codes.map((x, i) => `<i class="${x ? SER[x].k : "na"}" title="${keys[i].replace("_", " ")}: ${x ? SER[x].label : "not forecast by this model"}"></i>`).join("") + "</button>";
+    };
+    const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>${days.map((d) => `<td>${cell(T.cells[d.d] && T.cells[d.d][m], d, m) || ""}</td>`).join("")}</tr>`).join("");
     $("tracker").innerHTML = head + `<tbody>${body}</tbody>`;
     $("tracker").onclick = (e) => { const b = e.target.closest("button.trk"); if (!b) return; S.trkSel = { d: b.dataset.d, m: b.dataset.m }; renderTracker(); };
-    $("l-tracker").innerHTML = [["ok", "✓", "forecast and fully scored"], ["part", "◐", "scored so far, rest not due"], ["wait", "…", "forecast, scoring not due"],
-      ["miss", "!", "due but actuals missing"], ["late", "⏱", "after the gate"], ["err", "✕", "error or skipped"]]
-      .map(([k, i, l]) => `<span style="display:flex;align-items:center;gap:7px"><span class="trk ${k}" style="display:inline-grid;place-items:center;cursor:default">${i}</span>${l}</span>`).join("");
+    $("l-tracker").innerHTML = [["ok", "✓", "forecast and scored"], ["wait", "…", "forecast, scoring not due"],
+      ["miss", "!", "due, actuals missing"], ["late", "⏱", "after the gate"], ["err", "✕", "failed or skipped"]]
+      .map(([k, i, l]) => `<span style="display:flex;align-items:center;gap:7px"><span class="trk ${k}" style="display:inline-grid;place-items:center;cursor:default">${i}</span>${l}</span>`).join("") +
+      (keys.length > 1 ? `<span style="display:flex;align-items:center;gap:7px"><span class="trk grid key" style="--c:${ts.length};cursor:default">${keys.map(() => "<i class=\"wait\"></i>").join("")}</span>one square per series: rows ${esc(zs.join(", "))}, columns ${esc(ts.map((t) => TARGET_LABEL[t] || t).join(", "))}</span>` : "");
     const det = $("trk-detail");
     if (!S.trkSel) { det.hidden = true; return; }
     const d = T.days.find((x) => x.d === S.trkSel.d), c = T.cells[S.trkSel.d] && T.cells[S.trkSel.d][S.trkSel.m];
@@ -771,7 +798,13 @@
       <p>${st.icon} ${esc(st.label)}.</p>
       <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
-      ${c.msgs.length ? `<ul>${c.msgs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      <div class="tablewrap"><table class="trk-series"><thead><tr><th></th>${Object.keys(D.config.targets).map((t) => `<th>${esc(TARGET_LABEL[t] || t)}</th>`).join("")}</tr></thead><tbody>${D.config.zones.map((z) => `<tr><td class="model">${z}</td>${Object.keys(D.config.targets).map((t) => {
+        const key = `${z}_${t}`, x = serCode(c, d, key), a = (d.act || {})[key];
+        if (!x) return `<td class="na">not forecast</td>`;
+        const st = SER[x];
+        const actual = a === "frozen" ? "actuals in" : a === "prov" ? "actuals provisional" : x === "W" ? "" : "no actuals yet";
+        return `<td><span class="trk ${st.k} mini">${st.icon}</span> ${esc(st.label)}${actual ? `<br><small>${actual}</small>` : ""}${c.why && c.why[key] ? `<br><small class="why">${esc(c.why[key])}</small>` : ""}</td>`;
+      }).join("")}</tr>`).join("")}</tbody></table></div>
       ${(d.revised || []).length ? `<p>Actuals revised after first scoring, re-scored: ${esc(d.revised.join(", "))}.</p>` : ""}
       <p><a href="explorer.html?day=${d.d}">Open ${d.d} in the Forecast Explorer →</a></p>`;
   }
@@ -836,7 +869,7 @@
     for (const m of models) {
       const c = color(m);
       datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
-        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, endLabel: REF.has(m) ? `${m} (ref)` : m, endColor: c });
+        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, endLabel: REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
@@ -864,7 +897,7 @@
     const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
     tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
       models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).map((r) => `<tr class="${bt ? "is-bt" : ""}">
-        <td class="model"><i style="background:${color(r.model)}"></i>${esc(r.model)}</td>
+        <td class="model"><i style="background:${color(r.model)}"></i>${nm(r.model)}</td>
         ${["mae", "rmse", "bias", "pinball", "rel_mae"].map((k) => `<td class="num ${(k === "bias" ? Math.abs(r[k]) : r[k]) === best(k) ? "best" : ""}">${fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
       </tr>`).join("") + `</tbody>`;
   }
@@ -895,6 +928,7 @@
     renderStandings();
     renderCharts();
     renderHeatmap();
+    renderTracker();
     refreshTip();
   }
 
@@ -921,6 +955,7 @@
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
+    CAVEAT = Object.fromEntries(D.models.filter((m) => m.caveat).map((m) => [m.name, m.caveat]));
     const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
