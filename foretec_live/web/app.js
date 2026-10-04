@@ -483,25 +483,6 @@
     t.innerHTML = head + "<tbody>" + body + "</tbody>";
   }
 
-  function renderDetails() {
-    const md = metricDef();
-    const set = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
-    const ranked = filteredRows().filter((r) => set.has(r.issue_date));
-    const rows = ranked.concat(filteredRows(S.metric, true).filter((r) => set.has(r.issue_date)));
-    const models = MODELS.filter((m) => (REF.has(m) || shown(m)) && rows.some((r) => r.model === m));
-    const series = [];
-    for (const t of Object.keys(D.config.targets)) for (const z of D.config.zones)
-      if ((S.zone === "all" || S.zone === z) && (S.target === "all" || S.target === t)) series.push([z, t]);
-    const bt = S.phase === "backtest";
-    $("details-table").innerHTML = `<thead><tr><th>Series</th><th>Unit</th>${models.map((m) => `<th class="r">${esc(m)}${REF.has(m) ? " (ref)" : ""}</th>`).join("")}</tr></thead><tbody>` +
-      series.map(([z, t]) => {
-        const vals = models.map((m) => mean(rows.filter((r) => r.model === m && r.zone === z && r.target === t).map((r) => r[S.metric])));
-        const best = Math.min(...vals.filter((v, j) => v != null && !REF.has(models[j])));   // references never count as best
-        return `<tr class="${bt ? "is-bt" : ""}"><td class="model">${z} ${TARGET_LABEL[t] || t}</td><td>${md.unitless ? "ratio" : esc(D.config.targets[t].unit)}</td>` +
-          vals.map((v) => `<td class="num ${v === best ? "best" : ""}">${fmt(v, md.d)}</td>`).join("") + "</tr>";
-      }).join("") + "</tbody>";
-  }
-
   function renderModels() {
     if (!$("models-table")) return;
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
@@ -905,7 +886,6 @@
     renderStandings();
     renderCharts();
     renderHeatmap();
-    renderDetails();
     refreshTip();
   }
 
