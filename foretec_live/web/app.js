@@ -10,7 +10,7 @@
   ];
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10,
+    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -138,7 +138,7 @@
   // ---------- controls ----------
   function seg(el, items, current, onPick) {
     el.innerHTML = items.map((it) =>
-      `<button type="button" role="radio" data-k="${it.k}" aria-checked="${it.k === current}" ${it.disabled ? "disabled" : ""} ${it.title ? `title="${esc(it.title)}"` : ""}>${esc(it.label)}</button>`).join("");
+      `<button type="button" role="radio" data-k="${it.k}" aria-checked="${it.k === current}" ${it.disabled ? "disabled" : ""} ${it.title ? `title="${esc(it.title)}"` : ""} ${it.tip ? `data-tip="${it.tip}"` : ""}>${esc(it.label)}</button>`).join("");
     el.onclick = (e) => { const b = e.target.closest("button"); if (b && !b.disabled) onPick(b.dataset.k); };
   }
   function options(el, items, current) {
@@ -148,7 +148,7 @@
   function renderControls() {
     options($("f-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: z }))], S.zone);
     options($("f-target"), [{ k: "all", label: "All targets" }, ...Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t }))], S.target);
-    seg($("f-metric"), METRICS.map((m) => ({ k: m.k, label: m.label })), S.metric, (k) => { S.metric = k; if (!rawAllowed()) S.view = "rank"; renderAll(); });
+    seg($("f-metric"), METRICS.map((m) => ({ k: m.k, label: m.label, tip: m.k })), S.metric, (k) => { S.metric = k; if (!rawAllowed()) S.view = "rank"; renderAll(); });
     const hasLive = ROWS.some((r) => r.phase === "live");
     seg($("f-phase"), [
       { k: "live", label: "Live", disabled: !hasLive, title: hasLive ? "" : "No live forecasts scored yet" },
@@ -161,8 +161,8 @@
       { k: "without", label: "Without", title: "Models that only see the target's own history" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
     seg($("f-view"), [
-      { k: "rank", label: "Avg rank" },
-      { k: "value", label: "Value", disabled: !rawAllowed(), title: rawAllowed() ? "" : "Pick one zone and one target to compare raw values across days" },
+      { k: "rank", label: "Avg rank", tip: "rank" },
+      { k: "value", label: "Value", tip: "value", disabled: !rawAllowed(), title: rawAllowed() ? "" : "Pick one zone and one target to compare raw values across days" },
     ], S.view, (k) => { S.view = k; renderAll(); });
   }
 
@@ -265,6 +265,106 @@
     };
   }
 
+
+  // ---------- explanations: shown on hover (mouse), focus (keyboard) or tap (touch) wherever a metric is named ----------
+  const units = () => [...new Set(Object.values(D.config.targets).map((t) => t.unit))].join(" or ");
+  const mixedUnits = () => (S.target === "all" ? " With all targets selected, values in different units are averaged together: pick one target to compare them." : "");
+  const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
+  const GLOSS = {
+    pos: () => ["Position", "Place in the standings: most total points first, equal points split by average rank. It stays the same when you sort the table by another column."],
+    pts: () => ["Points", `Every issue day is scored like a race. The models are ordered by their average rank that day; the best gets one point for every model ranked that day (${fieldSize()} at most here), the last gets 1. Total points add up over the days in the period, so a day a model misses earns it nothing.`],
+    rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
+    rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
+    mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
+    rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
+    pinball: () => ["Pinball loss", `Quantile loss averaged over the 10th to 90th percentiles. It scores the whole forecast band: narrow bands score well only if the outcome falls inside them as often as they claim. Only models that publish quantiles have one. Lower is better.${mixedUnits()}`],
+    bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
+    best: () => ["Best day", "The most points the model earned on a single issue day."],
+    worst: () => ["Worst day", "The fewest points the model earned on a single issue day."],
+    days: () => ["Days", "Issue days on which the model was scored in the selected period. Fewer days means fewer chances to collect points."],
+    bar: () => ["Points", "Total points as a bar, scaled to the leader."],
+    metric: () => GLOSS[S.metric](),
+    value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
+    heat: () => ["Average rank", "Each cell is the model's average rank on that issue day across the selected series (1 = best); darker is better. The last column averages over all days."],
+  };
+  let tipAnchor = null, tipTimer = null, lastPointer = "mouse";
+  function showTip(el) {
+    const tip = $("tip"), g = el && GLOSS[el.dataset.tip];
+    if (!tip || !g || !D) return;
+    const [title, body] = g();
+    tip.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
+    tip.dataset.key = el.dataset.tip;
+    tip.dataset.scope = (el.closest("[id]") || {}).id || "";
+    tip.classList.add("on");
+    tipAnchor = el;
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), document.documentElement.clientWidth - w - 8);
+    const below = r.bottom + 8, above = r.top - h - 8;
+    tip.style.left = x + "px";
+    tip.style.top = (below + h > window.innerHeight - 8 && above > 8 ? above : below) + "px";
+  }
+  function hideTip() { const tip = $("tip"); if (tip) tip.classList.remove("on"); tipAnchor = null; clearTimeout(tipTimer); }
+  // a re-render (e.g. after sorting) replaces the header the tip points at: follow its successor
+  function refreshTip() {
+    const tip = $("tip");
+    if (!tipAnchor || tipAnchor.isConnected) return;
+    const scope = tip.dataset.scope && $(tip.dataset.scope);
+    const el = scope && scope.querySelector(`[data-tip="${tip.dataset.key}"]`);
+    el ? showTip(el) : hideTip();
+  }
+  document.addEventListener("pointerdown", (e) => { lastPointer = e.pointerType; }, true);
+  document.addEventListener("keydown", () => { lastPointer = "keyboard"; }, true);
+  document.addEventListener("pointerover", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const el = e.target.closest("[data-tip]");
+    if (el && el !== tipAnchor) showTip(el);
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (e.pointerType === "mouse" && tipAnchor && tipAnchor.contains(e.target) && !tipAnchor.contains(e.relatedTarget)) hideTip();
+  });
+  document.addEventListener("focusin", (e) => { const el = e.target.closest("[data-tip]"); if (el && el.matches(":focus-visible")) showTip(el); });
+  document.addEventListener("focusout", (e) => { if (e.target === tipAnchor) hideTip(); });
+  // touch has no hover: a tap shows the explanation for a few seconds (capture phase, before a sort re-renders the header)
+  document.addEventListener("click", (e) => {
+    if (lastPointer !== "touch" && lastPointer !== "pen") return;
+    const el = e.target.closest("[data-tip]");
+    if (!el) { hideTip(); return; }
+    showTip(el);
+    tipTimer = setTimeout(hideTip, 6000);
+  }, true);
+  window.addEventListener("scroll", hideTip, true);
+  window.addEventListener("resize", hideTip);
+
+  // ---------- standings sort ----------
+  const SORT_COLS = {
+    pos: { get: (s) => s.pos, dir: 1 },
+    model: { get: (s) => s.model, dir: 1 },
+    pts: { get: (s) => s.pts, dir: -1 },
+    rank: { get: (s) => s.avgRank, dir: 1 },
+    rel: { get: (s) => s.rel, dir: 1 },
+    metric: { get: (s) => s.metric, dir: 1 },
+    best: { get: (s) => s.best, dir: -1 },
+    worst: { get: (s) => s.worst, dir: -1 },
+    days: { get: (s) => s.days, dir: -1 },
+  };
+  function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] && !(k === "metric" && S.metric === "rel_mae") ? k : "pos"; }
+  function sortRows(st) {
+    const k = sortKey(), dir = k === S.sort.k ? S.sort.dir : 1, get = SORT_COLS[k].get;
+    return [...st].sort((a, b) => {
+      const x = get(a), y = get(b);
+      if (x == null || !isFinite(x) && typeof x === "number") return 1;      // missing values always last
+      if (y == null || !isFinite(y) && typeof y === "number") return -1;
+      const c = typeof x === "string" ? x.localeCompare(y) : x - y;
+      return c * dir || a.pos - b.pos;
+    });
+  }
+  function sortTh(key, label, tip, right = true) {
+    const on = sortKey() === key, dir = on && key === S.sort.k ? S.sort.dir : 1;
+    const aria = on ? (dir < 0 ? "descending" : "ascending") : "none";
+    return `<th class="${right ? "r" : ""}" aria-sort="${aria}"><button type="button" class="sort" data-sort="${key}" ${tip ? `data-tip="${tip}"` : ""}>` +
+      `<span class="${tip ? "lbl" : ""}">${esc(label)}</span><i aria-hidden="true">${on ? (dir < 0 ? "▼" : "▲") : "↕"}</i></button></th>`;
+  }
+
   // ---------- sections ----------
   let DAYS = [];
 
@@ -279,19 +379,19 @@
         <div class="pod-top"><span class="place">${["1st", "2nd", "3rd"][i]} place</span>${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="name"><i style="background:${color(s.model)}"></i>${esc(s.model)}</div>
         <div class="stats">
-          <div class="stat"><span>Points</span><b>${s.pts}</b></div>
-          <div class="stat"><span>Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
-          <div class="stat"><span>${esc(md.label)}</span><b>${fmt(s.metric, md.d)}</b></div>
+          <div class="stat"><span data-tip="pts">Points</span><b>${s.pts}</b></div>
+          <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
+          <div class="stat"><span data-tip="${S.metric}">${esc(md.label)}</span><b>${fmt(s.metric, md.d)}</b></div>
         </div>
       </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
     const maxPts = Math.max(1, ...st.map((s) => s.pts));
     const t = $("standings-table");
-    t.innerHTML = `<thead><tr><th>#</th><th>Model</th><th class="r">Total pts</th><th class="r">Avg rank</th><th class="r">Rel. MAE</th>
-      ${S.metric !== "rel_mae" ? `<th class="r">${esc(md.label)}${esc(unitSuffix())}</th>` : ""}
-      <th class="r">Best day</th><th class="r">Worst day</th><th class="r">Days</th><th>Points</th></tr></thead><tbody>` +
-      st.map((s, i) => `<tr class="${bt ? "is-bt" : ""}">
-        <td class="pos">${String(i + 1).padStart(2, "0")}</td>
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Total pts", "pts")}${sortTh("rank", "Avg rank", "rank")}${sortTh("rel", "Rel. MAE", "rel_mae")}
+      ${S.metric !== "rel_mae" ? sortTh("metric", md.label + unitSuffix(), S.metric) : ""}
+      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("days", "Days", "days")}<th><span class="lbl" data-tip="bar">Points</span></th></tr></thead><tbody>` +
+      sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}">
+        <td class="pos">${String(s.pos).padStart(2, "0")}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${esc(s.model)}</td>
         <td class="r v">${s.pts}</td><td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
         ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
@@ -299,6 +399,16 @@
         <td><div class="bar"><span style="width:${Math.round(140 * s.pts / maxPts)}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${s.pts}</b></div></td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
+    t.onclick = (e) => {
+      const b = e.target.closest("button[data-sort]");
+      if (!b) return;
+      const k = b.dataset.sort;
+      S.sort = sortKey() === k && S.sort.k === k ? { k, dir: -S.sort.dir } : { k, dir: SORT_COLS[k].dir };
+      saveFilters();
+      renderStandings();
+      if (e.detail === 0) { const nb = t.querySelector(`button[data-sort="${k}"]`); if (nb) nb.focus(); }   // keyboard: keep focus on the header
+      refreshTip();
+    };
     const set = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
     const refRel = filteredRows("rel_mae", true).filter((r) => set.has(r.issue_date));
     const refMet = filteredRows(S.metric, true).filter((r) => set.has(r.issue_date));
@@ -358,7 +468,7 @@
     const t = $("heatmap");
     if (!DAYS.length) { t.innerHTML = ""; return; }
     const lerp = (a, b, w) => mix(a, b, w);
-    const head = `<thead><tr><th>Model</th>${DAYS.map((x) => `<th class="${x.phase === "backtest" ? "is-bt" : "live"}" title="${x.d} · ${x.phase}">${esc(shortDate(x.d))}</th>`).join("")}<th>Avg</th></tr></thead>`;
+    const head = `<thead><tr><th>Model</th>${DAYS.map((x) => `<th class="${x.phase === "backtest" ? "is-bt" : "live"}" title="${x.d} · ${x.phase}">${esc(shortDate(x.d))}</th>`).join("")}<th><span class="lbl" data-tip="heat">Avg</span></th></tr></thead>`;
     const body = st.map((s) => {
       const cells = DAYS.map((x) => {
         const r = x.avgRank[s.model];
@@ -763,9 +873,10 @@
     renderInputs(day);
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);
     const tb = $("x-table");
-    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored two days after delivery."}</td></tr></tbody>`; return; }
+    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored the day after delivery."}</td></tr></tbody>`; return; }
     const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
-    tb.innerHTML = `<thead><tr><th>Model</th><th class="r">MAE</th><th class="r">RMSE</th><th class="r">Bias</th><th class="r">Pinball</th><th class="r">Rel. MAE</th></tr></thead><tbody>` +
+    const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
+    tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
       models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).map((r) => `<tr class="${bt ? "is-bt" : ""}">
         <td class="model"><i style="background:${color(r.model)}"></i>${esc(r.model)}</td>
         ${["mae", "rmse", "bias", "pinball", "rel_mae"].map((k) => `<td class="num ${(k === "bias" ? Math.abs(r[k]) : r[k]) === best(k) ? "best" : ""}">${fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
@@ -799,9 +910,10 @@
     renderCharts();
     renderHeatmap();
     renderDetails();
+    refreshTip();
   }
 
-  const FILTER_KEYS = ["zone", "target", "metric", "phase", "covFilter", "topN"];
+  const FILTER_KEYS = ["zone", "target", "metric", "phase", "covFilter", "topN", "sort"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -864,7 +976,7 @@
       const changed = () => { S.zone = S.x.zone; S.target = S.x.target; S.topN = S.xTop; saveFilters();
         history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
       const segs = () => {
-        seg($("x-metric"), METRICS.map((m) => ({ k: m.k, label: m.label })), S.metric, (k) => { S.metric = k; segs(); changed(); renderExplorerChart(); });
+        seg($("x-metric"), METRICS.map((m) => ({ k: m.k, label: m.label, tip: m.k })), S.metric, (k) => { S.metric = k; segs(); changed(); renderExplorerChart(); });
         seg($("x-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
           (k) => { S.phase = k; segs(); renderExplorerControls(); changed(); renderExplorerChart(); });
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
