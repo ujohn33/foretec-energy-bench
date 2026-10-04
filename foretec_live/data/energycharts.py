@@ -94,7 +94,8 @@ class EnergyChartsSource(Source):
             if f.exists():
                 self._cache[key] = json.loads(f.read_text())
                 return self._cache[key]
-        js = _get(path, params)
+        # as a fallback it must fail fast: a slow fallback could push the live run past the gate
+        js = _get(path, params, retries=2 if self.cfg.get("_fallback") else 7)
         if f is not None and js:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text(json.dumps(js))

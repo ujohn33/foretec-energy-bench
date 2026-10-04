@@ -50,6 +50,7 @@ class FallbackSource(Source):
         self.primary, self.fallback = primary, fallback
         self.name = f"{primary.name}+{fallback.name}"
         self.provenance: dict = {}
+        self.fallback_down = False   # circuit breaker: after one failure, skip the fallback for this run
 
     def fetch(self, zone, target, start, end):
         idx = pd.date_range(start, end, freq=FREQ, inclusive="left")
@@ -59,13 +60,14 @@ class FallbackSource(Source):
             log.warning("%s %s %s failed (%s); using %s", self.primary.name, zone, target, e, self.fallback.name)
             p = pd.Series(np.nan, index=idx)
         out, n_fb = p, 0
-        if p.isna().any():
+        if p.isna().any() and not self.fallback_down:
             try:
                 f = self.fallback.fetch(zone, target, start, end).reindex(idx)
                 out = p.combine_first(f)
                 n_fb = int((p.isna() & f.notna()).sum())
             except Exception as e:  # noqa: BLE001
-                log.warning("fallback %s %s %s failed: %s", self.fallback.name, zone, target, e)
+                self.fallback_down = True
+                log.warning("fallback %s %s %s failed (%s); not trying it again in this run", self.fallback.name, zone, target, e)
         self.provenance[(zone, target)] = {self.primary.name: int(p.notna().sum()), self.fallback.name: n_fb,
                                            "missing": int(out.isna().sum())}
         if n_fb:
@@ -91,7 +93,7 @@ def get_source(cfg: dict) -> Source:
     name = cfg.get("source", "energycharts")
     if cfg.get("fallback_source") and name != "synthetic":
         primary = get_source({**cfg, "source": name, "fallback_source": None})
-        fallback = get_source({**cfg, "source": cfg["fallback_source"], "fallback_source": None})
+        fallback = get_source({**cfg, "source": cfg["fallback_source"], "fallback_source": None, "_fallback": True})
         return FallbackSource(cfg, primary, fallback)
     if name == "energycharts":
         from .energycharts import EnergyChartsSource

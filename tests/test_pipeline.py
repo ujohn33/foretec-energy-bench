@@ -272,3 +272,28 @@ def test_revision_check_refreezes_and_rescores(cfg):
     assert ((s["zone"] == "BE") & (s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == 2
     checks = json.loads((f.parent / "_revisions.json").read_text())
     assert [c["revised"] for c in checks if c["series"] == "BE_wind"] == [False, True]
+
+
+def test_fallback_circuit_breaker(cfg):
+    """A failing fallback is tried once per run, then skipped: it must never stall the live run."""
+    from foretec_live.data.base import FallbackSource, Source
+
+    idx = pd.date_range("2026-09-20 22:00", periods=4, freq="15min")
+    calls = []
+
+    class Gappy(Source):
+        name = "entsoe"
+        def fetch(self, zone, target, start, end):
+            return pd.Series([1.0, None, 3.0, 4.0], index=idx).dropna()
+
+    class Down(Source):
+        name = "energycharts"
+        def fetch(self, zone, target, start, end):
+            calls.append(zone)
+            raise RuntimeError("503")
+
+    src = FallbackSource(cfg, Gappy(cfg), Down(cfg))
+    for z in ("BE", "NL", "FR"):
+        out = src.fetch(z, "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
+        assert out.tolist() == [1.0, 3.0, 4.0]
+    assert calls == ["BE"]
