@@ -169,7 +169,9 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             log_rows.append({"model": spec.name, "status": "skipped", "detail": why})
             continue
         frames = []
-        items = [((zone, target), y) for (zone, target), y in snaps.items() if spec.applies(zone, target)]
+        items = [((zone, target), y) for (zone, target), y in snaps.items() if spec.applies(zone, target)
+                 # live_only_zones: zones whose source only exists live (e.g. a forecast the publisher overwrites)
+                 and (live or zone not in (spec.raw.get("live_only_zones") or []))]
         extra = {}
         if external and set(spec.raw.get("inputs", ["history"])) - {"history", "calendar"}:
             if covariates is None:

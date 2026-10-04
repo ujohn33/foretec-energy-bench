@@ -1,10 +1,14 @@
 name: tso_cutoff
-author: Elia
-description: "The TSO's own day-ahead wind and solar forecast as it stood before the gate: Elia's forecast published at 11:00 on D-1 (Elia Open Data), a fixed snapshot, so the backtest is exact. Point forecast. RTE and TenneT publish their next-day forecast only around 18:00 (EU 543/2013 requires it by 18:00), after the gate, so FR and NL are not in this entry; see tso_final for those."
+author: Elia, NED.nl
+description: "The grid operators' own day-ahead wind and solar forecasts as they stood before the gate. BE: Elia's forecast published at 11:00 on D-1 (Elia Open Data), a fixed snapshot, so the backtest is exact. NL: the NED.nl national wind forecast (Nationaal Energie Dashboard, backed by TenneT), fetched live at the cut-off; NED overwrites its forecast, so NL has no backtest. FR: RTE publishes its next-day forecast around 18:00, after the gate. Point forecasts."
 family: tso
 inputs: [tso_forecast]
 targets: [wind, solar]
-zones: [BE]
+zones: [BE, NL]
+# NED forecasts national solar; the published NL actual covers metered plants only
+exclude: [NL_solar]
+# NED overwrites its forecast as delivery approaches: NL only exists in live runs
+live_only_zones: [NL]
 runner: subprocess
 env: _self
 script: forecaster.py

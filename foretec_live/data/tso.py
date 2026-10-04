@@ -9,11 +9,17 @@ Elia (BE), opendata.elia.be (Opendatasoft):
 RTE (FR), éCO2mix real-time on odre.opendatasoft.com:
   wind   `eolien` (onshore + offshore), solar `solaire`, 15-minute national values.
 
+NED (NL), Nationaal Energie Dashboard (api.ned.nl, key NED_NL_KEY), backed by TenneT and the grid operators:
+  national 15-minute forecasts of onshore wind, offshore wind and solar, updated about every hour and
+  overwritten as delivery approaches, so only a forecast fetched live before the gate is a gate-time forecast.
+
 Each source answers only for its own zone and returns nothing elsewhere, so they can sit in one fallback chain.
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
+import os
 import time
 
 import pandas as pd
@@ -99,3 +105,35 @@ class RteSource(Source):
         params = {"select": f"date_heure, {col} as value", "where": _when("date_heure", start, end) + f" and {col} is not null"}
         s = _series(_export(ODRE, "eco2mix-national-tr", params, 2 if self.cfg.get("_fallback") else 4), "date_heure")
         return s[(s.index >= start) & (s.index < end)] if not s.empty else s
+
+
+class NedForecast:
+    """NED.nl national wind/solar forecast for whole local days (MW). Live use only: NED overwrites it."""
+    URL = "https://api.ned.nl/v1/utilizations"
+    TYPES = {"wind": (1, 17), "solar": (2,)}          # onshore + offshore wind; solar
+
+    def __init__(self, key: str | None = None):
+        self.key = key or os.environ.get("NED_NL_KEY")
+        if not self.key:
+            raise RuntimeError("NED_NL_KEY is not set")
+
+    def forecast(self, target: str, first_day: dt.date, last_day: dt.date) -> pd.Series:
+        total = None
+        for typ in self.TYPES[target]:
+            rows, page = [], 1
+            while True:
+                # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps
+                q = {"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1, "classification": 1, "activity": 1,
+                     "validfrom[after]": first_day.isoformat(), "validfrom[strictly_before]": (last_day + dt.timedelta(days=1)).isoformat(),
+                     "itemsPerPage": 200, "page": page}
+                r = requests.get(self.URL, params=q, timeout=60,
+                                 headers={"X-AUTH-TOKEN": self.key, "Accept": "application/json", "User-Agent": "foretec-energy-bench/1.0"})
+                r.raise_for_status()
+                got = r.json()
+                rows += got
+                if len(got) < 200:
+                    break
+                page += 1
+            s = _series([{"t": x["validfrom"], "value": x["capacity"] / 1000.0} for x in rows], "t")   # kW -> MW
+            total = s if total is None else total.add(s, fill_value=None)
+        return total if total is not None else pd.Series(dtype=float)
