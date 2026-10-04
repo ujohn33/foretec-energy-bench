@@ -117,9 +117,9 @@ class NedForecast:
         if not self.key:
             raise RuntimeError("NED_NL_KEY is not set")
 
-    def forecast(self, target: str, first_day: dt.date, last_day: dt.date) -> pd.Series:
+    def forecast(self, target: str, first_day: dt.date, last_day: dt.date, types: tuple | None = None) -> pd.Series:
         total = None
-        for typ in self.TYPES[target]:
+        for typ in types or self.TYPES[target]:
             rows, page = [], 1
             while True:
                 # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps

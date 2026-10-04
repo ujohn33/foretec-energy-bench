@@ -2,10 +2,11 @@
 
 BE: Elia's day-ahead forecast published at 11:00 on D-1 (Elia Open Data, `dayahead11hforecast`), a fixed
     snapshot, so backtests see exactly what was public at the time.
-NL: the NED.nl national forecast (Nationaal Energie Dashboard, backed by TenneT), fetched at the run. NED
-    overwrites its forecast as delivery approaches, so it is used only in a live run before the gate;
-    backtests and late runs get no NL entry. NL solar is excluded (model.yaml): NED forecasts national
-    output, while the published NL actual covers metered plants only.
+NL: the NED.nl offshore wind forecast (Nationaal Energie Dashboard, backed by TenneT), fetched at the run.
+    Offshore only: the NL wind actual on ENTSO-E is offshore plus TSO-metered onshore (~28 MW of ~305 MW on
+    2-3 Oct 2026), while NED's onshore forecast is national (~6x that); NED offshore matched ENTSO-E offshore
+    (287 vs 277 MW). NED overwrites its forecast as delivery approaches, so it is used only in a live run
+    before the gate; backtests and late runs get no NL entry. NL solar is excluded for the same reason.
 Fallback, live runs only: ENTSO-E A69 as published when this runs (often not there yet; TSOs have until 18:00
 on D-1, and after the gate it would be that later version).
 Point forecasts only: quantiles of parts do not add up to quantiles of the total.
@@ -39,7 +40,7 @@ for key in series:
     def ned():
         if not live:
             raise RuntimeError("live only (NED overwrites its forecast)")
-        return NedForecast().forecast(target, issue, delivery)
+        return NedForecast().forecast(target, issue, delivery, types=(17,))   # offshore: see the docstring
 
     sources = {"BE": [("Elia 11:00", lambda: elia.dayahead_11h(target, idx[0], end))],
                "NL": [("NED.nl", ned)]}.get(zone, [])
