@@ -4,6 +4,8 @@ Elia (BE), opendata.elia.be (Opendatasoft):
   wind   ods031 (historical, `measured`) + ods086 (near real-time, `realtime`): the sum of the disjoint parts
          Federal offshore + Flanders/Wallonia onshore, each on the Elia grid and on distribution grids.
   solar  ods032 + ods087, region "Belgium".
+  Elia also publishes its own day-ahead forecast as it stood at 11:00 on D-1 (`dayahead11hforecast`), before
+  the 12:00 gate; the version ENTSO-E receives is the 18:00 one. `dayahead_11h` returns it.
 RTE (FR), éCO2mix real-time on odre.opendatasoft.com:
   wind   `eolien` (onshore + offshore), solar `solaire`, 15-minute national values.
 
@@ -59,9 +61,18 @@ class EliaSource(Source):
     def fetch(self, zone, target, start, end):
         if zone != "BE" or target not in ("wind", "solar"):
             return pd.Series(dtype=float)
+        return self._collect(target, self.WIND if target == "wind" else self.SOLAR, start, end)
+
+    def dayahead_11h(self, target, start, end) -> pd.Series:
+        """Elia's day-ahead forecast for Belgium as published at 11:00 on D-1, MW (a fixed snapshot, so it
+        can be fetched later without look-ahead)."""
+        parts = self.WIND if target == "wind" else self.SOLAR
+        return self._collect(target, [(ds, "dayahead11hforecast") for ds, _ in parts], start, end)
+
+    def _collect(self, target, datasets, start, end) -> pd.Series:
         retries = 2 if self.cfg.get("_fallback") else 4
         out = pd.Series(dtype=float)
-        for dataset, col in (self.WIND if target == "wind" else self.SOLAR):
+        for dataset, col in datasets:
             if target == "wind":
                 params = {"select": f"datetime, sum({col}) as value, count({col}) as n", "group_by": "datetime",
                           "where": _when("datetime", start, end) + f" and {col} is not null"}

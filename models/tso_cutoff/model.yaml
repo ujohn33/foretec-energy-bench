@@ -1,11 +1,10 @@
 name: tso_cutoff
-author: ENTSO-E / TSOs
-description: "TSO day-ahead wind and solar forecast (ENTSO-E A69) exactly as published at the 11:30 cut-off. Elia (BE) publishes before the gate; NL and FR publish later in the afternoon, so they are not in this entry. Live only: a backtest cannot show what was published at 11:30."
+author: Elia
+description: "The TSO's own day-ahead wind and solar forecast as it stood before the gate: Elia's forecast published at 11:00 on D-1 (Elia Open Data), a fixed snapshot, so the backtest is exact. Point forecast. RTE and TenneT publish their next-day forecast only around 18:00 (EU 543/2013 requires it by 18:00), after the gate, so FR and NL are not in this entry; see tso_final for those."
 family: tso
 inputs: [tso_forecast]
 targets: [wind, solar]
 zones: [BE]
-live_only: true
 runner: subprocess
 env: _self
 script: forecaster.py

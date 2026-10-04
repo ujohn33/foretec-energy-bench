@@ -21,13 +21,13 @@ This proof of concept scores accuracy only. Trading and money metrics come later
 | D-1 11:30 | **forecast**: snapshot the data that was public at the 11:30 cut-off, run every model, write `results/forecasts/D-1/*.parquet` |
 | D-1 12:00 | **gate**: SDAC day-ahead gate closure. A live run that finishes later is marked late and never scored |
 | D-1 14:45, 20:45 | **score + report**: the day-ahead auction for D has cleared (results around 13:00), so prices are scored |
-| D+1 14:45 | wind and solar for D are scored (metered day complete on ENTSO-E); until D+3 every scoring run re-fetches them, logs the change in `data/actuals/D/_revisions.json` and re-scores a series that moved by more than 0.5% of its daily energy |
+| D+1 07:00 | wind and solar for D are scored if every quarter-hour is published (otherwise from 14:45 with 95%); hourly before that the explorer shows the values metered so far as provisional; until D+3 every scoring run re-fetches them, logs the change in `data/actuals/D/_revisions.json` and re-scores a series that moved by more than 0.5% of its daily energy |
 
 **No look-ahead.** The data available to a model is cut off as follows:
 
 - **Prices:** everything up to the start of the delivery day. Prices for D-1 were published on D-2.
 - **Wind and solar:** actuals up to issue time minus one hour of publication lag.
-- **TSO day-ahead renewable forecasts:** not used. They are only published by 18:00 on D-1, after issue time.
+- **TSO day-ahead renewable forecasts:** not a model input. EU 543/2013 has TSOs publish them by 18:00 on D-1, after the gate. They enter as benchmarks instead: `tso_cutoff` is Elia's own forecast published at 11:00 (before the gate, ranked), `tso_final` the 18:00 version on ENTSO-E (reference, never ranked).
 
 ## Scoring
 
