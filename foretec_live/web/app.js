@@ -859,7 +859,7 @@
     renderInputs(day);
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);
     const tb = $("x-table");
-    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored the day after delivery."}</td></tr></tbody>`; return; }
+    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored at 07:00 the day after delivery, once the whole day is published."}</td></tr></tbody>`; return; }
     const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
     const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
     tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
