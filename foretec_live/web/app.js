@@ -179,9 +179,9 @@
       ctx.fillStyle = css("--band");
       ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
       ctx.fillStyle = css("--bt-ink");
-      ctx.font = "10px 'Geist Mono', monospace";
-      ctx.fillText("BACKTEST", x0 + 8, a.top + 14);
-      if (x1 < a.right - 40) ctx.fillText("LIVE", x1 + 8, a.top + 14);
+      ctx.font = "600 11px 'Source Sans 3', sans-serif";
+      ctx.fillText("Backtest", x0 + 8, a.top + 15);
+      if (x1 < a.right - 40) ctx.fillText("Live", x1 + 8, a.top + 15);
       ctx.restore();
     },
   };
@@ -192,7 +192,7 @@
       const { ctx } = chart;
       const placed = [];
       ctx.save();
-      ctx.font = "11px 'Geist Mono', monospace";
+      ctx.font = "12px 'Source Sans 3', sans-serif";
       ctx.textBaseline = "middle";
       chart.data.datasets.forEach((ds, i) => {
         if (!ds.endLabel || !chart.isDatasetVisible(i)) return;
@@ -220,14 +220,14 @@
       interaction: { mode: "index", intersect: false },
       layout: { padding: { right: narrow() ? 6 : extra.rightPad ?? 120, top: 4 } },
       scales: {
-        x: { grid: { color: grid, drawTicks: false }, border: { color: axis }, ticks: { color: ink2, font: { family: "Geist Mono", size: 11 }, maxRotation: 0, autoSkipPadding: 14, padding: 6 } },
-        y: { grid: { color: grid, drawTicks: false }, border: { display: false }, ticks: { color: ink2, font: { family: "Geist Mono", size: 11 }, padding: 8 }, title: { display: !!extra.yTitle, text: extra.yTitle, color: ink2, font: { family: "Geist Mono", size: 10 } } },
+        x: { grid: { color: grid, drawTicks: false }, border: { color: axis }, ticks: { color: ink2, font: { size: 12 }, maxRotation: 0, autoSkipPadding: 14, padding: 6 } },
+        y: { grid: { color: grid, drawTicks: false }, border: { display: false }, ticks: { color: ink2, font: { size: 12 }, padding: 8 }, title: { display: !!extra.yTitle, text: extra.yTitle, color: ink2, font: { size: 12, weight: 600 } } },
       },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink2"), borderColor: css("--rule"), borderWidth: 1,
-          padding: 10, boxPadding: 4, usePointStyle: true, titleFont: { family: "Archivo", weight: 600 }, bodyFont: { family: "Geist Mono", size: 11 },
+          padding: 10, boxPadding: 4, usePointStyle: true, titleFont: { weight: 700, size: 13 }, bodyFont: { size: 12.5 },
           itemSort: extra.itemSort,
           callbacks: extra.tooltip || {},
         },
@@ -258,7 +258,7 @@
     const c = color(m), g = btColor(m);
     return {
       label: m, data, hidden: S.hidden.has(m), endLabel: m, endColor: c,
-      borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0.25, spanGaps: true,
+      borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0, spanGaps: true,
       pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 2, pointBorderColor: css("--surface"),
       pointBackgroundColor: data.map((_, i) => (isBt(i) ? g : c)),
       segment: { borderColor: (ctx) => (isBt(ctx.p1DataIndex) ? g : c), borderDash: (ctx) => (isBt(ctx.p1DataIndex) ? [5, 4] : undefined) },
@@ -391,7 +391,7 @@
       ${S.metric !== "rel_mae" ? sortTh("metric", md.label + unitSuffix(), S.metric) : ""}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("days", "Days", "days")}<th><span class="lbl" data-tip="bar">Points</span></th></tr></thead><tbody>` +
       sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}">
-        <td class="pos">${String(s.pos).padStart(2, "0")}</td>
+        <td class="pos">${s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${esc(s.model)}</td>
         <td class="r v">${s.pts}</td><td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
         ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
@@ -417,7 +417,7 @@
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m);
-        return `<tr class="ref"><td class="pos">REF</td><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>
+        return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${esc(m)}</td>
           <td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
           ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(mean(refMet.filter((r) => r.model === m).map((r) => r[S.metric])), md.d)}</td>` : ""}
           <td class="r v">–</td><td class="r v">–</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td>
@@ -513,7 +513,7 @@
         <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : m.reference ? '<span class="tag bt">Reference, not ranked</span>' : m.live_only ? '<span class="tag live">Live only</span>' : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
-  const INPUT_LABEL = { history: "Own history", nwp: "NWP ensemble", load_forecast: "ENTSO-E load fc", fuel: "Fuel cost", calendar: "Calendar" };
+  const INPUT_LABEL = { history: "Own history", nwp: "NWP ensemble", load_forecast: "Load forecast", fuel: "Fuel cost", calendar: "Calendar" };
   function inputChips(inputs) {
     return (inputs || ["history"]).map((k) => `<span class="chip ${k === "history" ? "" : "on"}">${esc(INPUT_LABEL[k] || k)}</span>`).join("");
   }
@@ -581,12 +581,12 @@
       datasets.push({ label: "_lo", data: lo, borderWidth: 0, pointRadius: 0, fill: false });
       datasets.push({ label: "_hi", data: hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(css("--blue"), 0.14) });
       const mean = labels.map((_, i) => { const xs = members.map((m) => v.members[m][i]).filter((x) => x != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; });
-      datasets.push({ label: "Ensemble mean", data: mean, borderColor: ink, borderWidth: 2.6, pointRadius: 0, tension: 0.15, endLabel: "mean", endColor: ink });
+      datasets.push({ label: "Ensemble mean", data: mean, borderColor: ink, borderWidth: 2.6, pointRadius: 0, tension: 0, endLabel: "mean", endColor: ink });
     }
     for (const m of members) {
       const lab = (inp.nwp_models[m] && inp.nwp_models[m].label) || (m === "entsoe" ? "ENTSO-E" : m);
       datasets.push({ label: lab, data: v.members[m], borderColor: css("--blue-ink"), borderDash: NWP_STYLE[m] || [], borderWidth: 1.5,
-        pointRadius: 0, tension: 0.15, endLabel: lab.split(" ")[0], endColor: css("--blue-ink") });
+        pointRadius: 0, tension: 0, endLabel: lab.split(" ")[0], endColor: css("--blue-ink") });
     }
     const o = baseOptions({ yTitle: `${v.label} (${v.unit})`, tooltip: { label: (c) => (c.dataset.label.startsWith("_") ? null : ` ${c.dataset.label}: ${fmt(c.raw, 1)} ${v.unit}`) } });
     o.plugins.tooltip.filter = (it) => !it.dataset.label.startsWith("_");
@@ -782,7 +782,7 @@
     if (!d || !c) { det.hidden = true; return; }
     const st = cellStatus(c, d);
     det.hidden = false;
-    det.innerHTML = `<h4>${esc(S.trkSel.m)} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase}</span></h4>
+    det.innerHTML = `<h4>${esc(S.trkSel.m)} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase === "live" ? "Live" : "Backtest"}</span></h4>
       <p>${st.icon} ${esc(st.label)}.</p>
       <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
@@ -846,11 +846,11 @@
       datasets.push({ label: "_lo", data: ser.models[S.x.band].lo, borderWidth: 0, pointRadius: 0, fill: false });
       datasets.push({ label: "_hi", data: ser.models[S.x.band].hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(c, 0.16) });
     }
-    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0.15, endLabel: "Actual", endColor: actualColor(), order: -1 });
+    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: "Actual", endColor: actualColor(), order: -1 });
     for (const m of models) {
       const c = color(m);
       datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
-        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0.15, endLabel: REF.has(m) ? `${m} (ref)` : m, endColor: c });
+        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, endLabel: REF.has(m) ? `${m} (ref)` : m, endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
@@ -866,7 +866,7 @@
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
       ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}
       ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
-      ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
+      ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">Actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
     legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Actual</span>` : "");
 
@@ -947,7 +947,7 @@
 
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
     const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
-    if (typeof Chart !== "undefined") Chart.defaults.font.family = "Archivo, -apple-system, sans-serif";
+    if (typeof Chart !== "undefined") Chart.defaults.font.family = "'Source Sans 3', -apple-system, sans-serif";
     const rerender = () => { renderAll(); renderModels(); renderExplorerChart(); renderTimeline(); renderTracker(); };
     afterFonts = rerender;
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
