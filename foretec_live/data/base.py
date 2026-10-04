@@ -40,38 +40,49 @@ def to_15min(s: pd.Series) -> pd.Series:
 
 
 class FallbackSource(Source):
-    """Primary source first; quarter-hours it does not deliver are filled from the fallback.
+    """Primary source first; quarter-hours it does not deliver are filled from the fallbacks, in order.
 
     `provenance[(zone, target)]` counts, for the last fetch, how many points came from each source.
+    Each fallback has its own circuit breaker: after one failure it is skipped for the rest of the run,
+    so a dead service can never hold up the live run before the gate.
     """
 
-    def __init__(self, cfg: dict, primary: Source, fallback: Source):
+    def __init__(self, cfg: dict, primary: Source, *fallbacks: Source):
         super().__init__(cfg)
-        self.primary, self.fallback = primary, fallback
-        self.name = f"{primary.name}+{fallback.name}"
+        self.primary, self.fallbacks = primary, list(fallbacks)
+        self.name = "+".join([primary.name] + [f.name for f in self.fallbacks])
         self.provenance: dict = {}
-        self.fallback_down = False   # circuit breaker: after one failure, skip the fallback for this run
+        self.down: set = set()
+
+    @property
+    def fallback_down(self) -> bool:   # kept for callers that know a single fallback
+        return bool(self.down)
 
     def fetch(self, zone, target, start, end):
         idx = pd.date_range(start, end, freq=FREQ, inclusive="left")
         try:
-            p = self.primary.fetch(zone, target, start, end).reindex(idx)
+            out = self.primary.fetch(zone, target, start, end).reindex(idx)
         except Exception as e:  # noqa: BLE001 - a dead primary must not stop the run
-            log.warning("%s %s %s failed (%s); using %s", self.primary.name, zone, target, e, self.fallback.name)
-            p = pd.Series(np.nan, index=idx)
-        out, n_fb = p, 0
-        if p.isna().any() and not self.fallback_down:
+            log.warning("%s %s %s failed (%s); using the fallbacks", self.primary.name, zone, target, e)
+            out = pd.Series(np.nan, index=idx)
+        prov = {self.primary.name: int(out.notna().sum())}
+        for fb in self.fallbacks:
+            prov[fb.name] = 0
+            if not out.isna().any() or fb.name in self.down:
+                continue
             try:
-                f = self.fallback.fetch(zone, target, start, end).reindex(idx)
-                out = p.combine_first(f)
-                n_fb = int((p.isna() & f.notna()).sum())
+                f = fb.fetch(zone, target, start, end).reindex(idx)
             except Exception as e:  # noqa: BLE001
-                self.fallback_down = True
-                log.warning("fallback %s %s %s failed (%s); not trying it again in this run", self.fallback.name, zone, target, e)
-        self.provenance[(zone, target)] = {self.primary.name: int(p.notna().sum()), self.fallback.name: n_fb,
-                                           "missing": int(out.isna().sum())}
-        if n_fb:
-            log.info("%s %s: %d of %d quarter-hours from %s", zone, target, n_fb, len(idx), self.fallback.name)
+                self.down.add(fb.name)
+                log.warning("fallback %s %s %s failed (%s); not trying it again in this run", fb.name, zone, target, e)
+                continue
+            filled = out.isna() & f.notna()
+            prov[fb.name] = int(filled.sum())
+            out = out.combine_first(f)
+            if prov[fb.name]:
+                log.info("%s %s: %d of %d quarter-hours from %s", zone, target, prov[fb.name], len(idx), fb.name)
+        prov["missing"] = int(out.isna().sum())
+        self.provenance[(zone, target)] = prov
         return out.dropna()
 
 
@@ -93,14 +104,21 @@ def get_source(cfg: dict) -> Source:
     name = cfg.get("source", "energycharts")
     if cfg.get("fallback_source") and name != "synthetic":
         primary = get_source({**cfg, "source": name, "fallback_source": None})
-        fallback = get_source({**cfg, "source": cfg["fallback_source"], "fallback_source": None, "_fallback": True})
-        return FallbackSource(cfg, primary, fallback)
+        names = cfg["fallback_source"] if isinstance(cfg["fallback_source"], list) else [cfg["fallback_source"]]
+        fallbacks = [get_source({**cfg, "source": n, "fallback_source": None, "_fallback": True}) for n in names]
+        return FallbackSource(cfg, primary, *fallbacks)
     if name == "energycharts":
         from .energycharts import EnergyChartsSource
         return EnergyChartsSource(cfg)
     if name == "entsoe":
         from .entsoe import EntsoeSource
         return EntsoeSource(cfg)
+    if name == "elia":
+        from .tso import EliaSource
+        return EliaSource(cfg)
+    if name == "rte":
+        from .tso import RteSource
+        return RteSource(cfg)
     if name == "synthetic":
         from .synthetic import SyntheticSource
         return SyntheticSource(cfg)
