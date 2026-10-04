@@ -2,12 +2,14 @@
 # Set up Foretec Live on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
 #   sudo bash scripts/setup_server.sh            # core models only
 #   sudo bash scripts/setup_server.sh --foundation  # also the foundation-model envs (~5 GB, see install_model_envs.sh)
-#   sudo bash scripts/setup_server.sh --web      # also serve site/ on port 80 with Caddy
+#   sudo bash scripts/setup_server.sh --web      # also serve site/ with Caddy (plain HTTP on :80)
+#   sudo bash scripts/setup_server.sh --domain=transparency.foretec.co   # HTTPS on that domain, remembered for later runs
 # Safe to re-run: it updates the code and venv in place and keeps data/ and results/.
 set -euo pipefail
 
-FOUNDATION=0; WEB=0
+FOUNDATION=0; WEB=0; DOMAIN=
 for a in "$@"; do
+  case "$a" in --domain=*) DOMAIN="${a#--domain=}"; WEB=1; continue ;; esac
   case "$a" in
     --foundation|--chronos) FOUNDATION=1 ;;
     --web) WEB=1 ;;
@@ -57,14 +59,22 @@ fi
 #   systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer
 
 if [ $WEB -eq 1 ]; then
-  echo "== web (Caddy on :80)"
   apt-get install -y -qq caddy >/dev/null
-  cat > /etc/caddy/Caddyfile <<EOF
-:80 {
-  root * $APP/site
-  file_server
-}
-EOF
+  # the domain is remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
+  [ -n "$DOMAIN" ] && echo "$DOMAIN" > $BASE/site_domain
+  [ -z "$DOMAIN" ] && [ -f $BASE/site_domain ] && DOMAIN=$(cat $BASE/site_domain)
+  if [ -n "$DOMAIN" ]; then
+    echo "== web (Caddy, https://$DOMAIN; plain http on the server IP redirects there)"
+    IP=$(curl -4 -s --max-time 10 https://api.ipify.org || true)
+    {
+      printf '%s {\n  root * %s/site\n  encode gzip\n  file_server\n}\n' "$DOMAIN" "$APP"
+      if [ -n "$IP" ]; then printf '\nhttp://%s {\n  redir https://%s{uri} permanent\n}\n' "$IP" "$DOMAIN"; fi
+    } > /etc/caddy/Caddyfile
+  else
+    echo "== web (Caddy on :80, no domain: pass --domain=example.org for HTTPS)"
+    printf ':80 {\n  root * %s/site\n  file_server\n}\n' "$APP" > /etc/caddy/Caddyfile
+  fi
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
   systemctl reload caddy || systemctl restart caddy
 fi
 

@@ -151,6 +151,12 @@ To deploy changes, pull on the server and re-run the script; it keeps `data/` an
 cd /root/foretec-live && git pull && sudo bash scripts/setup_server.sh --web   # add --foundation when model envs change
 ```
 
+The first time, pass the domain for HTTPS (`--domain=transparency.foretec.co`); it is remembered, so later `--web` runs keep HTTPS and the plain-IP address redirects to it.
+
+```bash
+sudo bash scripts/setup_server.sh --domain=transparency.foretec.co
+```
+
 API keys (`ENTSOE_TOKEN`, `OPENMETEOKEY`, `OIL_PRICE_KEY`) live in `/root/.env` on the server, never in the repo.
 
 ## Layout
