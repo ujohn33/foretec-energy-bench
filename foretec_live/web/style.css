@@ -236,7 +236,7 @@ ol.steps p{margin-top:6px; color:var(--ink2); font-size:.95rem; max-width:72ch}
 /* ---------- footer (foretec.be) ---------- */
 footer{border-top:1px solid var(--rule); padding:36px 0 60px; color:var(--ink2); font-size:.85rem}
 .foot{display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap}
-.foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink)}
+.foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink); text-decoration:none}
 .foot-mark span{font-family:var(--brand); font-style:normal; font-weight:600; letter-spacing:-.03em; word-spacing:-.06em; margin-left:6px; padding-left:10px; border-left:1.5px solid var(--rule)}
 .foot-mark span b{font-weight:800; color:var(--blue-ink); text-decoration:underline; text-decoration-thickness:.14em; text-underline-offset:.16em; text-decoration-color:var(--blue)}
 
