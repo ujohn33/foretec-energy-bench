@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Set up Foretec Energy Open on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
+# Set up Foretec Energy Bench on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
 #   sudo bash scripts/setup_server.sh            # core models only
 #   sudo bash scripts/setup_server.sh --foundation  # also the foundation-model envs (~5 GB, see install_model_envs.sh)
 #   sudo bash scripts/setup_server.sh --web      # also serve site/ with Caddy (plain HTTP on :80)
-#   sudo bash scripts/setup_server.sh --domain=energyopen.foretec.co --alias=open.foretec.co,transparency.foretec.co
+#   sudo bash scripts/setup_server.sh --domain=energybench.foretec.co --alias=transparency.foretec.co
 #       HTTPS on that domain, the aliases redirect to it; both remembered for later runs
 # Safe to re-run: it updates the code and venv in place and keeps data/ and results/.
 set -euo pipefail

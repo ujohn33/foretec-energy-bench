@@ -1,4 +1,4 @@
-# Foretec Energy Open: benchmark definition. Changing anything here changes the benchmark; version it.
+# Foretec Energy Bench: benchmark definition. Changing anything here changes the benchmark; version it.
 timezone: Europe/Brussels
 issue_time: "11:30"          # data cut-off and model run, D-1 local time
 gate: "12:00"                # SDAC day-ahead gate closure: live forecasts must be locked before it

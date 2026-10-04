@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Open: snapshot data and run all models for today's issue
+Description=Foretec Energy Bench: snapshot data and run all models for today's issue
 Wants=network-online.target
 After=network-online.target
 

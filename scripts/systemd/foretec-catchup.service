@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Open: backtest any model missing from the backtest window (new model folders)
+Description=Foretec Energy Bench: backtest any model missing from the backtest window (new model folders)
 Wants=network-online.target
 After=network-online.target
 
