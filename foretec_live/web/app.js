@@ -376,8 +376,9 @@
     const top = st.slice(0, 3);
     $("podium").innerHTML = top.length ? top.map((s, i) => `
       <div class="pod ${i === 0 ? "lead" : ""}">
-        <div class="pod-top"><span class="place" aria-label="${["1st", "2nd", "3rd"][i]} place">${i + 1}</span>${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
-        <div class="name"><i style="background:${color(s.model)}"></i>${esc(s.model)}</div>
+        <div class="pod-top"><span class="place" aria-label="${["1st", "2nd", "3rd"][i]} place">${i + 1}</span>
+          <div class="name"><i style="background:${color(s.model)}"></i>${esc(s.model)}</div>
+          ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="stats">
           <div class="stat"><span data-tip="pts">Points</span><b>${s.pts}</b></div>
           <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
