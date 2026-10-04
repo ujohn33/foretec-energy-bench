@@ -1,0 +1,8 @@
+name: t0_alpha
+author: The Forecasting Company
+description: "The Forecasting Company t0-alpha (102M parameters), zero-shot on the target's own history."
+family: t0
+inputs: [history]
+runner: subprocess
+env: tfc
+script: forecaster.py

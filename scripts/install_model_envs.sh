@@ -15,6 +15,7 @@ declare -A PKGS=(
   [toto]="toto-ts|setuptools<81"
   [sundial]="transformers==4.40.1"
   [ttm]="granite-tsfm"
+  [tfc]="tfc-t0>=0.5.0"
 )
 families=("$@"); [ ${#families[@]} -eq 0 ] && families=("${!PKGS[@]}")
 for f in "${families[@]}"; do

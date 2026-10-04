@@ -9,7 +9,7 @@
   /* leaderboard additions */
   --muted:#6B7F8F; --grid:#E3ECEF;
   --bt:#8D99A4; --bt-ink:#76838F; --bt-soft:#EEF1F3; --band:rgba(11,31,58,.055);
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948; --s9:#2f4b2f;
   --heat-live-lo:#cde2fb; --heat-live-hi:#184f95; --heat-bt-lo:#F0F2F4; --heat-bt-hi:#5F6B76;
 }
 @media (prefers-color-scheme:dark){
@@ -22,7 +22,7 @@
     --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
     --muted:#6F8DA6; --grid:#183253;
     --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; --s9:#a8c8a0;
     --heat-live-lo:#1A3558; --heat-live-hi:#6da7ec; --heat-bt-lo:#172C47; --heat-bt-hi:#93A1AE;
   }
 }
@@ -35,7 +35,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
   --muted:#6F8DA6; --grid:#183253;
   --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; --s9:#a8c8a0;
   --heat-live-lo:#1A3558; --heat-live-hi:#6da7ec; --heat-bt-lo:#172C47; --heat-bt-hi:#93A1AE;
 }
 

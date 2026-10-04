@@ -29,7 +29,9 @@
   // ---------- colours: fixed per model, never by rank ----------
   // Colour follows the model family, never its rank: one palette slot per foundation-model family,
   // lighter shades for variants within a family, navy ink shades for the classical baselines.
-  const FAMILY_ORDER = ["chronos", "timesfm", "moirai", "tirex", "toto", "sundial", "ttm"];
+  // slots 1-8 are the validated categorical palette; slot 9 (t0) was chosen with the palette validator to clear
+  // every existing slot (light: normal-vision dE >= 19, CVD dE >= 13; dark step likewise). New families get grey.
+  const FAMILY_ORDER = ["chronos", "timesfm", "moirai", "tirex", "toto", "sundial", "ttm", "nwp", "t0"];
   let FAM = {};
   // One colour per model, on every page: it depends only on the model's family and its place in the
   // full model list (D.models), never on filters, rank or page. Full-strength ink is reserved for the
@@ -44,7 +46,7 @@
     if (fam === "tso") base = css("--ink2");
     else {
       const i = FAMILY_ORDER.indexOf(fam);
-      base = i >= 0 ? css(`--s${i + 1}`) : css("--s8");
+      base = i >= 0 ? css(`--s${i + 1}`) : css("--muted");
     }
     return k === 0 ? base : mix(base, css("--surface"), Math.min(0.22 * k, 0.66));
   }

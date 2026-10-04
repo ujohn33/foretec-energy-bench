@@ -1,0 +1,8 @@
+name: t0_beta_cov
+author: The Forecasting Company
+description: "The Forecasting Company t0-beta, zero-shot with known-future covariates (NWP ensemble means and spreads, ENTSO-E load forecast, fuel cost) over the history and the delivery day."
+family: t0
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: tfc
+script: forecaster.py
