@@ -1,0 +1,8 @@
+[Unit]
+Description=Foretec Energy Bench: hourly provisional actuals
+
+[Timer]
+OnCalendar=*-*-* *:10:00 Europe/Brussels
+
+[Install]
+WantedBy=timers.target

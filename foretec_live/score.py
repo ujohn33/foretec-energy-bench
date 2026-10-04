@@ -5,6 +5,8 @@ import json
 
 import datetime as dt
 import logging
+import os
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -18,11 +20,14 @@ MIN_COVERAGE = 0.95
 KEY = ["issue_date", "model", "zone", "target"]
 
 
+def _now(cfg, now=None) -> pd.Timestamp:
+    now = pd.Timestamp(now) if now is not None else local_now(cfg)
+    return now.tz_localize(cfg["timezone"]) if now.tzinfo is None else now.tz_convert(cfg["timezone"])
+
+
 def scorable(issue_date, target, cfg, now=None) -> bool:
     """Has enough time passed for the actuals of this target to be final?"""
-    now = pd.Timestamp(now) if now is not None else local_now(cfg)
-    if now.tzinfo is None:
-        now = now.tz_localize(cfg["timezone"])
+    now = _now(cfg, now)
     tcfg = cfg["targets"][target]
     d = as_date(issue_date)
     if "score_after" in tcfg:  # same-day scoring, e.g. day-ahead price
@@ -33,7 +38,22 @@ def scorable(issue_date, target, cfg, now=None) -> bool:
     return now >= ready
 
 
-def actuals(issue_date, zone, target, cfg, source=None) -> pd.Series | None:
+def required_coverage(issue_date, target, cfg, now=None) -> float:
+    """Share of quarter-hours that must be published before the actuals are frozen.
+
+    Wind and solar become scorable at midnight after delivery. Before `complete_before` on that day only a
+    complete day is frozen (the early run must not freeze a day whose last hour is still missing); from then
+    on MIN_COVERAGE suffices, as before.
+    """
+    tcfg = cfg["targets"][target]
+    if "score_after_days" not in tcfg or not tcfg.get("complete_before"):
+        return MIN_COVERAGE
+    day = delivery_date(issue_date) + dt.timedelta(days=tcfg["score_after_days"])
+    until = pd.Timestamp(f"{day.isoformat()} {tcfg['complete_before']}").tz_localize(cfg["timezone"])
+    return 1.0 if _now(cfg, now) < until else MIN_COVERAGE
+
+
+def actuals(issue_date, zone, target, cfg, source=None, min_coverage=MIN_COVERAGE) -> pd.Series | None:
     """Actuals for delivery day D, frozen to disk the first time they are complete."""
     p = paths(cfg)
     f = p["actuals"] / str(delivery_date(issue_date)) / f"{zone}_{target}.parquet"
@@ -42,8 +62,9 @@ def actuals(issue_date, zone, target, cfg, source=None) -> pd.Series | None:
     idx = delivery_index(issue_date, cfg)
     source = source or get_source(cfg)
     s = source.fetch(zone, target, idx[0], idx[-1] + pd.Timedelta("15min")).reindex(idx)
-    if s.notna().mean() < MIN_COVERAGE:
-        log.info("actuals %s %s %s incomplete (%.0f%%)", delivery_date(issue_date), zone, target, 100 * s.notna().mean())
+    if s.notna().mean() < min_coverage:
+        log.info("actuals %s %s %s incomplete (%.0f%%, need %.0f%%)", delivery_date(issue_date), zone, target,
+                 100 * s.notna().mean(), 100 * min_coverage)
         return None
     f.parent.mkdir(parents=True, exist_ok=True)
     s.rename("value").to_frame().to_parquet(f)
@@ -173,7 +194,7 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
             todo = [m for m in grp["model"].unique() if (issue_date, m, zone, target) not in done]
             if not todo or not scorable(issue_date, target, cfg, now):
                 continue
-            y = actuals(issue_date, zone, target, cfg, source)
+            y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now))
             if y is None:
                 continue
             for model in todo:
@@ -191,3 +212,49 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
     scores.to_parquet(p["scores"], index=False)
     log.info("scored %d new rows", len(new))
     return scores
+
+
+def provisional_actuals(cfg, source=None, now=None) -> list[str]:
+    """Metered-so-far wind and solar for delivery days under way or not frozen yet (today and yesterday).
+
+    Written to data/actuals_provisional/<D>/<zone>_<target>.parquet with a _fetched.json time stamp. The site
+    draws them as provisional actuals; they are never scored. A series is dropped once its frozen actuals
+    exist, and folders older than yesterday are removed.
+    """
+    p = paths(cfg)
+    root = p["actuals_provisional"]
+    today = _now(cfg, now).date()
+    targets = [t for t, v in cfg["targets"].items() if "score_after_days" in v]
+    source = source or get_source(cfg)
+    written = []
+    for delivery in (today - dt.timedelta(days=1), today):
+        idx = delivery_index(delivery - dt.timedelta(days=1), cfg)
+        ddir = root / str(delivery)
+        for zone in cfg["zones"]:
+            for target in targets:
+                key = f"{zone}_{target}"
+                if (p["actuals"] / str(delivery) / f"{key}.parquet").exists():
+                    (ddir / f"{key}.parquet").unlink(missing_ok=True)
+                    continue
+                try:
+                    s = source.fetch(zone, target, idx[0], idx[-1] + pd.Timedelta("15min")).reindex(idx)
+                except Exception as e:  # noqa: BLE001 - provisional values are a convenience, never block on them
+                    log.warning("provisional %s %s failed: %s", delivery, key, e)
+                    continue
+                if not s.notna().any():
+                    continue
+                ddir.mkdir(parents=True, exist_ok=True)
+                tmp = ddir / f".{key}.parquet.tmp"
+                s.rename("value").to_frame().to_parquet(tmp)
+                os.replace(tmp, ddir / f"{key}.parquet")
+                record_provenance(source, zone, target, ddir)
+                written.append(f"{delivery} {key} {int(s.notna().sum())}/{len(idx)}")
+        if ddir.exists():
+            (ddir / "_fetched.json").write_text(json.dumps({"fetched_utc": str(pd.Timestamp.now(tz="UTC").floor("s"))}))
+    for d in root.glob("*"):
+        try:
+            if dt.date.fromisoformat(d.name) < today - dt.timedelta(days=1):
+                shutil.rmtree(d)
+        except ValueError:
+            continue
+    return written

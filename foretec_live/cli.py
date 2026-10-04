@@ -23,7 +23,7 @@ from .report import write_report
 from .site import build_site
 from .registry import load_models
 from .run import run_forecasts, take_snapshot
-from .score import check_revisions, locked_before_gate, score_pending
+from .score import check_revisions, locked_before_gate, provisional_actuals, score_pending
 from .timeutil import availability_cutoff, delivery_index, gate_timestamp, issue_timestamp, local_today
 
 
@@ -96,6 +96,13 @@ def cmd_score(cfg, args):
         write_report(cfg, results_subdir="results/backtest")
         print(f"{len(revised)} series revised and re-scored: " + ", ".join(f"{r['delivery']} {r['series']}" for r in revised))
     print(f"{len(s)} scored rows in total")
+    return 0
+
+
+def cmd_provisional(cfg, args):
+    """Fetch metered-so-far wind/solar for days not frozen yet (shown as provisional, never scored)."""
+    for line in provisional_actuals(cfg):
+        print(line)
     return 0
 
 
@@ -173,6 +180,7 @@ def main(argv=None):
     p = sub.add_parser("forecast"); p.add_argument("--date", type=_date); p.add_argument("--models", nargs="*")
     p.add_argument("--force", action="store_true", help="run even after the gate or over a locked day")
     sub.add_parser("score")
+    sub.add_parser("provisional")
     sub.add_parser("report")
     sub.add_parser("site")
     sub.add_parser("catchup")
@@ -188,7 +196,7 @@ def main(argv=None):
     cfg = load_config(args.config)
     if args.source:
         cfg["source"] = args.source
-    return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score,
+    return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
             "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference}[args.cmd](cfg, args)
 
 

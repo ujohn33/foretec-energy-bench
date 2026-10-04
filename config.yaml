@@ -4,7 +4,7 @@ issue_time: "11:30"          # data cut-off and model run, D-1 local time
 gate: "12:00"                # SDAC day-ahead gate closure: live forecasts must be locked before it
 schedule:                     # Brussels time; must match scripts/systemd/*.timer (a test checks it)
   forecast: "11:30"
-  score: ["14:45", "20:45"]
+  score: ["07:00", "14:45", "20:45"]
   catchup: "03:30"
 resolution: 15min
 quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -52,8 +52,10 @@ targets:
     available_until: issue_time
     publication_lag: 1h
     score_after_days: 1      # complete on ENTSO-E by D+1; scored at the first scoring run of D+1
+    complete_before: "12:00" # before this on D+1 only a complete day is frozen; from then 95% suffices
   solar:
     unit: MW
     available_until: issue_time
     publication_lag: 1h
     score_after_days: 1      # complete on ENTSO-E by D+1; scored at the first scoring run of D+1
+    complete_before: "12:00" # before this on D+1 only a complete day is frozen; from then 95% suffices

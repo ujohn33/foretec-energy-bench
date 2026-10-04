@@ -85,8 +85,13 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
         for target in cfg["targets"]:
             key = f"{zone}_{target}"
             a = p["actuals"] / out["delivery_date"] / f"{key}.parquet"
-            actual = pd.read_parquet(a)["value"].reindex(idx) if a.exists() else pd.Series(np.nan, index=idx)
+            prov = p["actuals_provisional"] / out["delivery_date"] / f"{key}.parquet"
+            provisional = not a.exists() and prov.exists()     # metered so far, not frozen and never scored
+            src = a if a.exists() else prov if provisional else None
+            actual = pd.read_parquet(src)["value"].reindex(idx) if src else pd.Series(np.nan, index=idx)
             entry = {"actual": _round(actual) if actual.notna().any() else None, "models": {}}
+            if provisional and entry["actual"]:
+                entry["provisional"] = True
             if not fc.empty:
                 sub = fc[(fc["zone"] == zone) & (fc["target"] == target)]
                 for model, g in sub.groupby("model"):
@@ -97,8 +102,15 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
                     entry["models"][model] = m
             out["series"][key] = entry
     out["inputs"] = _day_inputs(issue_date, idx, cfg)
-    srcf = p["actuals"] / out["delivery_date"] / "_sources.json"
-    out["actual_sources"] = json.loads(srcf.read_text()) if srcf.exists() else None
+    srcs = {}
+    for folder in (p["actuals_provisional"], p["actuals"]):      # frozen provenance wins over provisional
+        srcf = folder / out["delivery_date"] / "_sources.json"
+        if srcf.exists():
+            srcs.update(json.loads(srcf.read_text()))
+    out["actual_sources"] = srcs or None
+    fetched = p["actuals_provisional"] / out["delivery_date"] / "_fetched.json"
+    if fetched.exists() and any(v.get("provisional") for v in out["series"].values()):
+        out["provisional_fetched_utc"] = json.loads(fetched.read_text()).get("fetched_utc")
     revf = p["actuals"] / out["delivery_date"] / "_revisions.json"
     out["revisions"] = [c for c in json.loads(revf.read_text()) if c.get("revised")] if revf.exists() else []
     hist = p["snapshots"] / issue_date / "_sources.json"   # live days only; backtests do not store snapshots

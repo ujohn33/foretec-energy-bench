@@ -317,3 +317,28 @@ def test_fallback_chain_order(cfg):
     out = chain.fetch("BE", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
     assert out.tolist() == [1.0, 2.0, 3.0]
     assert chain.provenance[("BE", "wind")] == {"entsoe": 1, "elia": 1, "rte": 0, "energycharts": 1, "missing": 1}
+
+
+def test_early_scoring_needs_complete_day_and_provisional_actuals(cfg):
+    """07:00 on D+1 freezes wind/solar only if D is complete; until then the site shows provisional values, never scored."""
+    from foretec_live.score import provisional_actuals, required_coverage
+
+    d = dt.date(2026, 9, 20)                                   # delivery 2026-09-21
+    assert required_coverage(d, "wind", cfg, now=pd.Timestamp("2026-09-22 07:00")) == 1.0
+    assert required_coverage(d, "solar", cfg, now=pd.Timestamp("2026-09-22 14:45")) == 0.95
+    assert required_coverage(d, "price", cfg, now=pd.Timestamp("2026-09-22 07:00")) == 0.95
+
+    run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily"])
+    during = pd.Timestamp("2026-09-21 15:00")                  # delivery day under way
+    written = provisional_actuals(cfg, now=during)
+    assert any(w.startswith("2026-09-21 BE_wind") for w in written)
+    prov = paths(cfg)["actuals_provisional"] / "2026-09-21" / "BE_wind.parquet"
+    assert prov.exists() and (prov.parent / "_fetched.json").exists()
+    s = score_pending(cfg, results_subdir="results/backtest", now=during)
+    assert not (s["target"].isin(["wind", "solar"])).any()     # provisional values are never scored
+    assert not (paths(cfg)["actuals"] / "2026-09-21" / "BE_wind.parquet").exists()
+
+    s = score_pending(cfg, results_subdir="results/backtest", now=pd.Timestamp("2026-09-22 07:00"))
+    assert ((s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == 3   # complete day, scored at 07:00
+    provisional_actuals(cfg, now=pd.Timestamp("2026-09-22 07:10"))
+    assert not prov.exists()                                   # frozen actuals replace the provisional ones

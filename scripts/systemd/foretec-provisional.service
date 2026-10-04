@@ -1,0 +1,16 @@
+[Unit]
+Description=Foretec Energy Bench: metered-so-far wind/solar for the explorer (provisional, never scored)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=foretec
+WorkingDirectory=/srv/foretec/foretec-live
+Environment=FORETEC_HOME=/srv/foretec/foretec-live
+Environment=PYTHONWARNINGS=ignore::FutureWarning
+EnvironmentFile=-/srv/foretec/foretec.env
+EnvironmentFile=-/root/.env
+ExecStart=/srv/foretec/venv/bin/foretec-live provisional
+ExecStart=/srv/foretec/venv/bin/foretec-live site
+TimeoutStartSec=15min

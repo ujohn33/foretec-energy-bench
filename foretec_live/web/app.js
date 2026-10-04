@@ -615,6 +615,13 @@
     return `<span class="tag pending">TSO forecast: ${esc(why)}</span>`;
   }
 
+  // end of the last published quarter-hour of a provisional actual, Brussels time
+  function meteredTo(day, actual) {
+    let i = actual.length - 1;
+    while (i >= 0 && actual[i] == null) i--;
+    const t = new Date(new Date(day.t0).getTime() + (i + 1) * 15 * 60000);
+    return t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" });
+  }
   function actualSource(day, key) {
     const p = provenance(day.actual_sources && day.actual_sources[key]);
     return p ? p + (p.includes("+") ? " quarter-hours" : "") : "Energy-Charts";
@@ -672,7 +679,8 @@
     txt(x(-24) + 4, y(0) + 35, "known at the cut-off: every price to 23:45 on D−1, cleared on D−2 ●", "", "start");
     out.push(`<circle class="mk pub" cx="${x(12.9 - 24)}" cy="${y(0) + 15.5}" r="4"/>`);
     mark(0, 12.9, "pub", "D prices published ~12:55", { side: "left" });
-    scores.forEach((h, k) => mark(0, h, "score", k === scores.length - 1 ? `scored ${(sched.score || []).join(" and ")}` : "", { shape: "diamond" }));
+    const priceRuns = (sched.score || ["14:45"]).filter((t) => !T.price_score_after || hm(t) >= hm(T.price_score_after));
+    priceRuns.forEach((t, k) => mark(0, hm(t), "score", k === priceRuns.length - 1 ? `scored ${priceRuns.join(" and ")}` : "", { shape: "diamond" }));
     // wind and solar: metered up to the cut-off minus the publication lag; actuals arrive during D
     ["wind", "solar"].forEach((t, k) => {
       const lag = T.lag_hours[t] || 0, days = T.score_after_days[t] || 2;
@@ -680,7 +688,7 @@
       bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D, ~${lag} h lag`);
       const sc = 24 * (days + 1) + scores[0];
       out.push(`<rect class="recheck" x="${x(sc)}" y="${y(k + 1) + 47}" width="${x(96) - x(sc)}" height="6" rx="1"/>`);
-      mark(k + 1, sc, "score", `scored D+${days} ${sched.score ? sched.score[0] : ""}`, { side: "left", shape: "diamond" });
+      mark(k + 1, sc, "score", `scored D+${days} ${sched.score ? sched.score[0] : ""} if complete`, { side: "left", shape: "diamond" });
       txt(x(96) - 2, y(k + 1) + 66, "re-checked to D+3 →", "", "end");
     });
     // inputs: the runs the cut-off rule admits, the ENTSO-E load forecast and the fuel quote
@@ -823,7 +831,8 @@
       datasets.push({ label: "_lo", data: ser.models[S.x.band].lo, borderWidth: 0, pointRadius: 0, fill: false });
       datasets.push({ label: "_hi", data: ser.models[S.x.band].hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(c, 0.16) });
     }
-    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: "Actual", endColor: actualColor(), order: -1 });
+    const actualLabel = ser.provisional ? "Actual so far" : "Actual";
+    if (ser.actual) datasets.push({ label: actualLabel, data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: actualLabel, endColor: actualColor(), order: -1 });
     for (const m of models) {
       const c = color(m);
       datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
@@ -841,11 +850,11 @@
     const delivered = addDays(day.issue_date, 1);
     $("x-meta").innerHTML = `<span>Locked <b>${day.issue_date} ${esc(D.config.issue_time)}</b></span><span>Gate <b>${esc(D.config.gate || D.config.issue_time)}</b></span><span>Delivery <b>${delivered}</b></span>
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
-      ${ser.actual ? "" : '<span class="tag pending">Actuals not published yet</span>'}
+      ${ser.actual ? (ser.provisional ? `<span class="tag pending" title="${day.provisional_fetched_utc ? `fetched ${esc(localTime(day.provisional_fetched_utc))} Brussels` : ""}">Provisional actuals to ${esc(meteredTo(day, ser.actual))}, not scored yet</span>` : "") : '<span class="tag pending">Actuals not published yet</span>'}
       ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
       ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">Actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
-    legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>Actual</span>` : "");
+    legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>${actualLabel}</span>` : "");
 
     renderInputs(day);
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);

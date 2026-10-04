@@ -1,8 +1,10 @@
 [Unit]
-Description=Foretec Energy Bench: daily scoring after day-ahead prices are published
+Description=Foretec Energy Bench: scoring runs (wind/solar of yesterday at 07:00, prices after the auction)
 
 [Timer]
-# day-ahead results are out ~12:45-13:00; the evening pass catches late publications
+# 07:00: wind/solar of yesterday, if the whole day is published; day-ahead results are out ~12:45-13:00;
+# the evening pass catches late publications
+OnCalendar=*-*-* 07:00:00 Europe/Brussels
 OnCalendar=*-*-* 14:45:00 Europe/Brussels
 OnCalendar=*-*-* 20:45:00 Europe/Brussels
 Persistent=true

@@ -28,6 +28,7 @@ def paths(cfg: dict, results_subdir: str = "results") -> dict[str, Path]:
         "models": root / "models",
         "snapshots": root / "data" / "snapshots",
         "actuals": root / "data" / "actuals",
+        "actuals_provisional": root / "data" / "actuals_provisional",
         "results": res,
         "forecasts": res / "forecasts",
         "scores": res / "scores.parquet",

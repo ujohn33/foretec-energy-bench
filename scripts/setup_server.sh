@@ -55,10 +55,10 @@ cp $APP/scripts/systemd/*.service $APP/scripts/systemd/*.timer /etc/systemd/syst
 systemctl daemon-reload
 # once the daily timers are on (after the first probe + backfill), keep the full set enabled on every re-run
 if systemctl is-enabled -q foretec-forecast.timer 2>/dev/null; then
-  systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer
+  systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer foretec-provisional.timer
 fi
 # timers are installed but NOT enabled: run the probe and a backfill first, then:
-#   systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer
+#   systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer foretec-provisional.timer
 
 if [ $WEB -eq 1 ]; then
   apt-get install -y -qq caddy >/dev/null
@@ -103,6 +103,6 @@ cat <<EOF
 Done. Next, as root:
   cd $APP && sudo -u foretec FORETEC_HOME=$APP foretec-live probe
   sudo -u foretec FORETEC_HOME=$APP foretec-live backfill --start 2026-09-01 --end 2026-09-28
-  systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer
+  systemctl enable --now foretec-forecast.timer foretec-score.timer foretec-catchup.timer foretec-provisional.timer
   systemctl list-timers 'foretec*'
 EOF
