@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One Python 3.12 env per foundation-model family, CPU torch, built with uv. Run as root; safe to re-run.
+# One Python 3.12 env per subprocess model family (CPU torch for the foundation models), built with uv.
+# Run as root; safe to re-run.
 #   bash scripts/install_model_envs.sh [family ...]     (default: all)
 set -u
 E=${FORETEC_ENVS:-/srv/foretec/envs}
@@ -16,18 +17,27 @@ declare -A PKGS=(
   [sundial]="transformers==4.40.1"
   [ttm]="granite-tsfm"
   [tfc]="tfc-t0>=0.5.0"
+  # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
+  # the main venv has pandas 3); same sktime version as the main venv
+  [stats]="sktime==1.2.0|statsforecast|pyyaml|joblib"
 )
+NO_TORCH=" stats "
 families=("$@"); [ ${#families[@]} -eq 0 ] && families=("${!PKGS[@]}")
 for f in "${families[@]}"; do
   (
     IFS='|' read -ra extra <<< "${PKGS[$f]}"
     [ -x "$E/$f/bin/python" ] || uv venv -q --python 3.12 "$E/$f"
-    VIRTUAL_ENV="$E/$f" uv pip install -q "${CPU[@]}" torch pandas pyarrow "numpy<2.3" "${extra[@]}"
+    if [[ "$NO_TORCH" == *" $f "* ]]; then
+      VIRTUAL_ENV="$E/$f" uv pip install -q pandas pyarrow "numpy<2.3" "${extra[@]}"
+    else
+      VIRTUAL_ENV="$E/$f" uv pip install -q "${CPU[@]}" torch pandas pyarrow "numpy<2.3" "${extra[@]}"
+    fi
   ) > "$E/_logs/$f.log" 2>&1 &
 done
 wait
 for f in "${families[@]}"; do
-  if "$E/$f/bin/python" -c "import torch, pandas" 2>/dev/null; then echo "  $f: ok"; else echo "  $f: FAILED, see $E/_logs/$f.log"; fi
+  mods="torch, pandas"; [[ "$NO_TORCH" == *" $f "* ]] && mods="pandas"
+  if "$E/$f/bin/python" -c "import $mods" 2>/dev/null; then echo "  $f: ok"; else echo "  $f: FAILED, see $E/_logs/$f.log"; fi
 done
 chown -R foretec:foretec "$E" 2>/dev/null || true
 mkdir -p /srv/foretec/.hf-cache && chown foretec:foretec /srv/foretec/.hf-cache

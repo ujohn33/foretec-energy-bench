@@ -1,0 +1,9 @@
+name: autoarima
+author: Foretec
+description: "AutoARIMA (StatsForecast, through sktime) on the deseasonalised series: sktime's Deseasonalizer removes the daily cycle (classical additive decomposition, 96 quarter-hours), AutoARIMA picks the ARIMA orders by AICc, and the cycle is added back. A seasonal ARIMA with a 96-step season directly takes minutes per series, too slow for the gate."
+family: baseline
+runner: subprocess
+env: stats
+script: ../_shared/fl_sktime.py
+estimator: "TransformedTargetForecaster([Deseasonalizer(sp=96), StatsForecastAutoARIMA()])"
+n_jobs: 4

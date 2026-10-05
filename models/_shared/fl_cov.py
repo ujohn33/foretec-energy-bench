@@ -23,6 +23,8 @@ def full_features(cols, zone: str, target: str) -> list[str]:
         pre = [f"{zone}.wind_onshore.", f"{zone}.wind_offshore."]
     elif target == "solar":
         pre = [f"{zone}.solar."]
+    elif target == "load":   # weather at the load centres and the TSO's day-ahead load forecast
+        pre = [f"{zone}.load.", f"{zone}.load_fc."]
     else:  # price: own load, residual-load drivers in all coupled zones, fuel
         pre = [f"{zone}.load.", f"{zone}.load_fc.", "fuel."]
         pre += [f"{z}.{b}.ens_" for z in ZONES for b in ("wind_onshore", "wind_offshore", "solar")]
@@ -38,6 +40,9 @@ def compact_features(cols, zone: str, target: str) -> list[str]:
     elif target == "solar":
         want = [f"{zone}.solar.ens_mean.global_tilted_irradiance", f"{zone}.solar.ens_std.global_tilted_irradiance",
                 f"{zone}.solar.ens_mean.cloud_cover", f"{zone}.solar.ens_mean.temperature_2m"]
+    elif target == "load":
+        want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m",
+                f"{zone}.load.ens_mean.shortwave_radiation", f"{zone}.load.ens_mean.cloud_cover"]
     else:
         want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m", "fuel.ccgt.srmc.eur_mwh"]
         want += [f"{z}.wind_onshore.ens_mean.wind_speed_100m" for z in ZONES]

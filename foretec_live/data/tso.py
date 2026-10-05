@@ -100,7 +100,7 @@ class EliaSource(Source):
 
 class RteSource(Source):
     name = "rte"
-    FIELD = {"wind": "eolien", "solar": "solaire"}
+    FIELD = {"wind": "eolien", "solar": "solaire", "load": "consommation"}
 
     def fetch(self, zone, target, start, end):
         if zone != "FR" or target not in self.FIELD:

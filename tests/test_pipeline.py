@@ -51,7 +51,7 @@ def test_forecast_score_report(cfg):
     assert all(r["status"] == "ok" for r in meta["runs"])
     p = paths(cfg, "results/backtest")
     fc = pd.read_parquet(p["forecasts"] / d.isoformat() / "naive_daily.parquet")
-    assert len(fc) == 96 * 3 * 3  # quarter-hours x zones x targets
+    assert len(fc) == 96 * len(cfg["zones"]) * len(cfg["targets"])  # quarter-hours x zones x targets
 
     scores = score_pending(cfg, results_subdir="results/backtest", now=pd.Timestamp("2026-10-01"))
     assert set(scores["model"]) == set(models)
@@ -129,7 +129,7 @@ def test_live_run_after_gate_is_not_scored(cfg):
     assert score_pending(cfg, now=pd.Timestamp("2026-10-01")).empty
     meta["run_finished_utc"] = "2026-09-20 09:35:00+00:00"   # 11:35 Brussels
     log.write_text(json.dumps(meta))
-    assert len(score_pending(cfg, now=pd.Timestamp("2026-10-01"))) == 9
+    assert len(score_pending(cfg, now=pd.Timestamp("2026-10-01"))) == len(cfg["zones"]) * len(cfg["targets"])
 
 
 def test_forecast_refuses_after_gate_and_over_locked_day(cfg):
@@ -342,3 +342,20 @@ def test_early_scoring_needs_complete_day_and_provisional_actuals(cfg):
     assert ((s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == 3   # complete day, scored at 07:00
     provisional_actuals(cfg, now=pd.Timestamp("2026-09-22 07:10"))
     assert not prov.exists()                                   # frozen actuals replace the provisional ones
+
+
+def test_new_target_merges_into_backtest_day(cfg):
+    """backfill --targets load adds the new target to a backtest day without touching the other targets."""
+    d = dt.date(2026, 9, 20)
+    others = [t for t in cfg["targets"] if t != "load"]
+    run_forecasts(d, {**cfg, "targets": {t: cfg["targets"][t] for t in others}}, results_subdir="results/backtest",
+                  only_models=["naive_daily"])
+    f = paths(cfg, "results/backtest")["forecasts"] / d.isoformat() / "naive_daily.parquet"
+    before = pd.read_parquet(f)
+    assert set(before["target"]) == set(others)
+    run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily"], targets=["load"])
+    after = pd.read_parquet(f)
+    assert set(after["target"]) == set(cfg["targets"])
+    pd.testing.assert_frame_equal(after[after["target"] != "load"].reset_index(drop=True), before.reset_index(drop=True))
+    log = json.loads((f.parent / "_run.json").read_text())
+    assert {r["target"] for r in log["runs"]} == set(cfg["targets"])

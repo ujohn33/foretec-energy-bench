@@ -4,6 +4,8 @@
          several resolutions (15-min SDAC prices next to an hourly series) the finest one is kept.
   wind   A75 actual generation per type, process A16, psrType B19 (onshore) + B18 (offshore).
   solar  A75, psrType B16.
+  load   A65 actual total load, process A16, outBiddingZone_Domain = bidding zone; the day-ahead total load
+         forecast (process A01, by regulation published two hours before the gate) is `tso_forecast(zone, "load")`.
 
 A75 documents can carry generation (inBiddingZone_Domain) and consumption (outBiddingZone_Domain)
 series for the same type; only generation is used. A03 curves leave out positions whose value
@@ -123,6 +125,10 @@ class EntsoeSource(Source):
         elif kind == "tso":
             xml = self._get({"documentType": "A69", "processType": "A01", "in_Domain": eic, "psrType": psr, **period})
             parts = [] if "No matching data" in xml else parse_timeseries(xml)
+        elif kind in ("load", "loadfc"):   # A65 total load: actual (A16) or day-ahead forecast (A01)
+            xml = self._get({"documentType": "A65", "processType": "A16" if kind == "load" else "A01",
+                             "outBiddingZone_Domain": eic, **period})
+            parts = [] if "No matching data" in xml else parse_timeseries(xml)
         else:
             xml = self._get({"documentType": "A75", "processType": "A16", "in_Domain": eic, "psrType": psr, **period})
             parts = [] if "No matching data" in xml else parse_timeseries(xml)
@@ -143,7 +149,15 @@ class EntsoeSource(Source):
             d0 += dt.timedelta(days=CHUNK_DAYS)
 
     def tso_forecast(self, zone: str, target: str, start, end) -> pd.Series:
-        """TSO day-ahead forecast (A69) for wind or solar, as published at the time of the call."""
+        """TSO day-ahead forecast as published at the time of the call: A69 for wind or solar, A65 for load."""
+        if target == "load":
+            parts = [self._chunk("loadfc", zone, "", a, b) for a, b in self._chunks(start, end)]
+            parts = [p for p in parts if not p.empty]
+            if not parts:
+                return pd.Series(dtype=float)
+            s = pd.concat(parts).sort_index()
+            s = s[~s.index.duplicated(keep="last")]
+            return s[(s.index >= start) & (s.index < end)]
         comps = []
         for psr in PSR[target]:
             parts = [self._chunk("tso", zone, psr, a, b) for a, b in self._chunks(start, end)]
@@ -161,6 +175,8 @@ class EntsoeSource(Source):
         for a, b in self._chunks(start, end):
             if target == "price":
                 parts.append(self._chunk("price", zone, "", a, b))
+            elif target == "load":
+                parts.append(self._chunk("load", zone, "", a, b))
             else:
                 comps = [self._chunk("gen", zone, psr, a, b) for psr in PSR[target]]
                 comps = [c for c in comps if not c.empty]    # e.g. no offshore wind in a zone

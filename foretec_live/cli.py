@@ -159,8 +159,9 @@ def cmd_backfill(cfg, args):
     src = get_source(cfg)
     d = args.start
     while d <= args.end:
-        snaps = take_snapshot(d, cfg, source=src, save=False)
-        run_forecasts(d, cfg, results_subdir="results/backtest", only_models=args.models, snapshots=snaps, source=src)
+        snaps = take_snapshot(d, cfg, source=src, save=False, targets=args.targets)
+        run_forecasts(d, cfg, results_subdir="results/backtest", only_models=args.models, snapshots=snaps, source=src,
+                      targets=args.targets)
         logging.info("backfilled %s", d)
         d += dt.timedelta(days=1)
     score_pending(cfg, results_subdir="results/backtest", source=src)
@@ -186,6 +187,7 @@ def main(argv=None):
     sub.add_parser("catchup")
     p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
+    p.add_argument("--targets", nargs="*", help="only these targets, merged into the existing backtest days (a new target)")
     p.add_argument("--end", type=_date, required=True); p.add_argument("--models", nargs="*")
     args = ap.parse_args(argv)
     # sktime 1.2 announces a 1.3 default change on every estimator; also reaches worker processes via env

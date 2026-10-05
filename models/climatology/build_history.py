@@ -2,7 +2,11 @@
 
     FORETEC_HOME=/srv/foretec/foretec-live python models/climatology/build_history.py
 writes data/static/climatology_history.parquet (zone, target, time_utc, value), 15-minute grid.
+
+    ... build_history.py --targets load
+adds targets to the existing file from ENTSO-E; the other rows are kept as they are.
 """
+import argparse
 import datetime as dt
 import os
 import time
@@ -17,6 +21,25 @@ from foretec_live.data.energycharts import SOLAR_NAMES, WIND_NAMES, _get, _pick,
 START, END = dt.date(2023, 1, 1), dt.date(2026, 8, 31)
 
 cfg = load_config()
+ap = argparse.ArgumentParser()
+ap.add_argument("--targets", nargs="*", help="add only these targets, from ENTSO-E, keeping the rest of the file")
+args = ap.parse_args()
+if args.targets:
+    from foretec_live.data.entsoe import EntsoeSource
+
+    src, new = EntsoeSource(cfg), []
+    for zone in cfg["zones"]:
+        for target in args.targets:
+            s = src.fetch(zone, target, pd.Timestamp(START), pd.Timestamp(END + dt.timedelta(days=1)))
+            new.append(s.rename("value").to_frame().assign(zone=zone, target=target))
+            print(zone, target, int(s.notna().sum()), "points", flush=True)
+    new = pd.concat(new).reset_index().rename(columns={"index": "time_utc"})
+    out = Path(os.environ.get("FORETEC_HOME", ".")) / "data" / "static" / "climatology_history.parquet"
+    old = pd.read_parquet(out)
+    h = pd.concat([old[~old["target"].isin(args.targets)], new[["zone", "target", "time_utc", "value"]]], ignore_index=True)
+    h.to_parquet(out, index=False)
+    print(out, len(h), "rows")
+    raise SystemExit(0)
 frames = []
 for zone, z in cfg["zones"].items():
     for year in range(START.year, END.year + 1):

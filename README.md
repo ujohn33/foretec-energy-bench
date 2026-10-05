@@ -9,6 +9,7 @@ Every day at 11:30 Brussels time, before the 12:00 SDAC day-ahead gate closure, 
 | Day-ahead price (EUR/MWh) | BE | NL | FR |
 | Wind generation (MW, on + offshore) | BE | NL | FR |
 | Solar generation (MW) | BE | NL | FR |
+| Total load (MW) | BE | NL | FR |
 
 Forecasts are on the 15-minute day-ahead grid: 96 quarter-hours, or 92/100 on clock-change days. Once the actuals are final they are scored, and the leaderboard is rebuilt.
 

@@ -1,0 +1,10 @@
+name: autotheta
+author: Foretec
+description: "AutoTheta (StatsForecast, through sktime): the best of the standard, optimised and dynamic Theta variants by in-sample error, on a series deseasonalised for the daily cycle."
+family: baseline
+runner: subprocess
+env: stats
+script: ../_shared/fl_sktime.py
+estimator: StatsForecastAutoTheta
+params: {season_length: 96}
+n_jobs: 4

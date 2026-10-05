@@ -8,7 +8,7 @@
     { k: "rmse", label: "RMSE", d: 1 },
     { k: "pinball", label: "Pinball", d: 2 },
   ];
-  const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar" };
+  const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
     zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
@@ -651,7 +651,7 @@
     const H = [-24, 0, 16, 24, 48, 72, 96], F = [0, 0.06, 0.58, 0.64, 0.80, 0.90, 1];
     const W = 1000, L = 128, R = 14, top = 74, laneH = 70;
     const x = (h) => { let i = 0; while (i < H.length - 2 && h > H[i + 1]) i++; const f = F[i] + (F[i + 1] - F[i]) * (Math.min(Math.max(h, H[i]), H[i + 1]) - H[i]) / (H[i + 1] - H[i]); return L + f * (W - L - R); };
-    const lanes = ["Day-ahead price", "Wind", "Solar", "Inputs"];
+    const lanes = ["Day-ahead price", "Wind", "Solar", "Load", "Inputs"];
     const y = (i) => top + i * laneH;
     const Hh = top + lanes.length * laneH + 6;
     const cut = hm(T.issue_time), gate = hm(T.gate), off = brusselsOffset();
@@ -689,8 +689,8 @@
     mark(0, 12.9, "pub", "D prices published ~12:55", { side: "left" });
     const priceRuns = (sched.score || ["14:45"]).filter((t) => !T.price_score_after || hm(t) >= hm(T.price_score_after));
     priceRuns.forEach((t, k) => mark(0, hm(t), "score", k === priceRuns.length - 1 ? `scored ${priceRuns.join(" and ")}` : "", { shape: "diamond" }));
-    // wind and solar: metered up to the cut-off minus the publication lag; actuals arrive during D
-    ["wind", "solar"].forEach((t, k) => {
+    // wind, solar and load: metered up to the cut-off minus the publication lag; actuals arrive during D
+    ["wind", "solar", "load"].forEach((t, k) => {
       const lag = T.lag_hours[t] || 0, days = T.score_after_days[t] || 2;
       bar(k + 1, -24, cut - lag, "hist", `history: metered to ${hh(cut - lag)} (cut-off − ${lag} h)`);
       bar(k + 1, 24 + lag, 48 + lag, "act", `actuals metered during D, ~${lag} h lag`);
@@ -706,9 +706,9 @@
       (runs[initUtc] ||= []).push(v.label.split(" ")[0]);
     }
     const order = Object.keys(runs).map(Number).sort((a, b) => a - b);
-    order.forEach((u, k) => mark(3, u + off, "in", `${runs[u].join(" + ")} ${String(u).padStart(2, "0")} UTC run`, { row: k % 2 ? 50 : 22, side: k % 2 ? "left" : "right" }));
-    mark(3, gate - 2, "in", `ENTSO-E load forecast, by ${hh(gate - 2)}`, { row: 50, side: "right" });
-    mark(3, -0.5, "in", "fuel quote ≤ D−2", { row: 22, side: "left" });
+    order.forEach((u, k) => mark(4, u + off, "in", `${runs[u].join(" + ")} ${String(u).padStart(2, "0")} UTC run`, { row: k % 2 ? 50 : 22, side: k % 2 ? "left" : "right" }));
+    mark(4, gate - 2, "in", `ENTSO-E load forecast, by ${hh(gate - 2)}`, { row: 50, side: "right" });
+    mark(4, -0.5, "in", "fuel quote ≤ D−2", { row: 22, side: "left" });
     // cut-off and gate over everything (row 2 labels)
     out.push(`<line class="cut" x1="${x(cut)}" x2="${x(cut)}" y1="${top - 34}" y2="${Hh}"/>`);
     out.push(`<line class="gate" x1="${x(gate)}" x2="${x(gate)}" y1="${top - 34}" y2="${Hh}"/>`);
@@ -895,7 +895,7 @@
     renderInputs(day);
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);
     const tb = $("x-table");
-    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind and solar are scored at 07:00 the day after delivery, once the whole day is published."}</td></tr></tbody>`; return; }
+    if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind, solar and load are scored at 07:00 the day after delivery, once the whole day is published."}</td></tr></tbody>`; return; }
     const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
     const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
     tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +

@@ -1,0 +1,10 @@
+name: autoets
+author: Foretec
+description: "AutoETS (StatsForecast, through sktime): exponential smoothing with additive error and additive daily season (96 quarter-hours), trend chosen by AICc. Fully automatic selection picked multiplicative seasons that diverged on solar (BE solar forecast 15,000 MW against ~1,500 MW actual in tests), so error and season are fixed additive."
+family: baseline
+runner: subprocess
+env: stats
+script: ../_shared/fl_sktime.py
+estimator: StatsForecastAutoETS
+params: {season_length: 96, model: AZA}
+n_jobs: 4

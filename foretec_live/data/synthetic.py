@@ -26,6 +26,8 @@ def _make(zone: str, target: str) -> pd.Series:
         v = 80 + 25 * np.sin((hour - 7) / 24 * 2 * np.pi) + 10 * (idx.dayofweek < 5) + 1.5 * ar + rng.normal(0, 4, n)
     elif target == "wind":
         v = np.clip(2500 + 600 * ar + 400 * np.cos(doy / 365 * 2 * np.pi), 0, None)
+    elif target == "load":
+        v = 10000 + 2000 * np.sin((hour - 9) / 24 * 2 * np.pi) + 1200 * (idx.dayofweek < 5) + 80 * ar + rng.normal(0, 150, n)
     else:
         sun = np.clip(np.sin((hour - 6) / 14 * np.pi), 0, None)
         season = 0.6 + 0.4 * np.sin((doy - 80) / 365 * 2 * np.pi)

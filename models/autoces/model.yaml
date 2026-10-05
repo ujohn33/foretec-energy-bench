@@ -1,0 +1,10 @@
+name: autoces
+author: Foretec
+description: "AutoCES (StatsForecast, through sktime): complex exponential smoothing (Svetunkov), which models level and potential in one complex-valued state, daily season of 96 quarter-hours."
+family: baseline
+runner: subprocess
+env: stats
+script: ../_shared/fl_sktime.py
+estimator: StatsForecastAutoCES
+params: {season_length: 96}
+n_jobs: 4

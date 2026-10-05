@@ -59,3 +59,9 @@ targets:
     publication_lag: 1h
     score_after_days: 1      # complete on ENTSO-E by D+1; scored at the first scoring run of D+1
     complete_before: "12:00" # before this on D+1 only a complete day is frozen; from then 95% suffices
+  load:                      # actual total load (ENTSO-E A65, process A16), metered like generation
+    unit: MW
+    available_until: issue_time
+    publication_lag: 1h
+    score_after_days: 1
+    complete_before: "12:00"

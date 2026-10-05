@@ -9,6 +9,7 @@ NL: the NED.nl offshore wind forecast (Nationaal Energie Dashboard, backed by Te
     before the gate. NL solar is excluded for the same reason.
 FR: none. RTE's next-day wind/solar forecast is published at 16:15 on D-1 (after the gate); its API has
     no D-2/D-3 vintage for wind or solar (checked 5 Oct 2026).
+Load: ENTSO-E A65 day-ahead total load forecast, every zone (published by 10:00 by regulation).
 Fallback, live runs only: ENTSO-E A69 as published when this runs (often not there yet; TSOs have until 18:00
 on D-1, and after the gate it would be that later version).
 Point forecasts only: quantiles of parts do not add up to quantiles of the total.
@@ -44,9 +45,12 @@ for key in series:
             raise RuntimeError("live only (NED overwrites its forecast)")
         return NedForecast().forecast(target, issue, delivery, types=(17,))   # offshore: see the docstring
 
-    sources = {"BE": [("Elia 11:00", lambda: elia.dayahead_11h(target, idx[0], end))],
-               "NL": [("NED.nl", ned)]}.get(zone, [])
-    if live:   # after the gate ENTSO-E holds the 18:00 version, which would be look-ahead
+    if target == "load":   # day-ahead total load forecast, due two hours before the gate
+        sources = [("ENTSO-E A65", lambda: EntsoeSource(cfg).tso_forecast(zone, "load", idx[0], end))]
+    else:
+        sources = {"BE": [("Elia 11:00", lambda: elia.dayahead_11h(target, idx[0], end))],
+                   "NL": [("NED.nl", ned)]}.get(zone, [])
+    if live and target != "load":   # after the gate ENTSO-E holds the 18:00 version, which would be look-ahead
         sources.append(("ENTSO-E A69", lambda: EntsoeSource(cfg).tso_forecast(zone, target, idx[0], end)))
     tried = []
     for name, get in sources:

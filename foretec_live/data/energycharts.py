@@ -27,6 +27,7 @@ ANCHOR = dt.date(2020, 1, 6)  # chunks start on fixed Mondays so repeated reques
 
 WIND_NAMES = {"wind onshore", "wind offshore"}
 SOLAR_NAMES = {"solar"}
+LOAD_NAMES = {"load", "load (incl. self-consumption)"}
 
 
 MIN_INTERVAL = 4.0  # seconds between requests; the public API answers bursts with 429
@@ -121,7 +122,10 @@ class EnergyChartsSource(Source):
             else:
                 js = self._get("/public_power", {"country": z["energycharts_country"], "start": a, "end": b})
                 types = js.get("production_types", [])
-                chosen = _pick(types, WIND_NAMES if target == "wind" else SOLAR_NAMES)
+                if target == "load":   # exact names only: the fuzzy match would also take "Residual load"
+                    chosen = [t for t in types if t.get("name", "").strip().lower() in LOAD_NAMES][:1]
+                else:
+                    chosen = _pick(types, WIND_NAMES if target == "wind" else SOLAR_NAMES)
                 if not chosen:
                     log.error("no %s series for %s; available: %s", target, zone, [t.get("name") for t in types])
                     continue
