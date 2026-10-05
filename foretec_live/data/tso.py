@@ -13,6 +13,10 @@ NED (NL), Nationaal Energie Dashboard (api.ned.nl, key NED_NL_KEY), backed by Te
   national 15-minute forecasts of onshore wind, offshore wind and solar, updated about every hour and
   overwritten as delivery approaches, so only a forecast fetched live before the gate is a gate-time forecast.
 
+RTE (FR), Generation Forecast API v3 (key RTE_DATA_KEY = base64 client_id:client_secret): RTE's day-ahead
+  ("D-1") wind (onshore + offshore) and solar forecast, published at 16:15 on D-1, after the gate. RTE has no
+  earlier vintage for wind or solar, so it is a reference only.
+
 Each source answers only for its own zone and returns nothing elsewhere, so they can sit in one fallback chain.
 """
 from __future__ import annotations
@@ -136,4 +140,33 @@ class NedForecast:
                 page += 1
             s = _series([{"t": x["validfrom"], "value": x["capacity"] / 1000.0} for x in rows], "t")   # kW -> MW
             total = s if total is None else total.add(s, fill_value=None)
+        return total if total is not None else pd.Series(dtype=float)
+
+
+class RteForecast:
+    """RTE's day-ahead (D-1) wind and solar forecast for France, MW, 15-minute values."""
+    TOKEN = "https://digital.iservices.rte-france.com/token/oauth/"
+    URL = "https://digital.iservices.rte-france.com/open_api/generation_forecast/v3/forecasts"
+    TYPES = {"wind": ("WIND_ONSHORE", "WIND_OFFSHORE"), "solar": ("SOLAR",)}
+
+    def __init__(self, key: str | None = None):
+        key = key or os.environ.get("RTE_DATA_KEY")
+        if not key:
+            raise RuntimeError("RTE_DATA_KEY is not set")
+        r = requests.post(self.TOKEN, headers={"Authorization": f"Basic {key}", "Content-Type": "application/x-www-form-urlencoded"}, timeout=60)
+        r.raise_for_status()
+        self.token = r.json()["access_token"]
+
+    def forecast(self, target: str, first_day: dt.date, last_day: dt.date, tz: str = "Europe/Paris") -> pd.Series:
+        """Sum of the production types of `target`, local days first_day..last_day (at most 21 per call)."""
+        a = pd.Timestamp(first_day.isoformat()).tz_localize(tz).isoformat()
+        b = pd.Timestamp((last_day + dt.timedelta(days=1)).isoformat()).tz_localize(tz).isoformat()
+        total = None
+        for pt in self.TYPES[target]:
+            r = requests.get(self.URL, params={"production_type": pt, "type": "D-1", "start_date": a, "end_date": b},
+                             headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"}, timeout=60)
+            r.raise_for_status()
+            rows = [{"t": v["start_date"], "value": v["value"]} for f in r.json().get("forecasts", []) for v in f.get("values", [])]
+            s = _series(rows, "t")
+            total = s if total is None else total.add(s)
         return total if total is not None else pd.Series(dtype=float)
