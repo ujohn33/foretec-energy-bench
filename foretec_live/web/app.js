@@ -618,7 +618,8 @@
     if (models.some((m) => FAM[m] === "tso")) return "";
     const why = S.x.target === "price" ? "TSOs do not forecast prices"
       : S.x.zone === "NL" && S.x.target === "solar" ? "not comparable for NL solar (see Methodology)"
-      : S.x.zone !== "BE" && day.phase === "live" ? "RTE and TenneT publish theirs around 18:00 on D-1, after the gate" : day.phase === "live" ? "not published yet" : "not available for this day";
+      : S.x.zone === "FR" ? "RTE publishes its next-day wind and solar forecast at 16:15 on D-1, after the gate"
+      : day.phase === "live" ? "not published yet" : "not available for this day";
     return `<span class="tag pending">TSO forecast: ${esc(why)}</span>`;
   }
 

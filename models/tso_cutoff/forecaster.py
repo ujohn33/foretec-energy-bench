@@ -7,6 +7,8 @@ NL: the NED.nl offshore wind forecast (Nationaal Energie Dashboard, backed by Te
     2-3 Oct 2026), while NED's onshore forecast is national (~6x that); NED offshore matched ENTSO-E offshore
     (287 vs 277 MW). NED overwrites its forecast as delivery approaches, so it is used only in a live run
     before the gate. NL solar is excluded for the same reason.
+FR: none. RTE's next-day wind/solar forecast is published at 16:15 on D-1 (after the gate); its API has
+    no D-2/D-3 vintage for wind or solar (checked 5 Oct 2026).
 Fallback, live runs only: ENTSO-E A69 as published when this runs (often not there yet; TSOs have until 18:00
 on D-1, and after the gate it would be that later version).
 Point forecasts only: quantiles of parts do not add up to quantiles of the total.
