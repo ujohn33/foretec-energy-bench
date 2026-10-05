@@ -354,6 +354,12 @@ def test_new_target_merges_into_backtest_day(cfg):
     before = pd.read_parquet(f)
     assert set(before["target"]) == set(others)
     run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily"], targets=["load"])
+    # a model without load (wind/solar only) is skipped, not called with no series
+    root = Path(cfg["_root"]) / "models" / "ws_only"
+    root.mkdir()
+    (root / "model.yaml").write_text("name: ws_only\nestimator: NaiveForecaster\nparams: {strategy: last}\ntargets: [wind, solar]\n")
+    meta = run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["ws_only"], targets=["load"])
+    assert not [r for r in meta["runs"] if r["model"] == "ws_only"]
     after = pd.read_parquet(f)
     assert set(after["target"]) == set(cfg["targets"])
     pd.testing.assert_frame_equal(after[after["target"] != "load"].reset_index(drop=True), before.reset_index(drop=True))
