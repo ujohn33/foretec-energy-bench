@@ -71,7 +71,9 @@
   let REF = new Set();   // reference entries (published after the gate): shown, never ranked
   let CAVEAT = {};       // model -> caveat from model.yaml: the name gets a star that explains it
   const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "");
-  const inField = (m) => REF.has(m) || S.covFilter === "all" || (S.covFilter === "with") === !!USES_COV[m];
+  // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
+  const isBench = (m) => FAM[m] === "baseline" || FAM[m] === "tso";
+  const inField = (m) => REF.has(m) || S.covFilter === "all" || isBench(m) || (S.covFilter === "with") === !!USES_COV[m];
   function filteredRows(metric = S.metric, refs = false) {
     return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
@@ -159,8 +161,8 @@
     ], S.phase, (k) => { S.phase = k; renderAll(); });
     seg($("f-cov"), [
       { k: "all", label: "All" },
-      { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost" },
-      { k: "without", label: "Without", title: "Models that only see the target's own history" },
+      { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
+      { k: "without", label: "Without", title: "Models that only see the target's own history, plus the benchmarks (baselines and the grid operators' forecasts)" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
     seg($("f-view"), [
       { k: "rank", label: "Avg rank", tip: "rank" },
