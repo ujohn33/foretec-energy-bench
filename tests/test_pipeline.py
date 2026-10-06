@@ -365,3 +365,28 @@ def test_new_target_merges_into_backtest_day(cfg):
     pd.testing.assert_frame_equal(after[after["target"] != "load"].reset_index(drop=True), before.reset_index(drop=True))
     log = json.loads((f.parent / "_run.json").read_text())
     assert {r["target"] for r in log["runs"]} == set(cfg["targets"])
+
+
+def test_nwp_fetch_retries_a_200_that_is_not_json(cfg, monkeypatch):
+    """Open-Meteo once answered 200 with a non-JSON body: that must be retried, not taken as the run."""
+    from foretec_live import covariates as cv
+
+    c = pd.DataFrame({"zone": ["BE", "BE"], "bucket": ["solar", "load"], "cluster_id": [0, 0],
+                      "latitude": [50.85, 51.05], "longitude": [4.35, 4.45], "weight": [1.0, 1.0]})
+    good = [{"minutely_15": {"time": ["2026-10-06T00:00", "2026-10-06T00:15"], **{v: [1.0, 2.0] for vs in cv.BUCKET_VARS.values() for v in vs}}}
+            for _ in range(len(c))]
+
+    class Reply:
+        def __init__(self, body):
+            self.status_code, self.body, self.text = 200, body, "" if body is None else "json"
+
+        def json(self):
+            if self.body is None:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+            return self.body
+
+    replies = iter([Reply(None), Reply(None), Reply(good)])
+    monkeypatch.setattr(cv.requests, "get", lambda *a, **k: next(replies))
+    monkeypatch.setattr(cv.time, "sleep", lambda s: None)
+    raw = cv.fetch_run("icon_eu", pd.Timestamp("2026-10-06 06:00"), cfg, c)
+    assert len(raw) == 2 * len(c) and set(raw["centroid"]) == set(range(len(c)))

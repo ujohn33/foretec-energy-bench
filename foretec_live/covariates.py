@@ -90,15 +90,27 @@ def fetch_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFra
     host = ncfg["host"] if key else ncfg["host"].replace("customer-", "")
     if key:
         params["apikey"] = key
+    js, why = None, ""
     for attempt in range(5):
-        r = requests.get(host, params=params, timeout=120)
-        if r.status_code == 200:
-            break
-        log.warning("open-meteo %s %s: HTTP %s %s", model, run, r.status_code, r.text[:200])
-        time.sleep(10 * (attempt + 1))
-    r.raise_for_status()
-    js = r.json()
-    js = js if isinstance(js, list) else [js]
+        # a 200 is not enough: on 2026-10-06 Open-Meteo answered 200 with a body that was not JSON
+        try:
+            r = requests.get(host, params=params, timeout=120)
+            if r.status_code == 200:
+                got = r.json()
+                got = got if isinstance(got, list) else [got]
+                if len(got) == len(c) and all((loc.get("minutely_15") or {}).get("time") for loc in got):
+                    js = got
+                    break
+                why = f"incomplete reply ({len(got)} of {len(c)} locations with data)"
+            else:
+                why = f"HTTP {r.status_code} {r.text[:200]}"
+        except (requests.RequestException, ValueError) as e:   # ValueError: the body is not JSON
+            why = f"{type(e).__name__}: {e}"
+        log.warning("open-meteo %s %s (try %d): %s", model, run, attempt + 1, why)
+        if attempt < 4:
+            time.sleep(10 * (attempt + 1))
+    if js is None:
+        raise RuntimeError(f"no valid reply after 5 tries, last: {why}"[:300])
     frames = []
     for i, loc in enumerate(js):
         m = loc["minutely_15"]
@@ -269,17 +281,29 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
         wide = []
         for model in models:
             run = select_run(model, d, cfg)
-            try:
-                raw = fetch_run(model, run, cfg, c)
-            except Exception as e:
-                log.error("NWP %s run %s unavailable: %s", model, run, e)
-                runs_used.append({"issue_date": str(d), "model": model, "run_utc": str(run), "status": f"missing: {e}"[:200]})
+            cycle = pd.Timedelta(hours=int(cfg["covariates"]["nwp"]["models"][model]["cycle_hours"]))
+            raw, used, errors = None, run, []
+            # the latest admissible run; if it cannot be fetched, up to two earlier cycles (published even earlier,
+            # so just as admissible) rather than an ensemble with a member missing
+            for back in range(3):
+                cand = run - back * cycle
+                try:
+                    raw, used = fetch_run(model, cand, cfg, c), cand
+                    break
+                except Exception as e:  # noqa: BLE001 - try the previous cycle
+                    errors.append(f"{cand:%H} UTC run: {e}"[:200])
+            if raw is None:
+                log.error("NWP %s run %s unavailable: %s", model, run, "; ".join(errors))
+                runs_used.append({"issue_date": str(d), "model": model, "run_utc": str(run), "status": f"missing: {'; '.join(errors)}"[:300]})
                 continue
+            if used != run:
+                log.warning("NWP %s: run %s unavailable, using %s (%s)", model, run, used, errors[0])
             agg = _aggregate(raw, c, model).reindex(idx)
             wide.append(agg)
-            meta_f = _nwp_cache(cfg, c, model, run).with_suffix(".json")
+            meta_f = _nwp_cache(cfg, c, model, used).with_suffix(".json")
             fetched = json.loads(meta_f.read_text())["fetched_utc"] if meta_f.exists() else None
-            runs_used.append({"issue_date": str(d), "model": model, "run_utc": str(run), "fetched_utc": fetched, "status": "ok"})
+            status = "ok" if used == run else f"fallback: the {run:%H} UTC run was unavailable ({errors[0][:120]})"
+            runs_used.append({"issue_date": str(d), "model": model, "run_utc": str(used), "fetched_utc": fetched, "status": status})
         w = pd.concat(wide, axis=1) if wide else pd.DataFrame(index=idx)
         w = pd.concat([w, _ensemble_stats(w, models)], axis=1)
         for zone in cfg["zones"]:
