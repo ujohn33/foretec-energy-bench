@@ -850,7 +850,7 @@
     const cands = MODELS.filter((m) => !REF.has(m) && inField(m) && ser.models[m])
       .sort((a, b) => (ranked.indexOf(a) + 1 || 1e3) - (ranked.indexOf(b) + 1 || 1e3));
     const top = new Set(cands.slice(0, S.xTop));
-    const models = MODELS.filter((m) => ser.models[m] && (top.has(m) || REF.has(m)));
+    const models = MODELS.filter((m) => ser.models[m] && (top.has(m) || REF.has(m) || FAM[m] === "tso"));   // TSO: the yardstick
     const xt = $("x-top");
     if (xt) { xt.max = String(Math.max(1, cands.length)); xt.value = String(Math.min(S.xTop, cands.length));
       $("x-top-val").textContent = S.xTop >= cands.length ? `All ${cands.length}` : `Top ${S.xTop} of ${cands.length}`; }
@@ -914,7 +914,8 @@
     if (!st.length) st = standings(DAYS, "all");
     const ranked = st.map((x) => x.model);
     const rest = MODELS.filter((m) => !ranked.includes(m) && inField(m));
-    SHOWN = new Set([...ranked, ...rest].slice(0, S.topN));
+    // the grid operators' forecasts are the yardstick: always shown, whatever the top-N slider says
+    SHOWN = new Set([...[...ranked, ...rest].slice(0, S.topN), ...MODELS.filter((m) => FAM[m] === "tso" && inField(m))]);
     const total = new Set([...ranked, ...rest]).size;
     const el = $("f-top");
     el.max = String(total);
