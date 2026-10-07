@@ -5,7 +5,9 @@ Elia (BE), opendata.elia.be (Opendatasoft):
          Federal offshore + Flanders/Wallonia onshore, each on the Elia grid and on distribution grids.
   solar  ods032 + ods087, region "Belgium".
   Elia also publishes its own day-ahead forecast as it stood at 11:00 on D-1 (`dayahead11hforecast`), before
-  the 12:00 gate; the version ENTSO-E receives is the 18:00 one. `dayahead_11h` returns it.
+  the 12:00 gate (`dayahead_11h`), and the 18:00 version (`dayaheadforecast`, `dayahead_18h`). The 18:00 one is
+  what Elia sends to ENTSO-E, but ENTSO-E gets hourly values; Elia Open Data has it at 15 minutes (hourly means
+  identical to the MW, checked 14 Sep - 6 Oct 2026).
 RTE (FR), éCO2mix real-time on odre.opendatasoft.com:
   wind   `eolien` (onshore + offshore), solar `solaire`, 15-minute national values.
 
@@ -78,6 +80,11 @@ class EliaSource(Source):
         can be fetched later without look-ahead)."""
         parts = self.WIND if target == "wind" else self.SOLAR
         return self._collect(target, [(ds, "dayahead11hforecast") for ds, _ in parts], start, end)
+
+    def dayahead_18h(self, target, start, end) -> pd.Series:
+        """Elia's day-ahead forecast for Belgium as published at 18:00 on D-1 (after the gate), MW, 15 minutes."""
+        parts = self.WIND if target == "wind" else self.SOLAR
+        return self._collect(target, [(ds, "dayaheadforecast") for ds, _ in parts], start, end)
 
     def _collect(self, target, datasets, start, end) -> pd.Series:
         retries = 2 if self.cfg.get("_fallback") else 4
