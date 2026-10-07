@@ -13,6 +13,7 @@ declare -A PKGS=(
   [timesfm]="timesfm[torch,xreg] @ git+https://github.com/google-research/timesfm.git"
   [moirai]="uni2ts @ git+https://github.com/SalesforceAIResearch/uni2ts.git"
   [tirex]="tirex-ts"
+  [tirex2]="tirex-2"
   [toto]="toto-ts|setuptools<81"
   [sundial]="transformers==4.40.1"
   [ttm]="granite-tsfm"

@@ -1,0 +1,7 @@
+name: tirex2
+author: Foretec
+description: "NX-AI TiRex-2 (xLSTM, 38M active parameters in univariate mode, Apache-2.0, NeurIPS 2026), zero-shot quantile forecasts from the target's own history."
+runner: subprocess
+env: tirex2
+script: forecaster.py
+family: tirex

@@ -1,0 +1,8 @@
+name: tirex2_cov
+author: Foretec
+description: "NX-AI TiRex-2 with known-future covariates: the NWP ensemble (ICON-EU, GFS, IFS) at capacity-weighted centroids, the ENTSO-E load forecast, fuel cost and calendar, the same compact feature set as chronos2_cov, standardised on their history. Zero-shot."
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: tirex2
+script: forecaster.py
+family: tirex
