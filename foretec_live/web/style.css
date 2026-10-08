@@ -211,7 +211,7 @@ td.kind{font-family:var(--mono); font-size:.8rem; color:var(--ink2); font-weight
 tr.is-bt td,tr.is-bt td.v.best{color:var(--bt-ink)}
 tr.is-bt td.v.best{font-weight:600}
 td.pos{font-weight:400; color:var(--ink2); width:36px}
-.bar{display:flex; align-items:center; gap:12px; min-width:190px}
+.bar{display:flex; align-items:center; gap:10px; min-width:140px}
 .bar span{height:6px; border-radius:1px}
 .bar b{font-weight:600; font-size:.9rem}
 td.empty{padding:28px; text-align:center; color:var(--ink2); font-weight:400; white-space:normal}

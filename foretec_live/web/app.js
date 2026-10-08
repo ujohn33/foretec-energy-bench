@@ -436,7 +436,7 @@
         <td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
         ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
-        <td><div class="bar"><span style="width:${Math.round(1.4 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
+        <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
     const starred = st.filter((x) => CAVEAT[x.model]);
