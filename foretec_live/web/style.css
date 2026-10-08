@@ -365,3 +365,4 @@ section.first{border-top:0; padding-top:48px}
 /* reference entries: listed below the ranking, never ranked */
 tr.ref td{color:var(--ink2); background:var(--raise)}
 tr.ref td.pos{font-style:italic}
+tr.prov td{color:var(--ink2)} tr.prov td.pos{font-style:italic; font-size:.82rem}

@@ -79,33 +79,57 @@
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
-  /** Per issue day: average rank across the selected series, raw mean, and championship points. */
+  // ---------- race points ----------
+  // A race is one issue day x one series. Its field is every model due in it: those with a scored forecast
+  // (finishers) and those whose run failed or was skipped (DNF). With n due, a finisher at rank r scores
+  // 100 (n - r) / (n - 1), ties sharing the average rank; a DNF scores 0. The winner gets 100 whatever the
+  // field size, and a model is only in races it was due in (not before it was added, not outside its scope),
+  // so the standing is its average over its races.
+  const MIN_RACES = 24;
+  let SCOPE = {}, TRK = {};
+  function dnfs(d, key) {
+    const cells = TRK[d] || {}, out = [];
+    for (const m in cells) {
+      const c = cells[m], x = c && c.s && c.s[key];
+      // a whole-model skip (no series in the log) counts in every race of the model's scope
+      const whole = c && c.s && (c.s._ === "K" || c.s._ === "F") && (SCOPE[m] || []).includes(key);
+      if (x === "F" || x === "K" || whole) out.push(m);
+    }
+    return out;
+  }
+
+  /** Per issue day: race points, average rank and raw mean across the selected series. */
   function dayTable(rows) {
     const byDay = new Map();
     for (const r of rows) {
       if (!byDay.has(r.issue_date)) byDay.set(r.issue_date, new Map());
       const ser = byDay.get(r.issue_date);
-      const key = r.zone + "|" + r.target;
+      const key = r.zone + "_" + r.target;
       if (!ser.has(key)) ser.set(key, []);
       ser.get(key).push(r);
     }
     const out = [];
     for (const [d, ser] of [...byDay.entries()].sort()) {
-      const ranks = {}, vals = {};
-      for (const list of ser.values()) {
+      const ranks = {}, vals = {}, pts = {}, dnf = {};
+      for (const [key, list] of ser) {
         const sorted = [...list].sort((a, b) => a[S.metric] - b[S.metric]);
-        sorted.forEach((r, i) => {
-          // ties share the average position
+        const finished = new Set(sorted.map((r) => r.model));
+        const out_ = dnfs(d, key).filter((m) => !finished.has(m) && !REF.has(m) && inField(m));
+        const n = sorted.length + out_.length;
+        if (n < 2) continue;
+        sorted.forEach((r) => {
           const tied = sorted.filter((x) => x[S.metric] === r[S.metric]).map((x) => sorted.indexOf(x) + 1);
-          (ranks[r.model] ||= []).push(mean(tied));
+          const rk = mean(tied);
+          (ranks[r.model] ||= []).push(rk);
           (vals[r.model] ||= []).push(r[S.metric]);
+          (pts[r.model] ||= []).push(100 * (n - rk) / (n - 1));
         });
+        for (const m of out_) { (pts[m] ||= []).push(0); dnf[m] = (dnf[m] || 0) + 1; }
       }
       const avgRank = {}, raw = {}, points = {};
       for (const m in ranks) { avgRank[m] = mean(ranks[m]); raw[m] = mean(vals[m]); }
-      const order = Object.keys(avgRank).sort((a, b) => avgRank[a] - avgRank[b]);
-      order.forEach((m, i) => { points[m] = order.length - i; });
-      out.push({ d, phase: phaseOf(d), avgRank, raw, points, n: order.length });
+      for (const m in pts) points[m] = mean(pts[m]);
+      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, dnf, n: Object.keys(pts).length });
     }
     return out;
   }
@@ -117,18 +141,25 @@
     const metRows = filteredRows().filter((r) => set.has(r.issue_date));
     const res = {};
     for (const x of sel) {
-      for (const m in x.points) {
-        const s = (res[m] ||= { model: m, pts: 0, ranks: [], ptsList: [] });
-        s.pts += x.points[m]; s.ranks.push(x.avgRank[m]); s.ptsList.push(x.points[m]);
+      for (const m in x.pts) {
+        const s = (res[m] ||= { model: m, sum: 0, races: 0, dnf: 0, ranks: [], dayScores: [] });
+        s.sum += x.pts[m].reduce((a, b) => a + b, 0); s.races += x.pts[m].length; s.dnf += x.dnf[m] || 0;
+        s.dayScores.push(x.points[m]);
+        if (x.avgRank[m] != null) s.ranks.push(x.avgRank[m]);
       }
     }
-    return Object.values(res).map((s) => ({
+    const list = Object.values(res);
+    const need = Math.min(MIN_RACES, Math.ceil(0.5 * Math.max(0, ...list.map((s) => s.races))));
+    return list.map((s) => ({
       ...s,
+      score: s.sum / s.races,
+      delivered: (s.races - s.dnf) / s.races,
+      provisional: s.races < need,
       avgRank: mean(s.ranks),
-      best: Math.max(...s.ptsList), worst: Math.min(...s.ptsList), days: s.ptsList.length,
+      best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
       rel: mean(relRows.filter((r) => r.model === s.model).map((r) => r.rel_mae)),
       metric: mean(metRows.filter((r) => r.model === s.model).map((r) => r[S.metric])),
-    })).sort((a, b) => b.pts - a.pts || a.avgRank - b.avgRank);
+    })).sort((a, b) => (a.provisional - b.provisional) || b.score - a.score || (a.avgRank ?? 99) - (b.avgRank ?? 99));
   }
 
   const narrow = () => window.innerWidth < 640;
@@ -275,18 +306,20 @@
   const mixedUnits = () => (S.target === "all" ? " With all targets selected, values in different units are averaged together: pick one target to compare them." : "");
   const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
   const GLOSS = {
-    pos: () => ["Position", "Place in the standings: most total points first, equal points split by average rank. It stays the same when you sort the table by another column."],
-    pts: () => ["Points", `Every issue day is scored like a race. The models are ordered by their average rank that day; the best gets one point for every model ranked that day (${fieldSize()} at most here), the last gets 1. Total points add up over the days in the period, so a day a model misses earns it nothing.`],
+    pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
+    pts: () => ["Score", `Average race points. A race is one issue day and one series; every model due in it takes part. With n due, the winner scores 100 and the last finisher 100 × (n − rank) / (n − 1); a model whose run failed scores 0. The score averages a model's races, so new models and different field sizes compare fairly. Ranked by ${metricDef().label}.`],
+    races: () => ["Races", `Races the model was due in during the period (issue day × series). A model with fewer than ${MIN_RACES} races, or half of the most any model has, is provisional and listed after the ranked ones.`],
+    delivered: () => ["Delivered", "Share of its races in which the model produced a scored forecast. A failed or skipped run is a DNF and scores 0 for that race."],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
     rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
     pinball: () => ["Pinball loss", `Quantile loss averaged over the 10th to 90th percentiles. It scores the whole forecast band: narrow bands score well only if the outcome falls inside them as often as they claim. Only models that publish quantiles have one. Lower is better.${mixedUnits()}`],
     bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
-    best: () => ["Best day", "The most points the model earned on a single issue day."],
-    worst: () => ["Worst day", "The fewest points the model earned on a single issue day."],
+    best: () => ["Best day", "The model's highest average race points on a single issue day."],
+    worst: () => ["Worst day", "The model's lowest average race points on a single issue day."],
     days: () => ["Days", "Issue days on which the model was scored in the selected period. Fewer days means fewer chances to collect points."],
-    bar: () => ["Points", "Total points as a bar, scaled to the leader."],
+    bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
     value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
     heat: () => ["Average rank", "Each cell is the model's average rank on that issue day across the selected series (1 = best); darker is better. The last column averages over all days."],
@@ -344,13 +377,14 @@
   const SORT_COLS = {
     pos: { get: (s) => s.pos, dir: 1 },
     model: { get: (s) => s.model, dir: 1 },
-    pts: { get: (s) => s.pts, dir: -1 },
+    pts: { get: (s) => s.score, dir: -1 },
+    races: { get: (s) => s.races, dir: -1 },
+    delivered: { get: (s) => s.delivered, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
     rel: { get: (s) => s.rel, dir: 1 },
     metric: { get: (s) => s.metric, dir: 1 },
     best: { get: (s) => s.best, dir: -1 },
     worst: { get: (s) => s.worst, dir: -1 },
-    days: { get: (s) => s.days, dir: -1 },
   };
   function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] && !(k === "metric" && S.metric === "rel_mae") ? k : "pos"; }
   function sortRows(st) {
@@ -378,31 +412,31 @@
     const bt = S.phase === "backtest";
     const md = metricDef();
     $("standings").classList.toggle("is-bt", bt);
-    const top = st.slice(0, 3);
+    const top = st.filter((x) => !x.provisional).slice(0, 3);
     $("podium").innerHTML = top.length ? top.map((s, i) => `
       <div class="pod ${i === 0 ? "lead" : ""}">
         <div class="pod-top"><span class="place" aria-label="${["1st", "2nd", "3rd"][i]} place">${i + 1}</span>
           <div class="name"><i style="background:${color(s.model)}"></i>${nm(s.model)}</div>
           ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="stats">
-          <div class="stat"><span data-tip="pts">Points</span><b>${s.pts}</b></div>
+          <div class="stat"><span data-tip="pts">Score</span><b>${fmt(s.score, 1)}</b></div>
           <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
           <div class="stat"><span data-tip="${S.metric}">${esc(md.label)}</span><b>${fmt(s.metric, md.d)}</b></div>
         </div>
       </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
-    const maxPts = Math.max(1, ...st.map((s) => s.pts));
     const t = $("standings-table");
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Total pts", "pts")}${sortTh("rank", "Avg rank", "rank")}${sortTh("rel", "Rel. MAE", "rel_mae")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts")}${sortTh("races", "Races", "races")}${sortTh("delivered", "Delivered", "delivered")}${sortTh("rank", "Avg rank", "rank")}${sortTh("rel", "Rel. MAE", "rel_mae")}
       ${S.metric !== "rel_mae" ? sortTh("metric", md.label + unitSuffix(), S.metric) : ""}
-      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("days", "Days", "days")}<th><span class="lbl" data-tip="bar">Points</span></th></tr></thead><tbody>` +
-      sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}">
-        <td class="pos">${s.pos}</td>
+      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}<th><span class="lbl" data-tip="bar">Score</span></th></tr></thead><tbody>` +
+      sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
+        <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td class="r v">${s.pts}</td><td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
+        <td class="r v">${fmt(s.score, 1)}</td><td class="r v">${s.races}</td><td class="r v">${fmt(100 * s.delivered, 0)}%</td>
+        <td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
         ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
-        <td class="r v">${s.best}</td><td class="r v">${s.worst}</td><td class="r v">${s.days}</td>
-        <td><div class="bar"><span style="width:${Math.round(140 * s.pts / maxPts)}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${s.pts}</b></div></td>
+        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
+        <td><div class="bar"><span style="width:${Math.round(1.4 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
     const starred = st.filter((x) => CAVEAT[x.model]);
@@ -426,9 +460,9 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m);
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
+          <td class="r v">–</td><td class="r v">${mine.length}</td><td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
           ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(mean(refMet.filter((r) => r.model === m).map((r) => r[S.metric])), md.d)}</td>` : ""}
-          <td class="r v">–</td><td class="r v">–</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td>
+          <td class="r v">–</td><td class="r v">–</td>
           <td class="wrap">Reference, not ranked: published after the gate${only}</td></tr>`;
       }).join(""));
     }
@@ -439,7 +473,7 @@
     const band = bandRange(DAYS);
     const md = metricDef();
     const rank = S.view === "rank";
-    const models = MODELS.filter((m) => shown(m) && DAYS.some((x) => x.avgRank[m] != null));
+    const models = MODELS.filter((m) => shown(m) && DAYS.some((x) => x.pts[m] != null));
     const phaseNote = (i) => (DAYS[i] && DAYS[i].phase === "backtest" ? " · backtest" : " · live");
 
     draw("c-perf", {
@@ -457,12 +491,16 @@
     });
     legend($("l-perf"), models);
 
-    const race = models.map((m) => { let c = 0; return lineDataset(m, DAYS.map((x) => { c += x.points[m] || 0; return c; }), DAYS); });
+    // running average race points: every model on the same 0-100 scale, however long it has been running
+    const race = models.map((m) => {
+      let sum = 0, n = 0;
+      return lineDataset(m, DAYS.map((x) => { const p = x.pts[m]; if (p) { sum += p.reduce((a, b) => a + b, 0); n += p.length; } return n ? sum / n : null; }), DAYS);
+    });
     draw("c-race", {
       type: "line", data: { labels, datasets: race },
       options: baseOptions({
-        band, yTitle: "Cumulative points", itemSort: (a, b) => b.raw - a.raw,
-        tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${c.raw} pts` },
+        band, yTitle: "Average race points (running)", itemSort: (a, b) => b.raw - a.raw,
+        tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 1)}` },
       }),
     });
     legend($("l-race"), models);
@@ -821,10 +859,9 @@
   function explorerRanking() {
     const rows = ROWS.filter((r) => !REF.has(r.model) && inField(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
       && (S.phase === "all" || r.phase === S.phase));
-    const days = dayTable(rows);
-    const pts = {};
-    for (const x of days) for (const m in x.points) pts[m] = (pts[m] || 0) + x.points[m];
-    return Object.keys(pts).sort((a, b) => pts[b] - pts[a]);
+    const sum = {}, n = {};
+    for (const x of dayTable(rows)) for (const m in x.pts) { sum[m] = (sum[m] || 0) + x.pts[m].reduce((a, b) => a + b, 0); n[m] = (n[m] || 0) + x.pts[m].length; }
+    return Object.keys(sum).sort((a, b) => sum[b] / n[b] - sum[a] / n[a]);
   }
 
   function renderExplorerControls() {
@@ -959,6 +996,8 @@
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
+    SCOPE = Object.fromEntries(D.models.map((m) => [m.name, m.scope || []]));
+    TRK = (D.tracker && D.tracker.cells) || {};
     CAVEAT = Object.fromEntries(D.models.filter((m) => m.caveat).map((m) => [m.name, m.caveat]));
     const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));

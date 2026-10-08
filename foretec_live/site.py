@@ -309,6 +309,9 @@ def build_site(cfg) -> Path:
         spec = SimpleNamespace(name=r.get("name", yml.parent.name))
         models.append({"name": spec.name, "author": r.get("author", ""), "description": r.get("description", ""),
                        "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
+                       # the series the model is due in (zones, targets, exclude): for race points and DNFs
+                       "scope": [f"{z}_{t}" for z in (r.get("zones") or cfg["zones"]) for t in (r.get("targets") or cfg["targets"])
+                                 if f"{z}_{t}" not in (r.get("exclude") or [])],
                        "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
                        "reference": bool(r.get("reference")), "live_only": bool(r.get("live_only")),
                        "caveat": r.get("caveat", ""),
