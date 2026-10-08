@@ -60,13 +60,20 @@ class FallbackSource(Source):
 
     def fetch(self, zone, target, start, end):
         idx = pd.date_range(start, end, freq=FREQ, inclusive="left")
+        # source_by_series puts one of the fallbacks first for a series (e.g. Elia's quarter-hours for BE wind)
+        first, rest = self.primary, list(self.fallbacks)
+        pref = (self.cfg.get("source_by_series") or {}).get(f"{zone}_{target}")
+        if pref and pref != self.primary.name:
+            chosen = next((s for s in self.fallbacks if s.name == pref), None)
+            if chosen is not None:
+                first, rest = chosen, [self.primary] + [s for s in self.fallbacks if s is not chosen]
         try:
-            out = self.primary.fetch(zone, target, start, end).reindex(idx)
+            out = first.fetch(zone, target, start, end).reindex(idx)
         except Exception as e:  # noqa: BLE001 - a dead primary must not stop the run
-            log.warning("%s %s %s failed (%s); using the fallbacks", self.primary.name, zone, target, e)
+            log.warning("%s %s %s failed (%s); using the fallbacks", first.name, zone, target, e)
             out = pd.Series(np.nan, index=idx)
-        prov = {self.primary.name: int(out.notna().sum())}
-        for fb in self.fallbacks:
+        prov = {first.name: int(out.notna().sum())}
+        for fb in rest:
             prov[fb.name] = 0
             if not out.isna().any() or fb.name in self.down:
                 continue

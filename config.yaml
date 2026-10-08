@@ -32,6 +32,9 @@ source: entsoe               # ENTSO-E Transparency Platform (ENTSOE_TOKEN), par
 # quarter-hours ENTSO-E does not deliver come from the TSOs' own open data (Elia for BE, RTE for FR), then
 # Energy-Charts as last resort (NL has no keyless TSO service); provenance per series in _sources.json
 fallback_source: [elia, rte, energycharts]
+# series whose TSO publishes finer data than it sends ENTSO-E: that source first, then the normal chain.
+# Elia sends ENTSO-E hourly wind and solar (forecasts and actuals); Elia Open Data has the quarter-hours.
+source_by_series: {BE_wind: elia, BE_solar: elia}
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

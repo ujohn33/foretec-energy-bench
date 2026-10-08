@@ -5,6 +5,10 @@ writes data/static/climatology_history.parquet (zone, target, time_utc, value), 
 
     ... build_history.py --targets load
 adds targets to the existing file from ENTSO-E; the other rows are kept as they are.
+
+    ... build_history.py --series BE_wind BE_solar
+rebuilds single series through the configured source chain (source_by_series applies, e.g. Elia's
+quarter-hours for BE wind and solar), one year per request; the other rows are kept.
 """
 import argparse
 import datetime as dt
@@ -23,7 +27,27 @@ START, END = dt.date(2023, 1, 1), dt.date(2026, 8, 31)
 cfg = load_config()
 ap = argparse.ArgumentParser()
 ap.add_argument("--targets", nargs="*", help="add only these targets, from ENTSO-E, keeping the rest of the file")
+ap.add_argument("--series", nargs="*", help="rebuild only these series (ZONE_target) through the source chain")
 args = ap.parse_args()
+if args.series:
+    from foretec_live.data import get_source
+
+    src, new = get_source(cfg), []
+    for key in args.series:
+        zone, target = key.split("_")
+        for year in range(START.year, END.year + 1):
+            a, b = max(START, dt.date(year, 1, 1)), min(END, dt.date(year, 12, 31)) + dt.timedelta(days=1)
+            s = src.fetch(zone, target, pd.Timestamp(a), pd.Timestamp(b))
+            new.append(s.rename("value").to_frame().assign(zone=zone, target=target))
+            print(key, year, int(s.notna().sum()), "points", getattr(src, "provenance", {}).get((zone, target)), flush=True)
+    new = pd.concat(new).reset_index().rename(columns={"index": "time_utc"})
+    out = Path(os.environ.get("FORETEC_HOME", ".")) / "data" / "static" / "climatology_history.parquet"
+    old = pd.read_parquet(out)
+    drop = (old["zone"] + "_" + old["target"]).isin(args.series)
+    h = pd.concat([old[~drop], new[["zone", "target", "time_utc", "value"]]], ignore_index=True)
+    h.to_parquet(out, index=False)
+    print(out, len(h), "rows")
+    raise SystemExit(0)
 if args.targets:
     from foretec_live.data.entsoe import EntsoeSource
 

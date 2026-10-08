@@ -141,15 +141,20 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
 
 
 def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, snapshots=None, source=None, reference_run=False,
-                  targets=None):
+                  targets=None, series=None):
     """reference_run: run only `reference: true` models (after the gate) and log to _reference.json, so the
     gate check on _run.json is untouched. In the live run reference models are left out; in backtests they run.
-    targets: run only these targets and merge into the day's existing forecasts and log (a target joining the backtest)."""
+    targets: run only these targets and merge into the day's existing forecasts and log (a target joining the backtest).
+    series: the same for single series, as "ZONE_target" (e.g. a series whose source changed)."""
     p = paths(cfg, results_subdir)
     started = str(pd.Timestamp.now(tz="UTC"))
     snaps = snapshots if snapshots is not None else take_snapshot(issue_date, cfg, source=source, targets=targets)
     if targets:
         snaps = {k: v for k, v in snaps.items() if k[1] in targets}
+    if series:
+        snaps = {k: v for k, v in snaps.items() if f"{k[0]}_{k[1]}" in series}
+    merge = bool(targets or series)
+    in_subset = (lambda z, t: (not targets or t in targets) and (not series or f"{z}_{t}" in series))
     fh_index = delivery_index(issue_date, cfg)
     outdir = p["forecasts"] / str(issue_date)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -220,9 +225,10 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             out.insert(0, "model", spec.name)
             out.insert(0, "issue_date", str(issue_date))
             target_f = outdir / f"{spec.name}.parquet"
-            if targets and target_f.exists():   # keep the other targets' forecasts as they are
+            if merge and target_f.exists():   # keep the other series' forecasts as they are
                 old = pd.read_parquet(target_f)
-                out = pd.concat([old[~old["target"].isin(targets)], out], ignore_index=True)
+                mine = [in_subset(z, t) for z, t in zip(old["zone"], old["target"])]
+                out = pd.concat([old[[not m for m in mine]], out], ignore_index=True)
             out.to_parquet(target_f, index=False)
     meta = {
         "issue_date": str(issue_date),
@@ -233,13 +239,14 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         "runs": log_rows,
     }
     f = outdir / ("_reference.json" if reference_run else "_run.json")
-    if targets and f.exists():   # a target added to a day: keep every other entry and the original run times
+    if merge and f.exists():   # series added or re-run on a day: keep every other entry and the original run times
         old = json.loads(f.read_text())
         rerun = {r["model"] for r in meta["runs"]}
-        keep = [r for r in old.get("runs", []) if not (r["model"] in rerun and (r.get("target") in targets or "target" not in r))]
+        keep = [r for r in old.get("runs", []) if not (r["model"] in rerun and ("target" not in r or in_subset(r.get("zone"), r.get("target"))))]
+        stamp = {x: meta["run_finished_utc"] for x in (targets or series)}
         meta = {**old, "series": old.get("series", []) + [x for x in meta["series"] if x not in old.get("series", [])],
                 "runs": keep + meta["runs"],
-                "targets_added_utc": {**old.get("targets_added_utc", {}), **{t: meta["run_finished_utc"] for t in targets}}}
+                "series_rerun_utc" if series else "targets_added_utc": {**old.get("series_rerun_utc" if series else "targets_added_utc", {}), **stamp}}
     elif (only_models or reference_run) and f.exists():  # partial re-run: keep the log entries of the other models
         old = json.loads(f.read_text())
         rerun = {r["model"] for r in meta["runs"]}

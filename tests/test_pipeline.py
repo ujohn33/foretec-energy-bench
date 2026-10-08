@@ -314,9 +314,9 @@ def test_fallback_chain_order(cfg):
 
     chain = FallbackSource(cfg, src("entsoe", [1.0, None, None, None]), src("elia", [9.0, 2.0, None, None]),
                            src("rte", [None, None, None, None]), src("energycharts", [9.0, 9.0, 3.0, None]))
-    out = chain.fetch("BE", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))
+    out = chain.fetch("NL", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))   # NL: no source_by_series entry
     assert out.tolist() == [1.0, 2.0, 3.0]
-    assert chain.provenance[("BE", "wind")] == {"entsoe": 1, "elia": 1, "rte": 0, "energycharts": 1, "missing": 1}
+    assert chain.provenance[("NL", "wind")] == {"entsoe": 1, "elia": 1, "rte": 0, "energycharts": 1, "missing": 1}
 
 
 def test_early_scoring_needs_complete_day_and_provisional_actuals(cfg):
@@ -390,3 +390,40 @@ def test_nwp_fetch_retries_a_200_that_is_not_json(cfg, monkeypatch):
     monkeypatch.setattr(cv.time, "sleep", lambda s: None)
     raw = cv.fetch_run("icon_eu", pd.Timestamp("2026-10-06 06:00"), cfg, c)
     assert len(raw) == 2 * len(c) and set(raw["centroid"]) == set(range(len(c)))
+
+
+def test_source_by_series_puts_a_fallback_first(cfg):
+    """source_by_series: for BE wind the preferred source is asked first, the primary fills its gaps."""
+    from foretec_live.data.base import FallbackSource, Source
+
+    class Fake(Source):
+        def __init__(self, name, value, gap=False):
+            super().__init__(cfg); self.name, self.value, self.gap = name, value, gap
+
+        def fetch(self, zone, target, start, end):
+            idx = pd.date_range(start, end, freq="15min", inclusive="left")
+            s = pd.Series(self.value, index=idx, dtype=float)
+            return s.iloc[1:] if self.gap else s
+
+    a, b = pd.Timestamp("2026-09-20"), pd.Timestamp("2026-09-20 02:00")
+    chain = FallbackSource({**cfg, "source_by_series": {"BE_wind": "elia"}}, Fake("entsoe", 1.0), Fake("elia", 2.0, gap=True))
+    be = chain.fetch("BE", "wind", a, b)
+    assert be.iloc[0] == 1.0 and (be.iloc[1:] == 2.0).all()          # Elia first, ENTSO-E fills its gap
+    assert chain.provenance[("BE", "wind")] == {"elia": 7, "entsoe": 1, "missing": 0}
+    assert (chain.fetch("NL", "wind", a, b) == 1.0).all()             # other series: the primary as before
+
+
+def test_series_rerun_merges_into_backtest_day(cfg):
+    """backfill --series BE_wind re-runs one series and leaves every other series of the day untouched."""
+    d = dt.date(2026, 9, 20)
+    run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily"])
+    f = paths(cfg, "results/backtest")["forecasts"] / d.isoformat() / "naive_daily.parquet"
+    before = pd.read_parquet(f)
+    run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["naive_daily"], series=["BE_wind"])
+    after = pd.read_parquet(f)
+    key = after["zone"] + "_" + after["target"]
+    bkey = before["zone"] + "_" + before["target"]
+    pd.testing.assert_frame_equal(after[key != "BE_wind"].reset_index(drop=True), before[bkey != "BE_wind"].reset_index(drop=True))
+    assert (key == "BE_wind").sum() == (bkey == "BE_wind").sum()
+    log = json.loads((f.parent / "_run.json").read_text())
+    assert sum(1 for r in log["runs"] if r["model"] == "naive_daily") == len(cfg["zones"]) * len(cfg["targets"])
