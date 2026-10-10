@@ -91,6 +91,76 @@
   // standing is its average over the races it finished; the run tracker still shows the failures.
   const MIN_RACES = 24;
 
+  // ---------- Diebold-Mariano ----------
+  // Loss = Rel. MAE of each race, so series of different scale pool. The loss differential of A against B
+  // is averaged per issue day over the series both delivered, and the test runs on that daily series:
+  // Newey-West variance (Bartlett, floor(T^1/3) lags, since weather regimes make days autocorrelated),
+  // Harvey-Leybourne-Newbold small-sample correction, Student t with T - 1 degrees of freedom, two-sided.
+  const DM_MIN_DAYS = 5;
+  function lgamma(x) {
+    const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+    let y = x, t = x + 5.5, ser = 1.000000000190015;
+    t -= (x + 0.5) * Math.log(t);
+    for (const k of c) ser += k / ++y;
+    return -t + Math.log(2.5066282746310005 * ser / x);
+  }
+  function betacf(a, b, x) {
+    const TINY = 1e-30; let c = 1, d = 1 - (a + b) * x / (a + 1);
+    d = 1 / (Math.abs(d) < TINY ? TINY : d); let h = d;
+    for (let m = 1; m <= 200; m++) {
+      const m2 = 2 * m;
+      let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2));
+      d = 1 + aa * d; d = 1 / (Math.abs(d) < TINY ? TINY : d); c = 1 + aa / c; c = Math.abs(c) < TINY ? TINY : c; h *= d * c;
+      aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1));
+      d = 1 + aa * d; d = 1 / (Math.abs(d) < TINY ? TINY : d); c = 1 + aa / c; c = Math.abs(c) < TINY ? TINY : c;
+      const del = d * c; h *= del;
+      if (Math.abs(del - 1) < 1e-12) break;
+    }
+    return h;
+  }
+  function ibeta(a, b, x) {   // regularized incomplete beta I_x(a, b)
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+    return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
+  }
+  const tTwoSided = (t, df) => ibeta(df / 2, 0.5, df / (df + t * t));
+  /** Per-day loss of a model: issue day -> (series -> Rel. MAE). */
+  function dailyLoss(rows, model) {
+    const out = new Map();
+    for (const r of rows) if (r.model === model && r.rel_mae != null) {
+      if (!out.has(r.issue_date)) out.set(r.issue_date, new Map());
+      out.get(r.issue_date).set(r.zone + "_" + r.target, r.rel_mae);
+    }
+    return out;
+  }
+  /** DM test of loss map a against b: mean differential (a - b, below 0 = a better), p-value, days. */
+  function dmTest(a, b) {
+    const d = [];
+    for (const [day, la] of [...a.entries()].sort()) {
+      const lb = b.get(day); if (!lb) continue;
+      const diffs = [...la].filter(([k]) => lb.has(k)).map(([k, v]) => v - lb.get(k));
+      if (diffs.length) d.push(mean(diffs));
+    }
+    const T = d.length;
+    if (T < DM_MIN_DAYS) return { T, p: null, diff: T ? mean(d) : null };
+    const m = mean(d), e = d.map((x) => x - m);
+    const gamma = (k) => { let s = 0; for (let i = k; i < T; i++) s += e[i] * e[i - k]; return s / T; };
+    const L = Math.floor(Math.cbrt(T));
+    let v = gamma(0);
+    for (let k = 1; k <= L; k++) v += 2 * (1 - k / (L + 1)) * gamma(k);
+    if (!(v > 0)) return { T, p: m === 0 ? 1 : 0, diff: m };
+    const t = m / Math.sqrt(v / T) * Math.sqrt((T - 1) / T);   // HLN with h = 1
+    return { T, p: tTwoSided(t, T - 1), diff: m };
+  }
+  const fmtP = (p) => (p == null ? "–" : p < 0.001 ? "<0.001" : p.toFixed(p < 0.01 ? 3 : 2));
+  function dmCell(r, isLeader) {
+    if (isLeader) return `<td class="r v dm lead">#1</td>`;
+    if (!r || r.p == null) return `<td class="r v dm">–</td>`;
+    const sig = r.p < 0.05, cls = !sig ? "tie" : r.diff < 0 ? "better" : "worse";
+    const mark = !sig ? "≈ " : r.diff < 0 ? "▲ " : "";
+    return `<td class="r v dm ${cls}" title="Rel. MAE ${r.diff >= 0 ? "+" : ""}${r.diff.toFixed(3)} per day vs #1 over ${r.T} days">${mark}${fmtP(r.p)}</td>`;
+  }
+
   /** Per issue day: race points, average rank and raw mean across the selected series. */
   function dayTable(rows) {
     const byDay = new Map();
@@ -295,7 +365,8 @@
   const GLOSS = {
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
     pts: () => ["Score", `Average race points. A race is one issue day and one series; every model with a scored forecast takes part. With n in the race, a model at rank r scores 100 × (n − r) / (n − 1): the winner 100, the last 0. A failed run is left out of the race rather than counted as 0. The score averages a model's races, so new models and different field sizes compare fairly. Ranked by ${metricDef().label}.`],
-    races: () => ["Races", `Races the model was due in during the period (issue day × series). A model with fewer than ${MIN_RACES} races, or half of the most any model has, is provisional and listed after the ranked ones.`],
+    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or half of the most any model has, is provisional and listed after the ranked ones.`],
+    dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
@@ -304,7 +375,6 @@
     bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
     best: () => ["Best day", "The model's highest average race points on a single issue day."],
     worst: () => ["Worst day", "The model's lowest average race points on a single issue day."],
-    days: () => ["Days", `Issue days on which the model took part in at least one race in the selected period. The score averages its races (day × series), so fewer days does not lower it; a model with too few races is provisional.`],
     bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
     value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
@@ -370,7 +440,7 @@
     mae: { get: (s) => s.mae, dir: 1 },
     rmse: { get: (s) => s.rmse, dir: 1 },
     pinball: { get: (s) => s.pinball, dir: 1 },
-    days: { get: (s) => s.days, dir: -1 },
+    dm: { get: (s) => s.dm, dir: -1 },
     best: { get: (s) => s.best, dir: -1 },
     worst: { get: (s) => s.worst, dir: -1 },
   };
@@ -401,6 +471,12 @@
     const place = Object.fromEntries(full.filter((x) => !x.provisional).map((x, i) => [x.model, i + 1]));
     const st = full.filter((x) => shown(x.model));
     const bt = S.phase === "backtest";
+    // Diebold-Mariano against #1 of the whole field, on the races of the selected period
+    const inPeriod = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
+    const leader = Object.keys(place).find((m) => place[m] === 1);
+    const dmRows = raceRows("rel_mae").filter((r) => inPeriod.has(r.issue_date));
+    const leadLoss = leader ? dailyLoss(dmRows, leader) : null;
+    const dm = Object.fromEntries(st.map((s) => [s.model, leadLoss && s.model !== leader ? dmTest(dailyLoss(dmRows, s.model), leadLoss) : null]));
     const md = metricDef();
     $("standings").classList.toggle("is-bt", bt);
     const top = st.filter((x) => !x.provisional).slice(0, 3);
@@ -418,14 +494,14 @@
 
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("days", "Days", "days")}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("races", "N evaluations", "races")}${sortTh("dm", "DM p vs #1", "dm")}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel_mae")}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
-      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
+      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
-        <td class="r v">${s.days}</td><td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="r v">${s.races}</td>${dmCell(dm[s.model], s.model === leader)}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
       </tr>`).join("") + "</tbody>";
@@ -442,17 +518,15 @@
       if (e.detail === 0) { const nb = t.querySelector(`button[data-sort="${k}"]`); if (nb) nb.focus(); }   // keyboard: keep focus on the header
       refreshTip();
     };
-    const set = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
-    const refRel = filteredRows("rel_mae", true).filter((r) => set.has(r.issue_date));
-    const refMet = filteredRows(S.metric, true).filter((r) => set.has(r.issue_date));
+    const refRel = filteredRows("rel_mae", true).filter((r) => inPeriod.has(r.issue_date));
     const refs = [...REF].filter((m) => refRel.some((r) => r.model === m));
     if (refs.length && st.length) {
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m);
-        const mm = (k) => mean(filteredRows(k, true).filter((r) => set.has(r.issue_date) && r.model === m).map((r) => r[k]));
+        const mm = (k) => mean(filteredRows(k, true).filter((r) => inPeriod.has(r.issue_date) && r.model === m).map((r) => r[k]));
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td><td class="r v">–</td>
+          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${mine.length}</td>${dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false)}<td class="r v">–</td>
           <td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td><td class="r v">${fmt(mm("mae"), 1)}</td><td class="r v">${fmt(mm("rmse"), 1)}</td><td class="r v">${fmt(mm("pinball"), 1)}</td>
           <td class="r v">–</td><td class="r v">–</td></tr>`;
       }).join(""));
