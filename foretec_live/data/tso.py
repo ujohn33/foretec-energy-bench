@@ -131,19 +131,34 @@ class NedForecast:
             raise RuntimeError("NED_NL_KEY is not set")
         self.retries = retries
 
+    _last = 0.0   # time of the last request, shared by every client in the process (NED rate-limits per key)
+
     def _get(self, q: dict) -> list:
-        for attempt in range(self.retries):
+        """One page. NED rate-limits per key (429): requests are paced, a 429 waits for Retry-After (or backs off)
+        and is retried up to 8 times, other failures `retries` times."""
+        fails = rate_limited = 0
+        while True:
+            wait = NedForecast._last + 0.6 - time.time()   # at most ~100 requests a minute
+            if wait > 0:
+                time.sleep(wait)
+            NedForecast._last = time.time()
             try:
                 r = requests.get(self.URL, params=q, timeout=60,
                                  headers={"X-AUTH-TOKEN": self.key, "Accept": "application/json", "User-Agent": "foretec-energy-bench/1.0"})
+                if r.status_code == 429 and rate_limited < 8:
+                    rate_limited += 1
+                    delay = float(r.headers.get("Retry-After") or min(60, 5 * 2 ** rate_limited))
+                    log.warning("NED rate limit, waiting %.0f s (%d/8)", delay, rate_limited)
+                    time.sleep(delay)
+                    continue
                 r.raise_for_status()
                 return r.json()
             except (requests.RequestException, ValueError) as e:
-                if attempt == self.retries - 1:
+                fails += 1
+                if fails >= self.retries:
                     raise
                 log.warning("NED %s failed (%s), retrying", q.get("type"), e)
-                time.sleep(5 * (attempt + 1))
-        return []
+                time.sleep(5 * fails)
 
     def forecast(self, target: str, first_day: dt.date, last_day: dt.date, types: tuple | None = None,
                  classification: int = 1) -> pd.Series:

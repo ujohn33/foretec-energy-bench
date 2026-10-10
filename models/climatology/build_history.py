@@ -38,8 +38,11 @@ if args.series:
         for year in range(START.year, END.year + 1):
             a, b = max(START, dt.date(year, 1, 1)), min(END, dt.date(year, 12, 31)) + dt.timedelta(days=1)
             s = src.fetch(zone, target, pd.Timestamp(a), pd.Timestamp(b))
+            expected = len(pd.date_range(pd.Timestamp(a), pd.Timestamp(b), freq="15min", inclusive="left"))
+            print(key, year, int(s.notna().sum()), "of", expected, "points", getattr(src, "provenance", {}).get((zone, target)), flush=True)
+            if s.notna().sum() < 0.95 * expected:   # never write a history with a hole (e.g. a source rate-limited us)
+                raise SystemExit(f"{key} {year}: only {int(s.notna().sum())} of {expected} points; history not written")
             new.append(s.rename("value").to_frame().assign(zone=zone, target=target))
-            print(key, year, int(s.notna().sum()), "points", getattr(src, "provenance", {}).get((zone, target)), flush=True)
     new = pd.concat(new).reset_index().rename(columns={"index": "time_utc"})
     out = Path(os.environ.get("FORETEC_HOME", ".")) / "data" / "static" / "climatology_history.parquet"
     old = pd.read_parquet(out)
