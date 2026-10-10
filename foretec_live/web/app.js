@@ -85,23 +85,11 @@
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
   // ---------- race points ----------
-  // A race is one issue day x one series. Its field is every model due in it: those with a scored forecast
-  // (finishers) and those whose run failed or was skipped (DNF). With n due, a finisher at rank r scores
-  // 100 (n - r) / (n - 1), ties sharing the average rank; a DNF scores 0. The winner gets 100 whatever the
-  // field size, and a model is only in races it was due in (not before it was added, not outside its scope),
-  // so the standing is its average over its races.
+  // A race is one issue day x one series. Its field is the models with a scored forecast in it. With n in the
+  // field, a model at rank r scores 100 (n - r) / (n - 1), ties sharing the average rank: the winner gets 100
+  // whatever the field size. A model whose run failed or was skipped is not in that race at all (no 0), so the
+  // standing is its average over the races it finished; the run tracker still shows the failures.
   const MIN_RACES = 24;
-  let SCOPE = {}, TRK = {};
-  function dnfs(d, key) {
-    const cells = TRK[d] || {}, out = [];
-    for (const m in cells) {
-      const c = cells[m], x = c && c.s && c.s[key];
-      // a whole-model skip (no series in the log) counts in every race of the model's scope
-      const whole = c && c.s && (c.s._ === "K" || c.s._ === "F") && (SCOPE[m] || []).includes(key);
-      if (x === "F" || x === "K" || whole) out.push(m);
-    }
-    return out;
-  }
 
   /** Per issue day: race points, average rank and raw mean across the selected series. */
   function dayTable(rows) {
@@ -115,12 +103,10 @@
     }
     const out = [];
     for (const [d, ser] of [...byDay.entries()].sort()) {
-      const ranks = {}, vals = {}, pts = {}, dnf = {};
+      const ranks = {}, vals = {}, pts = {};
       for (const [key, list] of ser) {
         const sorted = [...list].sort((a, b) => a[S.metric] - b[S.metric]);
-        const finished = new Set(sorted.map((r) => r.model));
-        const out_ = dnfs(d, key).filter((m) => !finished.has(m) && !REF.has(m));
-        const n = sorted.length + out_.length;
+        const n = sorted.length;
         if (n < 2) continue;
         sorted.forEach((r) => {
           const tied = sorted.filter((x) => x[S.metric] === r[S.metric]).map((x) => sorted.indexOf(x) + 1);
@@ -129,12 +115,11 @@
           (vals[r.model] ||= []).push(r[S.metric]);
           (pts[r.model] ||= []).push(100 * (n - rk) / (n - 1));
         });
-        for (const m of out_) { (pts[m] ||= []).push(0); dnf[m] = (dnf[m] || 0) + 1; }
       }
       const avgRank = {}, raw = {}, points = {};
       for (const m in ranks) { avgRank[m] = mean(ranks[m]); raw[m] = mean(vals[m]); }
       for (const m in pts) points[m] = mean(pts[m]);
-      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, dnf, n: Object.keys(pts).length });
+      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, n: Object.keys(pts).length });
     }
     return out;
   }
@@ -147,8 +132,8 @@
     const res = {};
     for (const x of sel) {
       for (const m in x.pts) {
-        const s = (res[m] ||= { model: m, sum: 0, races: 0, dnf: 0, ranks: [], dayScores: [] });
-        s.sum += x.pts[m].reduce((a, b) => a + b, 0); s.races += x.pts[m].length; s.dnf += x.dnf[m] || 0;
+        const s = (res[m] ||= { model: m, sum: 0, races: 0, ranks: [], dayScores: [] });
+        s.sum += x.pts[m].reduce((a, b) => a + b, 0); s.races += x.pts[m].length;
         s.dayScores.push(x.points[m]);
         if (x.avgRank[m] != null) s.ranks.push(x.avgRank[m]);
       }
@@ -158,7 +143,6 @@
     return list.map((s) => ({
       ...s,
       score: s.sum / s.races,
-      delivered: (s.races - s.dnf) / s.races,
       provisional: s.races < need,
       avgRank: mean(s.ranks),
       best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
@@ -310,9 +294,8 @@
   const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
   const GLOSS = {
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
-    pts: () => ["Score", `Average race points. A race is one issue day and one series; every model due in it takes part. With n due, the winner scores 100 and the last finisher 100 × (n − rank) / (n − 1); a model whose run failed scores 0. The score averages a model's races, so new models and different field sizes compare fairly. Ranked by ${metricDef().label}.`],
+    pts: () => ["Score", `Average race points. A race is one issue day and one series; every model with a scored forecast takes part. With n in the race, a model at rank r scores 100 × (n − r) / (n − 1): the winner 100, the last 0. A failed run is left out of the race rather than counted as 0. The score averages a model's races, so new models and different field sizes compare fairly. Ranked by ${metricDef().label}.`],
     races: () => ["Races", `Races the model was due in during the period (issue day × series). A model with fewer than ${MIN_RACES} races, or half of the most any model has, is provisional and listed after the ranked ones.`],
-    delivered: () => ["Delivered", "Share of its races in which the model produced a scored forecast. A failed or skipped run is a DNF and scores 0 for that race."],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
@@ -382,7 +365,6 @@
     model: { get: (s) => s.model, dir: 1 },
     pts: { get: (s) => s.score, dir: -1 },
     races: { get: (s) => s.races, dir: -1 },
-    delivered: { get: (s) => s.delivered, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
     rel: { get: (s) => s.rel, dir: 1 },
     mae: { get: (s) => s.mae, dir: 1 },
@@ -1006,8 +988,6 @@
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
-    SCOPE = Object.fromEntries(D.models.map((m) => [m.name, m.scope || []]));
-    TRK = (D.tracker && D.tracker.cells) || {};
     CAVEAT = Object.fromEntries(D.models.filter((m) => m.caveat).map((m) => [m.name, m.caveat]));
     const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
