@@ -13,6 +13,7 @@ import pandas as pd
 
 from .config import paths
 from .data import get_source, record_provenance
+from .registry import load_models
 from .timeutil import as_date, delivery_date, delivery_index, gate_timestamp, local_now
 
 log = logging.getLogger(__name__)
@@ -179,6 +180,8 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
     scores = pd.read_parquet(p["scores"]) if p["scores"].exists() else pd.DataFrame(columns=KEY)
     done = set(map(tuple, scores[KEY].astype(str).values)) if len(scores) else set()
     source = source or get_source(cfg)
+    # a forecast written before a series was excluded from its model (exclude: in model.yaml) is not scored
+    specs = {s.name: s for s in load_models(p["models"])} if p["models"].exists() else {}
     rows = []
     for day_dir in sorted(p["forecasts"].glob("*")):
         if not day_dir.is_dir():
@@ -191,7 +194,8 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
             continue
         fc_all = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
         for (zone, target), grp in fc_all.groupby(["zone", "target"]):
-            todo = [m for m in grp["model"].unique() if (issue_date, m, zone, target) not in done]
+            todo = [m for m in grp["model"].unique() if (issue_date, m, zone, target) not in done
+                    and (m not in specs or specs[m].applies(zone, target))]
             if not todo or not scorable(issue_date, target, cfg, now):
                 continue
             y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now))
