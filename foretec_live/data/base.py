@@ -126,6 +126,9 @@ def get_source(cfg: dict) -> Source:
     if name == "rte":
         from .tso import RteSource
         return RteSource(cfg)
+    if name == "ned":
+        from .tso import NedSource
+        return NedSource(cfg)
     if name == "synthetic":
         from .synthetic import SyntheticSource
         return SyntheticSource(cfg)

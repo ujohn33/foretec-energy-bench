@@ -4,7 +4,7 @@ FR: RTE's day-ahead forecast published at 16:15 on D-1 (RTE Generation Forecast 
     solar), so it is there from the 20:45 scoring run. Fallback: ENTSO-E A69.
 BE: Elia's day-ahead forecast published at 18:00 on D-1 (Elia Open Data, 15 minutes; ENTSO-E gets the same
     forecast in hourly values). Fallback: ENTSO-E A69.
-NL: ENTSO-E A69 (process A01), as published when this runs (by 18:00 on D-1 by regulation).
+NL: left out (model.yaml): the NL actuals are NED's national estimates, TenneT's ENTSO-E forecasts a narrower scope.
 """
 import numpy as np
 import pandas as pd

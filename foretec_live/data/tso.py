@@ -12,8 +12,9 @@ RTE (FR), éCO2mix real-time on odre.opendatasoft.com:
   wind   `eolien` (onshore + offshore), solar `solaire`, 15-minute national values.
 
 NED (NL), Nationaal Energie Dashboard (api.ned.nl, key NED_NL_KEY), backed by TenneT and the grid operators:
-  national 15-minute forecasts of onshore wind, offshore wind and solar, updated about every hour and
-  overwritten as delivery approaches, so only a forecast fetched live before the gate is a gate-time forecast.
+  national 15-minute onshore wind, offshore wind and solar, as current estimates (NedSource: the NL actuals,
+  rooftop PV and DSO-connected turbines included) and as forecasts, updated about every hour and overwritten as
+  delivery approaches, so only a forecast fetched live before the gate is a gate-time forecast.
 
 RTE (FR), Generation Forecast API v3 (key RTE_DATA_KEY = base64 client_id:client_secret): RTE's day-ahead
   ("D-1") wind (onshore + offshore) and solar forecast, published at 16:15 on D-1, after the gate. RTE has no
@@ -119,35 +120,66 @@ class RteSource(Source):
 
 
 class NedForecast:
-    """NED.nl national wind/solar forecast for whole local days (MW). Live use only: NED overwrites it."""
+    """NED.nl national wind/solar series for whole local days (MW): classification 1 = forecast (live use only,
+    NED overwrites it), 2 = current estimate (the national actual: monitored systems upscaled, rooftop included)."""
     URL = "https://api.ned.nl/v1/utilizations"
     TYPES = {"wind": (1, 17), "solar": (2,)}          # onshore + offshore wind; solar
 
-    def __init__(self, key: str | None = None):
+    def __init__(self, key: str | None = None, retries: int = 3):
         self.key = key or os.environ.get("NED_NL_KEY")
         if not self.key:
             raise RuntimeError("NED_NL_KEY is not set")
+        self.retries = retries
 
-    def forecast(self, target: str, first_day: dt.date, last_day: dt.date, types: tuple | None = None) -> pd.Series:
+    def _get(self, q: dict) -> list:
+        for attempt in range(self.retries):
+            try:
+                r = requests.get(self.URL, params=q, timeout=60,
+                                 headers={"X-AUTH-TOKEN": self.key, "Accept": "application/json", "User-Agent": "foretec-energy-bench/1.0"})
+                r.raise_for_status()
+                return r.json()
+            except (requests.RequestException, ValueError) as e:
+                if attempt == self.retries - 1:
+                    raise
+                log.warning("NED %s failed (%s), retrying", q.get("type"), e)
+                time.sleep(5 * (attempt + 1))
+        return []
+
+    def forecast(self, target: str, first_day: dt.date, last_day: dt.date, types: tuple | None = None,
+                 classification: int = 1) -> pd.Series:
         total = None
         for typ in types or self.TYPES[target]:
             rows, page = [], 1
             while True:
                 # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps
-                q = {"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1, "classification": 1, "activity": 1,
-                     "validfrom[after]": first_day.isoformat(), "validfrom[strictly_before]": (last_day + dt.timedelta(days=1)).isoformat(),
-                     "itemsPerPage": 200, "page": page}
-                r = requests.get(self.URL, params=q, timeout=60,
-                                 headers={"X-AUTH-TOKEN": self.key, "Accept": "application/json", "User-Agent": "foretec-energy-bench/1.0"})
-                r.raise_for_status()
-                got = r.json()
+                got = self._get({"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1,
+                                 "classification": classification, "activity": 1,
+                                 "validfrom[after]": first_day.isoformat(),
+                                 "validfrom[strictly_before]": (last_day + dt.timedelta(days=1)).isoformat(),
+                                 "itemsPerPage": 200, "page": page})
                 rows += got
                 if len(got) < 200:
                     break
                 page += 1
             s = _series([{"t": x["validfrom"], "value": x["capacity"] / 1000.0} for x in rows], "t")   # kW -> MW
-            total = s if total is None else total.add(s, fill_value=None)
+            total = s if total is None else total.add(s)       # both parts needed for a quarter-hour
         return total if total is not None else pd.Series(dtype=float)
+
+
+class NedSource(Source):
+    """NL wind (onshore + offshore) and solar as NED's national current estimate. ENTSO-E's NL wind is offshore plus
+    TSO-metered onshore and its NL solar only TSO-metered plants (about 1% of the fleet); NED covers all of it."""
+    name = "ned"
+
+    def fetch(self, zone, target, start, end):
+        if zone != "NL" or target not in NedForecast.TYPES:
+            return pd.Series(dtype=float)
+        ned = NedForecast(retries=2 if self.cfg.get("_fallback") else 4)
+        tz = "Europe/Amsterdam"
+        first = pd.Timestamp(start).tz_localize("UTC").tz_convert(tz).date()
+        last = (pd.Timestamp(end) - pd.Timedelta("15min")).tz_localize("UTC").tz_convert(tz).date()
+        s = ned.forecast(target, first, last, classification=2)
+        return s[(s.index >= start) & (s.index < end)] if not s.empty else s
 
 
 class RteForecast:
