@@ -77,6 +77,11 @@
   function filteredRows(metric = S.metric, refs = false) {
     return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
+  // the races are run over the whole field: the covariate filter only chooses which models are shown, so a
+  // model's score is the same under All, With and Without (zone and target choose which races count)
+  function raceRows(metric = S.metric) {
+    return ROWS.filter((r) => !REF.has(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+  }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
   // ---------- race points ----------
@@ -114,7 +119,7 @@
       for (const [key, list] of ser) {
         const sorted = [...list].sort((a, b) => a[S.metric] - b[S.metric]);
         const finished = new Set(sorted.map((r) => r.model));
-        const out_ = dnfs(d, key).filter((m) => !finished.has(m) && !REF.has(m) && inField(m));
+        const out_ = dnfs(d, key).filter((m) => !finished.has(m) && !REF.has(m));
         const n = sorted.length + out_.length;
         if (n < 2) continue;
         sorted.forEach((r) => {
@@ -408,14 +413,17 @@
   let DAYS = [];
 
   function renderStandings() {
-    const st = standings(DAYS, S.phase).filter((x) => shown(x.model));
+    const full = standings(DAYS, S.phase);
+    // place in the whole field, so the number does not change with the covariate filter or the top-N slider
+    const place = Object.fromEntries(full.filter((x) => !x.provisional).map((x, i) => [x.model, i + 1]));
+    const st = full.filter((x) => shown(x.model));
     const bt = S.phase === "backtest";
     const md = metricDef();
     $("standings").classList.toggle("is-bt", bt);
     const top = st.filter((x) => !x.provisional).slice(0, 3);
     $("podium").innerHTML = top.length ? top.map((s, i) => `
-      <div class="pod ${i === 0 ? "lead" : ""}">
-        <div class="pod-top"><span class="place" aria-label="${["1st", "2nd", "3rd"][i]} place">${i + 1}</span>
+      <div class="pod ${place[s.model] === 1 ? "lead" : ""}">
+        <div class="pod-top"><span class="place" aria-label="place ${place[s.model]}">${place[s.model]}</span>
           <div class="name"><i style="background:${color(s.model)}"></i>${nm(s.model)}</div>
           ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="stats">
@@ -429,7 +437,7 @@
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts")}${sortTh("races", "Races", "races")}${sortTh("delivered", "Delivered", "delivered")}${sortTh("rank", "Avg rank", "rank")}${sortTh("rel", "Rel. MAE", "rel_mae")}
       ${S.metric !== "rel_mae" ? sortTh("metric", md.label + unitSuffix(), S.metric) : ""}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}<th><span class="lbl" data-tip="bar">Score</span></th></tr></thead><tbody>` +
-      sortRows(st.map((s, i) => ({ ...s, pos: i + 1 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
+      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td class="r v">${fmt(s.score, 1)}</td><td class="r v">${s.races}</td><td class="r v">${fmt(100 * s.delivered, 0)}%</td>
@@ -857,7 +865,7 @@
   }
   // explorer ranking: points over every scored day (live and backtest) for the explorer's zone and target
   function explorerRanking() {
-    const rows = ROWS.filter((r) => !REF.has(r.model) && inField(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
+    const rows = ROWS.filter((r) => !REF.has(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
       && (S.phase === "all" || r.phase === S.phase));
     const sum = {}, n = {};
     for (const x of dayTable(rows)) for (const m in x.pts) { sum[m] = (sum[m] || 0) + x.pts[m].reduce((a, b) => a + b, 0); n[m] = (n[m] || 0) + x.pts[m].length; }
@@ -947,8 +955,8 @@
   // the top-N slider lives on the leaderboard; elsewhere every model is shown
   const shown = (m) => PAGE !== "leaderboard" || SHOWN.has(m);
   function updateShown() {
-    let st = standings(DAYS, S.phase);
-    if (!st.length) st = standings(DAYS, "all");
+    let st = standings(DAYS, S.phase).filter((x) => inField(x.model));
+    if (!st.length) st = standings(DAYS, "all").filter((x) => inField(x.model));
     const ranked = st.map((x) => x.model);
     const rest = MODELS.filter((m) => !ranked.includes(m) && inField(m));
     // the grid operators' forecasts are the yardstick: always shown, whatever the top-N slider says
@@ -963,7 +971,7 @@
   function renderAll() {
     if (!$("standings")) return;
     saveFilters();
-    DAYS = dayTable(filteredRows());
+    DAYS = dayTable(raceRows());
     updateShown();
     renderControls();
     renderStandings();
