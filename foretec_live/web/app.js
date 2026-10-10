@@ -142,8 +142,8 @@
   function standings(days, phase) {
     const sel = days.filter((x) => phase === "all" || x.phase === phase);
     const set = new Set(sel.map((x) => x.d));
-    const relRows = filteredRows("rel_mae").filter((r) => set.has(r.issue_date));
-    const metRows = filteredRows().filter((r) => set.has(r.issue_date));
+    const byMetric = Object.fromEntries(METRICS.map((m) => [m.k, filteredRows(m.k).filter((r) => set.has(r.issue_date))]));
+    const meanOf = (k, model) => mean(byMetric[k].filter((r) => r.model === model).map((r) => r[k]));
     const res = {};
     for (const x of sel) {
       for (const m in x.pts) {
@@ -162,8 +162,7 @@
       provisional: s.races < need,
       avgRank: mean(s.ranks),
       best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
-      rel: mean(relRows.filter((r) => r.model === s.model).map((r) => r.rel_mae)),
-      metric: mean(metRows.filter((r) => r.model === s.model).map((r) => r[S.metric])),
+      rel: meanOf("rel_mae", s.model), mae: meanOf("mae", s.model), rmse: meanOf("rmse", s.model), pinball: meanOf("pinball", s.model),
     })).sort((a, b) => (a.provisional - b.provisional) || b.score - a.score || (a.avgRank ?? 99) - (b.avgRank ?? 99));
   }
 
@@ -188,7 +187,6 @@
   function renderControls() {
     options($("f-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: z }))], S.zone);
     options($("f-target"), [{ k: "all", label: "All targets" }, ...Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t }))], S.target);
-    seg($("f-metric"), METRICS.map((m) => ({ k: m.k, label: m.label, tip: m.k })), S.metric, (k) => { S.metric = k; if (!rawAllowed()) S.view = "rank"; renderAll(); });
     const hasLive = ROWS.some((r) => r.phase === "live");
     seg($("f-phase"), [
       { k: "live", label: "Live", disabled: !hasLive, title: hasLive ? "" : "No live forecasts scored yet" },
@@ -323,7 +321,7 @@
     bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
     best: () => ["Best day", "The model's highest average race points on a single issue day."],
     worst: () => ["Worst day", "The model's lowest average race points on a single issue day."],
-    days: () => ["Days", "Issue days on which the model was scored in the selected period. Fewer days means fewer chances to collect points."],
+    days: () => ["Days", `Issue days on which the model took part in at least one race in the selected period. The score averages its races (day × series), so fewer days does not lower it; a model with too few races is provisional.`],
     bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
     value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
@@ -387,11 +385,14 @@
     delivered: { get: (s) => s.delivered, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
     rel: { get: (s) => s.rel, dir: 1 },
-    metric: { get: (s) => s.metric, dir: 1 },
+    mae: { get: (s) => s.mae, dir: 1 },
+    rmse: { get: (s) => s.rmse, dir: 1 },
+    pinball: { get: (s) => s.pinball, dir: 1 },
+    days: { get: (s) => s.days, dir: -1 },
     best: { get: (s) => s.best, dir: -1 },
     worst: { get: (s) => s.worst, dir: -1 },
   };
-  function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] && !(k === "metric" && S.metric === "rel_mae") ? k : "pos"; }
+  function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] ? k : "pos"; }
   function sortRows(st) {
     const k = sortKey(), dir = k === S.sort.k ? S.sort.dir : 1, get = SORT_COLS[k].get;
     return [...st].sort((a, b) => {
@@ -434,17 +435,17 @@
       </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
     const t = $("standings-table");
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts")}${sortTh("races", "Races", "races")}${sortTh("delivered", "Delivered", "delivered")}${sortTh("rank", "Avg rank", "rank")}${sortTh("rel", "Rel. MAE", "rel_mae")}
-      ${S.metric !== "rel_mae" ? sortTh("metric", md.label + unitSuffix(), S.metric) : ""}
-      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}<th><span class="lbl" data-tip="bar">Score</span></th></tr></thead><tbody>` +
+    const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("days", "Days", "days")}${sortTh("rank", "Avg rank", "rank")}
+      ${sortTh("rel", "Rel. MAE", "rel_mae")}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
+      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3 }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td class="r v">${fmt(s.score, 1)}</td><td class="r v">${s.races}</td><td class="r v">${fmt(100 * s.delivered, 0)}%</td>
-        <td class="r v">${fmt(s.avgRank, 2)}</td><td class="r v">${fmt(s.rel, 3)}</td>
-        ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(s.metric, md.d)}</td>` : ""}
-        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
         <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
+        <td class="r v">${s.days}</td><td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
+        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
     const starred = st.filter((x) => CAVEAT[x.model]);
@@ -467,11 +468,11 @@
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m);
+        const mm = (k) => mean(filteredRows(k, true).filter((r) => set.has(r.issue_date) && r.model === m).map((r) => r[k]));
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="r v">–</td><td class="r v">${mine.length}</td><td class="r v">–</td><td class="r v">–</td><td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td>
-          ${S.metric !== "rel_mae" ? `<td class="r v">${fmt(mean(refMet.filter((r) => r.model === m).map((r) => r[S.metric])), md.d)}</td>` : ""}
-          <td class="r v">–</td><td class="r v">–</td>
-          <td class="wrap">Reference, not ranked: published after the gate${only}</td></tr>`;
+          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${new Set(mine.map((r) => r.issue_date)).size}</td><td class="r v">–</td>
+          <td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td><td class="r v">${fmt(mm("mae"), 1)}</td><td class="r v">${fmt(mm("rmse"), 1)}</td><td class="r v">${fmt(mm("pinball"), 1)}</td>
+          <td class="r v">–</td><td class="r v">–</td></tr>`;
       }).join(""));
     }
   }
@@ -980,7 +981,9 @@
     refreshTip();
   }
 
-  const FILTER_KEYS = ["zone", "target", "metric", "phase", "covFilter", "topN", "sort"];
+  // the metric is no longer a filter: races rank by Rel. MAE (within a race the same order as MAE), and the
+  // standings show all four metrics as sortable columns
+  const FILTER_KEYS = ["zone", "target", "phase", "covFilter", "topN", "sort"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -1046,7 +1049,6 @@
       const changed = () => { S.zone = S.x.zone; S.target = S.x.target; S.topN = S.xTop; saveFilters();
         history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
       const segs = () => {
-        seg($("x-metric"), METRICS.map((m) => ({ k: m.k, label: m.label, tip: m.k })), S.metric, (k) => { S.metric = k; segs(); changed(); renderExplorerChart(); });
         seg($("x-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
           (k) => { S.phase = k; segs(); renderExplorerControls(); changed(); renderExplorerChart(); });
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
