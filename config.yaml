@@ -36,6 +36,8 @@ fallback_source: [elia, rte, ned, energycharts]
 # Elia sends ENTSO-E hourly wind and solar (forecasts and actuals); Elia Open Data has the quarter-hours.
 # NL: ENTSO-E has offshore + TSO-metered onshore wind and TSO-metered solar only; NED has the national totals.
 source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned}
+# only the preferred source, no fallback: ENTSO-E's NL wind/solar is a different quantity, a gap is better than mixing
+exclusive_series: [NL_wind, NL_solar]
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

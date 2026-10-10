@@ -149,18 +149,23 @@ class NedForecast:
                  classification: int = 1) -> pd.Series:
         total = None
         for typ in types or self.TYPES[target]:
-            rows, page = [], 1
-            while True:
-                # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps
-                got = self._get({"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1,
-                                 "classification": classification, "activity": 1,
-                                 "validfrom[after]": first_day.isoformat(),
-                                 "validfrom[strictly_before]": (last_day + dt.timedelta(days=1)).isoformat(),
-                                 "itemsPerPage": 200, "page": page})
-                rows += got
-                if len(got) < 200:
-                    break
-                page += 1
+            rows = []
+            a = first_day
+            while a <= last_day:   # a month per query: year-long ranges time out at NED's gateway (504)
+                b = min(last_day, a + dt.timedelta(days=30))
+                page = 1
+                while True:
+                    # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps
+                    got = self._get({"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1,
+                                     "classification": classification, "activity": 1,
+                                     "validfrom[after]": a.isoformat(),
+                                     "validfrom[strictly_before]": (b + dt.timedelta(days=1)).isoformat(),
+                                     "itemsPerPage": 200, "page": page})
+                    rows += got
+                    if len(got) < 200:
+                        break
+                    page += 1
+                a = b + dt.timedelta(days=1)
             s = _series([{"t": x["validfrom"], "value": x["capacity"] / 1000.0} for x in rows], "t")   # kW -> MW
             total = s if total is None else total.add(s)       # both parts needed for a quarter-hour
         return total if total is not None else pd.Series(dtype=float)

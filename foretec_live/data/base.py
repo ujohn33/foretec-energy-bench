@@ -67,6 +67,10 @@ class FallbackSource(Source):
             chosen = next((s for s in self.fallbacks if s.name == pref), None)
             if chosen is not None:
                 first, rest = chosen, [self.primary] + [s for s in self.fallbacks if s is not chosen]
+                # exclusive_series: the other sources measure a different quantity (NL: ENTSO-E has metered plants
+                # only), so a gap stays a gap instead of being filled with an incompatible number
+                if f"{zone}_{target}" in (self.cfg.get("exclusive_series") or []):
+                    rest = []
         try:
             out = first.fetch(zone, target, start, end).reindex(idx)
         except Exception as e:  # noqa: BLE001 - a dead primary must not stop the run

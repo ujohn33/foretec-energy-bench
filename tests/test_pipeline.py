@@ -411,6 +411,11 @@ def test_source_by_series_puts_a_fallback_first(cfg):
     assert be.iloc[0] == 1.0 and (be.iloc[1:] == 2.0).all()          # Elia first, ENTSO-E fills its gap
     assert chain.provenance[("BE", "wind")] == {"elia": 7, "entsoe": 1, "missing": 0}
     assert (chain.fetch("NL", "wind", a, b) == 1.0).all()             # other series: the primary as before
+    # exclusive: a different quantity elsewhere, so the preferred source's gap stays a gap
+    excl = FallbackSource({**cfg, "source_by_series": {"NL_solar": "ned"}, "exclusive_series": ["NL_solar"]},
+                          Fake("entsoe", 1.0), Fake("ned", 3.0, gap=True))
+    nl = excl.fetch("NL", "solar", a, b)
+    assert len(nl) == 7 and (nl == 3.0).all() and excl.provenance[("NL", "solar")]["missing"] == 1
 
 
 def test_series_rerun_merges_into_backtest_day(cfg):
