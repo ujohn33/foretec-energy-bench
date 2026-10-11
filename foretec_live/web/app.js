@@ -477,7 +477,6 @@
     const dmRows = raceRows("rel_mae").filter((r) => inPeriod.has(r.issue_date));
     const leadLoss = leader ? dailyLoss(dmRows, leader) : null;
     const dm = Object.fromEntries(st.map((s) => [s.model, leadLoss && s.model !== leader ? dmTest(dailyLoss(dmRows, s.model), leadLoss) : null]));
-    const md = metricDef();
     $("standings").classList.toggle("is-bt", bt);
     const top = st.filter((x) => !x.provisional).slice(0, 3);
     $("podium").innerHTML = top.length ? top.map((s, i) => `
@@ -488,7 +487,7 @@
         <div class="stats">
           <div class="stat"><span data-tip="pts">Score</span><b>${fmt(s.score, 1)}</b></div>
           <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
-          <div class="stat"><span data-tip="${S.metric}">${esc(md.label)}</span><b>${fmt(s.metric, md.d)}</b></div>
+          <div class="stat"><span data-tip="rel_mae">Rel. MAE</span><b>${fmt(s.rel, 3)}</b></div>
         </div>
       </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
