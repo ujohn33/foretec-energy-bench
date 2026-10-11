@@ -26,6 +26,14 @@ def _now(cfg, now=None) -> pd.Timestamp:
     return now.tz_localize(cfg["timezone"]) if now.tzinfo is None else now.tz_convert(cfg["timezone"])
 
 
+def voided(issue_date, zone, target, cfg) -> str | None:
+    """Why a live forecast is never scored (config void_live), or None."""
+    for v in cfg.get("void_live") or []:
+        if f"{zone}_{target}" in v["series"] and str(issue_date) <= str(v["through"]):
+            return v.get("reason", "voided")
+    return None
+
+
 def scorable(issue_date, target, cfg, now=None) -> bool:
     """Has enough time passed for the actuals of this target to be final?"""
     now = _now(cfg, now)
@@ -196,6 +204,8 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
         for (zone, target), grp in fc_all.groupby(["zone", "target"]):
             todo = [m for m in grp["model"].unique() if (issue_date, m, zone, target) not in done
                     and (m not in specs or specs[m].applies(zone, target))]
+            if results_subdir == "results" and voided(issue_date, zone, target, cfg):
+                todo = []
             if not todo or not scorable(issue_date, target, cfg, now):
                 continue
             y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now))

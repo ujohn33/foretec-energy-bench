@@ -120,10 +120,13 @@ class RteSource(Source):
 
 
 class NedForecast:
-    """NED.nl national wind/solar series for whole local days (MW): classification 1 = forecast (live use only,
-    NED overwrites it), 2 = current estimate (the national actual: monitored systems upscaled, rooftop included)."""
+    """NED.nl national wind/solar/load series for whole local days (MW): classification 1 = forecast (live use only,
+    NED overwrites it), 2 = current estimate (the national actual: monitored systems upscaled, rooftop included).
+    Load is ElectricityLoad (type 59, activity consuming): gross national consumption, including what rooftop and
+    distribution-connected generation supply locally (unlike the net grid load TenneT reports to ENTSO-E)."""
     URL = "https://api.ned.nl/v1/utilizations"
-    TYPES = {"wind": (1, 17), "solar": (2,)}          # onshore + offshore wind; solar
+    TYPES = {"wind": (1, 17), "solar": (2,), "load": (59,)}   # onshore + offshore wind; solar; electricity load
+    ACTIVITY = {"load": 2}                                     # 1 providing (generation), 2 consuming
 
     def __init__(self, key: str | None = None, retries: int = 3):
         self.key = key or os.environ.get("NED_NL_KEY")
@@ -172,7 +175,7 @@ class NedForecast:
                 while True:
                     # the API accepts plain dates (local, Europe/Amsterdam with granularitytimezone=1), not timestamps
                     got = self._get({"point": 0, "type": typ, "granularity": 4, "granularitytimezone": 1,
-                                     "classification": classification, "activity": 1,
+                                     "classification": classification, "activity": self.ACTIVITY.get(target, 1),
                                      "validfrom[after]": a.isoformat(),
                                      "validfrom[strictly_before]": (b + dt.timedelta(days=1)).isoformat(),
                                      "itemsPerPage": 200, "page": page})
@@ -187,8 +190,9 @@ class NedForecast:
 
 
 class NedSource(Source):
-    """NL wind (onshore + offshore) and solar as NED's national current estimate. ENTSO-E's NL wind is offshore plus
-    TSO-metered onshore and its NL solar only TSO-metered plants (about 1% of the fleet); NED covers all of it."""
+    """NL wind (onshore + offshore), solar and load as NED's national current estimate. ENTSO-E's NL wind is offshore
+    plus TSO-metered onshore, its NL solar only TSO-metered plants (about 1% of the fleet) and its NL load net of
+    embedded solar; NED covers all of it (load gross, as Elia and RTE report it)."""
     name = "ned"
 
     def fetch(self, zone, target, start, end):

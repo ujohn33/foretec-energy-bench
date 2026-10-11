@@ -34,10 +34,15 @@ source: entsoe               # ENTSO-E Transparency Platform (ENTSOE_TOKEN), par
 fallback_source: [elia, rte, ned, energycharts]
 # series whose TSO publishes finer data than it sends ENTSO-E: that source first, then the normal chain.
 # Elia sends ENTSO-E hourly wind and solar (forecasts and actuals); Elia Open Data has the quarter-hours.
-# NL: ENTSO-E has offshore + TSO-metered onshore wind and TSO-metered solar only; NED has the national totals.
-source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned}
+# NL: ENTSO-E has offshore + TSO-metered onshore wind, TSO-metered solar only and load net of embedded solar;
+# NED has the national totals (load gross, like Elia's and RTE's total load).
+source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned}
 # only the preferred source, no fallback: ENTSO-E's NL wind/solar is a different quantity, a gap is better than mixing
-exclusive_series: [NL_wind, NL_solar]
+exclusive_series: [NL_wind, NL_solar, NL_load]
+# live forecasts made from a different quantity than the one now scored: kept and shown, never scored
+void_live:
+  - {series: [NL_wind, NL_solar], through: 2026-10-10, reason: "made from ENTSO-E's NL history before the switch to NED's national estimate"}
+  - {series: [NL_load], through: 2026-10-11, reason: "made from ENTSO-E's net NL load before the switch to NED's gross load"}
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

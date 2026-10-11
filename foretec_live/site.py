@@ -182,7 +182,7 @@ def _timeline(cfg) -> dict:
 
 def _tracker(cfg) -> dict:
     """Per issue day and model: forecasts generated, on time, scored. Built from the run logs and scores."""
-    from .score import scorable
+    from .score import scorable, voided
     from .timeutil import gate_timestamp
 
     s = _scores(cfg)
@@ -201,11 +201,17 @@ def _tracker(cfg) -> dict:
         due = {(z, t) for z in cfg["zones"] for t in cfg["targets"] if scorable(day, t, cfg)}
         per = {}
         for r in meta.get("runs", []) + ref_runs:
-            c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "sec": 0.0, "msgs": [],
+            c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "void": 0, "sec": 0.0, "msgs": [],
                                             "s": {}, "why": {}})
             key = f"{r.get('zone', '')}_{r.get('target', '')}"
-            # per series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped
-            if r["status"] == "ok":
+            # per series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped, V voided
+            why_void = phase == "live" and voided(day, r.get("zone"), r.get("target"), cfg)
+            if r["status"] == "ok" and why_void:
+                c["ok"] += 1
+                c["void"] += 1
+                c["s"][key] = "V"
+                c["why"][key] = why_void
+            elif r["status"] == "ok":
                 c["ok"] += 1
                 if (r.get("zone"), r.get("target")) in due:
                     c["due"] += 1

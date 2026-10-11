@@ -848,11 +848,12 @@
   }
 
   // ---------- pipeline: run tracker ----------
-  // one series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped
+  // one series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped, V voided
   const SER = {
     S: { k: "ok", icon: "✓", label: "forecast and scored" }, W: { k: "wait", icon: "…", label: "forecast, scoring not due yet" },
     M: { k: "miss", icon: "!", label: "due, actuals missing" }, F: { k: "err", icon: "✕", label: "forecast failed" },
     K: { k: "err", icon: "✕", label: "skipped" }, L: { k: "late", icon: "⏱", label: "finished after the gate, not scored" },
+    V: { k: "void", icon: "⊘", label: "voided, not scored" },
   };
   const trkZones = () => (S.zone === "all" ? D.config.zones : [S.zone]);
   const trkTargets = () => (S.target === "all" ? Object.keys(D.config.targets) : [S.target]);
@@ -861,10 +862,12 @@
     if (!c) return null;
     if (c.err || c.skip) return { k: "err", icon: "✕", label: `error: ${c.err} failed, ${c.skip} skipped` };
     if (day.phase === "live" && day.on_time === false) return { k: "late", icon: "⏱", label: "finished after the gate, not scored" };
-    if (c.due === 0) return { k: "wait", icon: "…", label: "forecasts generated, scoring not due yet" };
-    if (c.scored < c.due) return { k: "miss", icon: "!", label: `scored ${c.scored} of ${c.due} due series (awaiting actuals)` };
-    if (c.due < c.ok) return { k: "part", icon: "◐", label: `scored ${c.scored} of ${c.ok}; the rest is not due yet` };
-    return { k: "ok", icon: "✓", label: `all ${c.ok} series forecast and scored` };
+    const nv = c.void || 0, vtxt = nv ? `; ${nv} voided` : "";
+    if (c.due === 0 && nv === c.ok) return { k: "void", icon: "⊘", label: `${nv} series voided, not scored` };
+    if (c.due === 0) return { k: "wait", icon: "…", label: `forecasts generated, scoring not due yet${vtxt}` };
+    if (c.scored < c.due) return { k: "miss", icon: "!", label: `scored ${c.scored} of ${c.due} due series (awaiting actuals)${vtxt}` };
+    if (c.due + nv < c.ok) return { k: "part", icon: "◐", label: `scored ${c.scored} of ${c.ok}; the rest is not due yet${vtxt}` };
+    return { k: "ok", icon: "✓", label: nv ? `scored ${c.scored} of ${c.ok}${vtxt}` : `all ${c.ok} series forecast and scored` };
   }
   const localTime = (u) => (u ? new Date(String(u).replace(" ", "T").replace(/\+00:00$/, "Z").replace(/(\d)$/, "$1Z"))
     .toLocaleTimeString("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" }) : "–");

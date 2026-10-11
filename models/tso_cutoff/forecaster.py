@@ -7,7 +7,8 @@ NL: the NED.nl national wind (onshore + offshore) and solar forecast (Nationaal 
     approaches, so it is used only in a live run before the gate.
 FR: none. RTE's next-day wind/solar forecast is published at 16:15 on D-1 (after the gate); its API has
     no D-2/D-3 vintage for wind or solar (checked 5 Oct 2026).
-Load: ENTSO-E A65 day-ahead total load forecast, every zone (published by 10:00 by regulation).
+Load: BE and FR, the ENTSO-E A65 day-ahead total load forecast (published by 10:00 by regulation); NL, NED.nl's
+    national load forecast (gross consumption, the same quantity as the NL load actuals), live only like NL wind/solar.
 Fallback, live runs only: ENTSO-E A69 as published when this runs (often not there yet; TSOs have until 18:00
 on D-1, and after the gate it would be that later version).
 Point forecasts only: quantiles of parts do not add up to quantiles of the total.
@@ -41,9 +42,11 @@ for key in series:
     def ned():
         if not live:
             raise RuntimeError("live only (NED overwrites its forecast)")
-        return NedForecast().forecast(target, issue, delivery)   # national: onshore + offshore wind, solar
+        return NedForecast().forecast(target, issue, delivery)   # national: onshore + offshore wind, solar, load
 
-    if target == "load":   # day-ahead total load forecast, due two hours before the gate
+    if target == "load" and zone == "NL":   # TenneT's A65 is not the quantity scored (NED's gross load)
+        sources = [("NED.nl", ned)]
+    elif target == "load":   # day-ahead total load forecast, due two hours before the gate
         sources = [("ENTSO-E A65", lambda: EntsoeSource(cfg).tso_forecast(zone, "load", idx[0], end))]
     else:
         sources = {"BE": [("Elia 11:00", lambda: elia.dayahead_11h(target, idx[0], end))],

@@ -432,3 +432,17 @@ def test_series_rerun_merges_into_backtest_day(cfg):
     assert (key == "BE_wind").sum() == (bkey == "BE_wind").sum()
     log = json.loads((f.parent / "_run.json").read_text())
     assert sum(1 for r in log["runs"] if r["model"] == "naive_daily") == len(cfg["zones"]) * len(cfg["targets"])
+
+
+def test_voided_live_series_are_never_scored(cfg):
+    """void_live: live forecasts made from a different quantity stay on disk and in the tracker, never scored."""
+    d = dt.date(2026, 9, 20)
+    cfg["void_live"] = [{"series": ["NL_wind", "NL_load"], "through": "2026-09-20", "reason": "test"}]
+    run_forecasts(d, cfg, only_models=["naive_weekly"])
+    s = score_pending(cfg, now=pd.Timestamp("2026-10-01"))
+    keys = set(s["zone"] + "_" + s["target"])
+    assert not keys & {"NL_wind", "NL_load"} and "NL_solar" in keys
+    assert len(score_pending(cfg, now=pd.Timestamp("2026-10-02"))) == len(s)   # a later pass does not re-score them
+    from foretec_live.site import _tracker
+    c = _tracker(cfg)["cells"][d.isoformat()]["naive_weekly"]
+    assert c["s"]["NL_wind"] == "V" and c["why"]["NL_wind"] == "test" and c["void"] == 2

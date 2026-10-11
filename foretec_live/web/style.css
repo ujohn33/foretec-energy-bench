@@ -367,3 +367,4 @@ tr.ref td{color:var(--ink2); background:var(--raise)}
 tr.ref td.pos{font-style:italic}
 tr.prov td{color:var(--ink2)} tr.prov td.pos{font-style:italic; font-size:.82rem}
 td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.dm.better{color:var(--blue-ink); font-weight:700} td.dm.lead{color:var(--ink2)}
+.trk.void{background:var(--raise); color:var(--ink2); border-color:var(--rule); border-style:dashed} .trk.grid i.void{background:transparent; box-shadow:inset 0 0 0 1px var(--ink2)}

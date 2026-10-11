@@ -28,6 +28,7 @@ cfg = load_config()
 ap = argparse.ArgumentParser()
 ap.add_argument("--targets", nargs="*", help="add only these targets, from ENTSO-E, keeping the rest of the file")
 ap.add_argument("--series", nargs="*", help="rebuild only these series (ZONE_target) through the source chain")
+ap.add_argument("--from-year", type=int, help="with --series: start in this year (a source with a shorter history)")
 args = ap.parse_args()
 if args.series:
     from foretec_live.data import get_source
@@ -35,7 +36,7 @@ if args.series:
     src, new = get_source(cfg), []
     for key in args.series:
         zone, target = key.split("_")
-        for year in range(START.year, END.year + 1):
+        for year in range(args.from_year or START.year, END.year + 1):
             a, b = max(START, dt.date(year, 1, 1)), min(END, dt.date(year, 12, 31)) + dt.timedelta(days=1)
             s = src.fetch(zone, target, pd.Timestamp(a), pd.Timestamp(b))
             expected = len(pd.date_range(pd.Timestamp(a), pd.Timestamp(b), freq="15min", inclusive="left"))
