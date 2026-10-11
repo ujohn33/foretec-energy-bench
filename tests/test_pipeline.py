@@ -24,6 +24,7 @@ def cfg(tmp_path, monkeypatch):
     monkeypatch.setenv("FORETEC_HOME", str(tmp_path))
     c = load_config(tmp_path / "config.yaml")
     c["source"] = "synthetic"
+    c["void_live"] = []   # the production voids are dated; tests set their own
     return c
 
 
@@ -439,6 +440,8 @@ def test_voided_live_series_are_never_scored(cfg):
     d = dt.date(2026, 9, 20)
     cfg["void_live"] = [{"series": ["NL_wind", "NL_load"], "through": "2026-09-20", "reason": "test"}]
     run_forecasts(d, cfg, only_models=["naive_weekly"])
+    log = paths(cfg)["forecasts"] / d.isoformat() / "_run.json"
+    log.write_text(json.dumps({**json.loads(log.read_text()), "run_finished_utc": "2026-09-20 09:35:00+00:00"}))   # on time
     s = score_pending(cfg, now=pd.Timestamp("2026-10-01"))
     keys = set(s["zone"] + "_" + s["target"])
     assert not keys & {"NL_wind", "NL_load"} and "NL_solar" in keys
