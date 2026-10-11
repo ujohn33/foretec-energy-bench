@@ -10,7 +10,7 @@
   ];
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -194,8 +194,18 @@
     return out;
   }
 
-  function standings(days, phase) {
+  // the points window: all time, or the last N calendar days up to the latest scored issue day of the period
+  const WINDOWS = { all: null, d30: 30, d7: 7 };
+  function periodDays(days, phase) {
     const sel = days.filter((x) => phase === "all" || x.phase === phase);
+    const n = WINDOWS[S.win];
+    if (!n || !sel.length) return sel;
+    const from = addDays(sel[sel.length - 1].d, 1 - n);
+    return sel.filter((x) => x.d >= from);
+  }
+
+  function standings(days, phase) {
+    const sel = periodDays(days, phase);
     const set = new Set(sel.map((x) => x.d));
     const byMetric = Object.fromEntries(METRICS.map((m) => [m.k, filteredRows(m.k).filter((r) => set.has(r.issue_date))]));
     const meanOf = (k, model) => mean(byMetric[k].filter((r) => r.model === model).map((r) => r[k]));
@@ -247,6 +257,11 @@
       { k: "backtest", label: "Backtest" },
       { k: "all", label: "All" },
     ], S.phase, (k) => { S.phase = k; renderAll(); });
+    seg($("f-win"), [
+      { k: "all", label: "All time" },
+      { k: "d30", label: "30 days", title: "Points over the last 30 days up to the latest scored issue day" },
+      { k: "d7", label: "7 days", title: "Points over the last 7 days up to the latest scored issue day" },
+    ], S.win, (k) => { S.win = k; renderAll(); });
     seg($("f-cov"), [
       { k: "all", label: "All" },
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
@@ -472,7 +487,7 @@
     const st = full.filter((x) => shown(x.model));
     const bt = S.phase === "backtest";
     // Diebold-Mariano against #1 of the whole field, on the races of the selected period
-    const inPeriod = new Set(DAYS.filter((x) => S.phase === "all" || x.phase === S.phase).map((x) => x.d));
+    const inPeriod = new Set(periodDays(DAYS, S.phase).map((x) => x.d));
     const leader = Object.keys(place).find((m) => place[m] === 1);
     const dmRows = raceRows("rel_mae").filter((r) => inPeriod.has(r.issue_date));
     const leadLoss = leader ? dailyLoss(dmRows, leader) : null;
@@ -1038,7 +1053,7 @@
 
   // the metric is no longer a filter: races rank by Rel. MAE (within a race the same order as MAE), and the
   // standings show all four metrics as sortable columns
-  const FILTER_KEYS = ["zone", "target", "phase", "covFilter", "topN", "sort"];
+  const FILTER_KEYS = ["zone", "target", "phase", "win", "covFilter", "topN", "sort"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -1070,6 +1085,7 @@
     loadFilters();
     if (!["live", "backtest", "all"].includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
     if (!METRICS.some((m) => m.k === S.metric)) S.metric = "rel_mae";
+    if (!(S.win in WINDOWS)) S.win = "all";
 
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
     const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
