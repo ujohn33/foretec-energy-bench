@@ -258,9 +258,9 @@
       { k: "all", label: "All" },
     ], S.phase, (k) => { S.phase = k; renderAll(); });
     seg($("f-win"), [
+      { k: "d7", label: "Last 7 days", title: "Points over the last 7 days up to the latest scored issue day" },
+      { k: "d30", label: "Last 30 days", title: "Points over the last 30 days up to the latest scored issue day" },
       { k: "all", label: "All time" },
-      { k: "d30", label: "30 days", title: "Points over the last 30 days up to the latest scored issue day" },
-      { k: "d7", label: "7 days", title: "Points over the last 7 days up to the latest scored issue day" },
     ], S.win, (k) => { S.win = k; renderAll(); });
     seg($("f-cov"), [
       { k: "all", label: "All" },
