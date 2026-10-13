@@ -274,6 +274,12 @@ def test_revision_check_refreezes_and_rescores(cfg):
     checks = json.loads((f.parent / "_revisions.json").read_text())
     assert [c["revised"] for c in checks if c["series"] == "BE_wind"] == [False, True]
 
+    # actuals_locked_through: frozen under an earlier series definition, never re-checked, scores kept
+    cfg["actuals_locked_through"] = {"BE_wind": "2026-09-21"}
+    original.assign(value=original["value"] * 1.05).to_parquet(f)
+    assert check_revisions(cfg, now=now) == []
+    assert pd.read_parquet(f)["value"].round(6).equals((original["value"] * 1.05).round(6))
+
 
 def test_fallback_circuit_breaker(cfg):
     """A failing fallback is tried once per run, then skipped: it must never stall the live run."""

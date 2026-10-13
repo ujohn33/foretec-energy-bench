@@ -125,7 +125,9 @@ class NedForecast:
     Load is ElectricityLoad (type 59, activity consuming): gross national consumption, including what rooftop and
     distribution-connected generation supply locally (unlike the net grid load TenneT reports to ENTSO-E)."""
     URL = "https://api.ned.nl/v1/utilizations"
-    TYPES = {"wind": (1, 17), "solar": (2,), "load": (59,)}   # onshore + offshore wind; solar; electricity load
+    # wind: onshore (1) + offshore 51, the metered offshore output (identical to ENTSO-E B18). Type 17 is NED's per-park
+    # model: capped at a fixed capacity and 7-27% high (checked 2023-2026); used for NL wind actuals until 12 Oct 2026.
+    TYPES = {"wind": (1, 51), "solar": (2,), "load": (59,)}   # onshore + offshore wind; solar; electricity load
     ACTIVITY = {"load": 2}                                     # 1 providing (generation), 2 consuming
 
     def __init__(self, key: str | None = None, retries: int = 3):

@@ -152,6 +152,9 @@ def check_revisions(cfg, source=None, now=None) -> list[dict]:
             zone, target = f.stem.split("_")
             if "score_after_days" not in cfg["targets"].get(target, {}):
                 continue
+            locked = (cfg.get("actuals_locked_through") or {}).get(f.stem)
+            if locked is not None and str(delivery) <= str(locked):   # frozen under an earlier series definition
+                continue
             old = pd.read_parquet(f)["value"]
             try:
                 new = source.fetch(zone, target, old.index[0], old.index[-1] + pd.Timedelta("15min")).reindex(old.index)
