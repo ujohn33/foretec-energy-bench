@@ -69,7 +69,7 @@ def history(cfg, zone: str, target: str, end_day: dt.date, days: int) -> pd.Seri
             old = pd.read_parquet(ext)["value"] if ext.exists() else pd.Series(dtype=float)
             both = pd.concat([old, new]).sort_index()
             ext.parent.mkdir(parents=True, exist_ok=True)
-            both[~both.index.duplicated(keep="last")].to_frame().to_parquet(ext)
+            both[~both.index.duplicated(keep="last")].rename("value").to_frame().to_parquet(ext)
             s = pd.concat([s, new]).sort_index()
             s = s[~s.index.duplicated(keep="last")]
     s = s[(s.index >= start) & (s.index < end)]
