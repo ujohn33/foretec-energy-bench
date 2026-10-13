@@ -108,6 +108,7 @@ Add the env to `scripts/install_model_envs.sh`. The foundation models in this re
 - **Dependencies:** a model whose soft dependencies or env are not installed is skipped and logged, not failed.
 - **Quantiles:** models that return quantiles (`predict_quantiles`, or the subprocess `quantiles` array) are also scored on pinball loss.
 - **Covariates:** add `inputs: [history, nwp, load_forecast, fuel, calendar]` to `model.yaml` and the request gets a `covariates` parquet frozen at the cut-off (see below and `models/_shared/fl_cov.py`).
+- **Long history:** the request carries `issue_date`; a model may train on longer history as long as it ends before the issue month. `models/_shared/fl_lagmodel.py` (lgbm_lags, lin_lags) trains on `train_days` of history up to the end of the previous month, caches the model in `data/models/<name>/<train_end>.pkl` and is retrained monthly; the nightly catch-up warms it.
 
 ## Covariates
 

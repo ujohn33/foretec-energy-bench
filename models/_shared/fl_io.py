@@ -3,7 +3,8 @@
 The runner calls   <env python> forecaster.py request.json   with
 
 request.json  {"input": ..., "output": ..., "quantiles": [0.1, ..., 0.9], "freq": "15min",
-               "horizon": {"BE_price": 96, "BE_wind": 156, ...}}
+               "horizon": {"BE_price": 96, "BE_wind": 156, ...}, "issue_date": "2026-10-14",
+               "covariates": ... (only for models whose inputs go beyond history and calendar)}
 input         parquet: series, time_utc, value      (gap-free 15-min history, oldest first)
 output        parquet: series, step, point, q0.1 ... q0.9   (step 1 = first quarter-hour after the history)
 

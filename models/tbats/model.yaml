@@ -8,3 +8,5 @@ script: ../_shared/fl_sktime.py
 estimator: StatsForecastAutoTBATS
 params: {seasonal_periods: [96]}
 n_jobs: 4
+enabled: false
+retired: "Retired 14 Oct 2026: classical univariate models (ARIMA, ETS, Theta, CES, TBATS) are not meaningful on 15-minute data with a 96-step daily cycle; the classical benchmark is now linear regression on the lag pipeline (lin_lags) and on the covariates (lin_cov). Results up to 13 Oct stay public."

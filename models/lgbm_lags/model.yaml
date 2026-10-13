@@ -1,5 +1,11 @@
 name: lgbm_lags
 author: Foretec
-description: LightGBM on the last two days of lags, recursive. No covariates yet.
-module: forecaster.py
+description: "LightGBM per series on the series' own history, trained on the last two years and retrained monthly (through the end of the previous month). Direct day-ahead: one row per quarter-hour from the history cut-off to the end of D, with the same quarter-hour 1 to 7 days earlier (only what is public at the cut-off), the latest level and its deviation from yesterday fading over the horizon, steps ahead, time-of-day Fourier terms and day of week. Intervals from held-out residuals per hour of day. Same pipeline as lin_lags; only the regressor differs. Before 14 Oct 2026: recursive LightGBM on two days of lags, trained on the 28-day window."
 family: baseline
+inputs: [history, calendar]
+runner: subprocess
+env: _self
+script: ../_shared/fl_lagmodel.py
+regressor: lgbm
+train_days: 730
+holdout_days: 120

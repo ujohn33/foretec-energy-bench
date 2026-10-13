@@ -1,0 +1,11 @@
+name: lin_lags
+author: Foretec
+description: "Linear regression (ridge, penalty by cross-validation) on exactly the lgbm_lags pipeline: the series' own history over the last two years, retrained monthly; the same quarter-hour 1 to 7 days earlier, the latest level and its fading deviation from yesterday, steps ahead, time-of-day Fourier terms and day of week. The classical autoregression-with-seasonal-regressors benchmark, in place of ARIMA and ETS, which do not suit 15-minute data with a 96-step daily cycle."
+family: baseline
+inputs: [history, calendar]
+runner: subprocess
+env: _self
+script: ../_shared/fl_lagmodel.py
+regressor: ridge
+train_days: 730
+holdout_days: 120

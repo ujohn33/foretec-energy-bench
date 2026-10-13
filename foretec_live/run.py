@@ -183,7 +183,7 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                  and (live or zone not in (spec.raw.get("live_only_zones") or []))]
         if not items:   # e.g. a wind/solar-only model in a run restricted to load
             continue
-        extra = {}
+        extra = {"issue_date": str(issue_date)}
         if external and set(spec.raw.get("inputs", ["history"])) - {"history", "calendar"}:
             if covariates is None:
                 try:
@@ -196,7 +196,7 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             if not covariates:
                 log_rows.append({"model": spec.name, "status": "skipped", "detail": "covariates unavailable"})
                 continue
-            extra = {"covariates": covariates}
+            extra["covariates"] = covariates
         if external:
             t0 = time.time()
             results = _forecast_external(spec, items, fh_index, cfg, extra)

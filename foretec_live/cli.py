@@ -14,6 +14,7 @@ import logging
 import os
 import sys
 import warnings
+from pathlib import Path
 
 import pandas as pd
 
@@ -113,6 +114,24 @@ def cmd_report(cfg, args):
     return 0
 
 
+def _warm_long_history_models(cfg, models_dir):
+    """Models trained on long history (train_days in model.yaml) retrain monthly: train this month's artifact
+    overnight, so the first run of the month does not spend its time before the gate training."""
+    import subprocess
+
+    from .run import external_python
+
+    for s in load_models(models_dir):
+        if not s.raw.get("train_days"):
+            continue
+        env = {**os.environ, "PYTHONPATH": str(Path(cfg["_root"]) / "models" / "_shared"), "FORETEC_HOME": str(cfg["_root"])}
+        script = s.folder / s.raw.get("script", "forecaster.py")
+        r = subprocess.run([str(external_python(s, cfg)), str(script), "warm", str(s.folder), str(local_today(cfg))],
+                           cwd=s.folder, env=env, capture_output=True, text=True, timeout=3600)
+        if r.returncode != 0:
+            logging.error("warming %s failed: %s", s.name, r.stderr.strip()[-400:])
+
+
 def cmd_catchup(cfg, args):
     """Backtest every model that is missing from the backtest window, so adding a model folder is enough
     to deploy it: backtested overnight, live from the next issue time, scored daily."""
@@ -123,6 +142,7 @@ def cmd_catchup(cfg, args):
     start, end = dt.date.fromisoformat(str(bt["start"])), dt.date.fromisoformat(str(bt["end"]))
     p = paths(cfg, "results/backtest")
     names = [s.name for s in load_models(p["models"]) if not s.raw.get("live_only")]
+    _warm_long_history_models(cfg, p["models"])
     src = get_source(cfg)
     ran = []
     d = start

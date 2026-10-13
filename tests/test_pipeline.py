@@ -455,3 +455,30 @@ def test_voided_live_series_are_never_scored(cfg):
     from foretec_live.site import _tracker
     c = _tracker(cfg)["cells"][d.isoformat()]["naive_weekly"]
     assert c["s"]["NL_wind"] == "V" and c["why"]["NL_wind"] == "test" and c["void"] == 2
+
+
+def test_long_history_lag_models(cfg):
+    """lgbm_lags / lin_lags: trained through the end of the previous month (never the issue month), with intervals."""
+    import pickle
+
+    import yaml
+
+    from foretec_live.data import get_source
+
+    root = Path(cfg["_root"])
+    for m in ("lgbm_lags", "lin_lags"):           # a short window keeps the test fast
+        f = root / "models" / m / "model.yaml"
+        f.write_text(yaml.safe_dump({**yaml.safe_load(f.read_text()), "train_days": 21, "holdout_days": 5}))
+    src, ext = get_source(cfg), root / "data" / "static" / "history_ext"
+    ext.mkdir(parents=True)
+    for z in cfg["zones"]:
+        for t in cfg["targets"]:
+            s = src.fetch(z, t, pd.Timestamp("2026-07-20"), pd.Timestamp("2026-09-02"))
+            s.rename("value").to_frame().to_parquet(ext / f"{z}_{t}.parquet")
+    d = dt.date(2026, 9, 20)
+    meta = run_forecasts(d, cfg, results_subdir="results/backtest", only_models=["lgbm_lags", "lin_lags"])
+    assert meta["runs"] and all(r["status"] == "ok" for r in meta["runs"]), [r for r in meta["runs"] if r["status"] != "ok"][:2]
+    fc = pd.read_parquet(paths(cfg, "results/backtest")["forecasts"] / d.isoformat() / "lin_lags.parquet")
+    assert fc["q0.9"].ge(fc["q0.1"]).all() and fc["point"].notna().all()
+    art = pickle.loads((root / "data" / "models" / "lgbm_lags" / "2026-08-31.pkl").read_bytes())
+    assert art["train_end"] == "2026-08-31" and len(art["series"]) == len(cfg["zones"]) * len(cfg["targets"])
