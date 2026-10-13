@@ -175,6 +175,16 @@ def cmd_reference(cfg, args):
     return 0
 
 
+def cmd_covhist(cfg, args):
+    """Training covariates for long-history covariate models (see covariates_history.py); fetched once, kept."""
+    from .covariates_history import build_history, extend_fuel
+
+    calls = extend_fuel(cfg, args.start)
+    written = build_history(cfg, args.start, args.end)
+    print(f"fuel: {calls} quota calls; covariate history: {len(written)} month files written")
+    return 0
+
+
 def cmd_backfill(cfg, args):
     src = get_source(cfg)
     d = args.start
@@ -207,6 +217,7 @@ def main(argv=None):
     sub.add_parser("site")
     sub.add_parser("catchup")
     p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
+    p = sub.add_parser("covhist"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
     p.add_argument("--targets", nargs="*", help="only these targets, merged into the existing backtest days (a new target)")
     p.add_argument("--series", nargs="*", help="only these series (ZONE_target), merged into the existing backtest days")
@@ -221,7 +232,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

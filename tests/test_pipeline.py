@@ -482,3 +482,21 @@ def test_long_history_lag_models(cfg):
     assert fc["q0.9"].ge(fc["q0.1"]).all() and fc["point"].notna().all()
     art = pickle.loads((root / "data" / "models" / "lgbm_lags" / "2026-08-31.pkl").read_bytes())
     assert art["train_end"] == "2026-08-31" and len(art["series"]) == len(cfg["zones"]) * len(cfg["targets"])
+
+
+def test_previous_runs_lead_matching(cfg):
+    """Training weather from the previous-runs archive: per quarter-hour the offset nearest the live run's lead."""
+    from foretec_live.covariates import select_run
+    from foretec_live.covariates_history import VARIABLES, previous_runs_day
+
+    d = dt.date(2026, 9, 21)                                   # delivery day; issue 20 Sep, 11:30 Brussels
+    idx = delivery_index(d - dt.timedelta(days=1), cfg)
+    prev = pd.DataFrame({"time_utc": idx.repeat(2), "centroid": [0, 1] * len(idx)})
+    for v in VARIABLES:
+        prev[f"{v}@1"], prev[f"{v}@2"] = 1.0, 2.0
+    for model, run_h in (("icon_eu", 6), ("gfs_seamless", 0)):
+        assert select_run(model, d - dt.timedelta(days=1), cfg).hour == run_h
+        got = previous_runs_day(model, d, cfg, prev)
+        lead = (got["time_utc"] - select_run(model, d - dt.timedelta(days=1), cfg)).dt.total_seconds() / 3600
+        assert (got.loc[lead < 36, "wind_speed_100m"] == 1).all() and (got.loc[lead > 36, "wind_speed_100m"] == 2).all()
+    assert set(got.columns) == {"time_utc", "centroid", *VARIABLES}
