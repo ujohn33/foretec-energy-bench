@@ -97,6 +97,7 @@
   // Newey-West variance (Bartlett, floor(T^1/3) lags, since weather regimes make days autocorrelated),
   // Harvey-Leybourne-Newbold small-sample correction, Student t with T - 1 degrees of freedom, two-sided.
   const DM_MIN_DAYS = 5;
+  const SHOW_DM = false;   // the column is hidden for now (too cluttered for what it tells); the test stays available
   function lgamma(x) {
     const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
     let y = x, t = x + 5.5, ser = 1.000000000190015;
@@ -533,7 +534,7 @@
     const inPeriod = new Set(periodDays(DAYS, S.phase).map((x) => x.d));
     const leader = Object.keys(place).find((m) => place[m] === 1);
     const dmRows = raceRows("rel_mae").filter((r) => inPeriod.has(r.issue_date));
-    const leadLoss = leader ? dailyLoss(dmRows, leader) : null;
+    const leadLoss = SHOW_DM && leader ? dailyLoss(dmRows, leader) : null;
     const dm = Object.fromEntries(st.map((s) => [s.model, leadLoss && s.model !== leader ? dmTest(dailyLoss(dmRows, s.model), leadLoss) : null]));
     $("standings").classList.toggle("is-bt", bt);
     const top = st.filter((x) => !x.provisional).slice(0, 3);
@@ -552,14 +553,14 @@
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
     const multi = !singleSeries();   // the series count only matters when more than one series is combined
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("races", "N evaluations", "races")}${sortTh("dm", "DM p vs #1", "dm")}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("races", "N evaluations", "races")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
-        <td class="r v">${s.races}</td>${dmCell(dm[s.model], s.model === leader)}<td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="r v">${s.races}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
       </tr>`).join("") + "</tbody>";
@@ -584,7 +585,7 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${mine.length}</td>${dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false)}<td class="r v">–</td>
+          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${mine.length}</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
           <td class="r v">–</td><td class="r v">–</td></tr>`;
       }).join(""));
