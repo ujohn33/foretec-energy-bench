@@ -290,9 +290,11 @@ def build_site(cfg) -> Path:
     (site / "backtest.html").write_text('<!doctype html><meta http-equiv="refresh" content="0;url=./#standings">')
 
     s = _scores(cfg)
-    cols = ["issue_date", "phase", "model", "zone", "target", "mae", "rmse", "bias", "pinball", "rel_mae"]
+    cols = ["issue_date", "phase", "model", "zone", "target", "mae", "rmse", "bias", "pinball", "rel_mae", "n"]
+    if not s.empty:
+        s["n"] = s["n"].fillna(96).astype(int) if "n" in s else 96   # quarter-hours scored: pooling weights by them
     rows = [] if s.empty else [
-        [r.issue_date, r.phase, r.model, r.zone, r.target] + _round([r.mae, r.rmse, r.bias, r.pinball], 2) + _round([r.rel_mae], 4)
+        [r.issue_date, r.phase, r.model, r.zone, r.target] + _round([r.mae, r.rmse, r.bias, r.pinball], 2) + _round([r.rel_mae], 4) + [int(r.n)]
         for r in s[cols].itertuples(index=False)
     ]
     days = _forecast_days(cfg)

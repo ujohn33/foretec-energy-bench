@@ -10,7 +10,7 @@
   ];
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -204,11 +204,44 @@
     return sel.filter((x) => x.d >= from);
   }
 
+  // ---------- relative errors: pooled per series, then aggregated across series ----------
+  // Per series (zone x target), every quarter-hour of every day in the period is pooled first and only then
+  // divided by the baseline (naive_weekly) on the same days: Rel. MAE = sum |e| / sum |e_base|, Rel. RMSE =
+  // sqrt(sum e^2 / sum e_base^2). The series the zone and target filters select are then combined by the mean,
+  // the median or the geometric mean (S.agg) of those per-series values.
+  const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+  const AGGS = { mean, median, gmean: (a) => (a.length && a.every((x) => x > 0) ? Math.exp(mean(a.map(Math.log))) : null) };
+  function pooledStats(days, refs) {
+    const inSel = (r) => days.has(r.issue_date) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r.mae != null;
+    const base = new Map(ROWS.filter((r) => r.model === D.config.baseline && inSel(r)).map((r) => [`${r.issue_date}|${r.zone}_${r.target}`, r]));
+    const acc = {};
+    for (const r of ROWS) {
+      if (REF.has(r.model) !== refs || !inSel(r)) continue;
+      const key = `${r.zone}_${r.target}`, b = base.get(`${r.issue_date}|${key}`), n = r.n || 96;
+      const a = ((acc[r.model] ||= {})[key] ||= { ae: 0, se: 0, bae: 0, bse: 0, n: 0, pin: 0, npin: 0 });
+      a.n += n;
+      a.ae += n * r.mae; a.se += n * r.rmse * r.rmse;
+      if (r.pinball != null) { a.pin += n * r.pinball; a.npin += n; }
+      if (b) { a.bae += n * b.mae; a.bse += n * b.rmse * b.rmse; a.both = (a.both || 0) + 1; a.cae = (a.cae || 0) + n * r.mae; a.cse = (a.cse || 0) + n * r.rmse * r.rmse; }
+    }
+    const out = {};
+    for (const m in acc) {
+      const ser = Object.values(acc[m]);
+      const rel = ser.filter((a) => a.bae > 0).map((a) => a.cae / a.bae), relr = ser.filter((a) => a.bse > 0).map((a) => Math.sqrt(a.cse / a.bse));
+      const n = ser.reduce((x, a) => x + a.n, 0), npin = ser.reduce((x, a) => x + a.npin, 0);
+      out[m] = {
+        rel: AGGS[S.agg](rel), relr: AGGS[S.agg](relr), nser: ser.length,
+        mae: ser.reduce((x, a) => x + a.ae, 0) / n, rmse: Math.sqrt(ser.reduce((x, a) => x + a.se, 0) / n),
+        pinball: npin ? ser.reduce((x, a) => x + a.pin, 0) / npin : null,
+      };
+    }
+    return out;
+  }
+
   function standings(days, phase) {
     const sel = periodDays(days, phase);
     const set = new Set(sel.map((x) => x.d));
-    const byMetric = Object.fromEntries(METRICS.map((m) => [m.k, filteredRows(m.k).filter((r) => set.has(r.issue_date))]));
-    const meanOf = (k, model) => mean(byMetric[k].filter((r) => r.model === model).map((r) => r[k]));
+    const ps = pooledStats(set, false);
     const res = {};
     for (const x of sel) {
       for (const m in x.pts) {
@@ -226,11 +259,12 @@
       provisional: s.races < need,
       avgRank: mean(s.ranks),
       best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
-      rel: meanOf("rel_mae", s.model), mae: meanOf("mae", s.model), rmse: meanOf("rmse", s.model), pinball: meanOf("pinball", s.model),
+      ...(ps[s.model] || {}),
     })).sort((a, b) => (a.provisional - b.provisional) || b.score - a.score || (a.avgRank ?? 99) - (b.avgRank ?? 99));
   }
 
   const narrow = () => window.innerWidth < 640;
+  const aggText = () => (singleSeries() ? "" : `Across the selected series: the ${{ mean: "mean", median: "median", gmean: "geometric mean" }[S.agg]} of the per-series values.`);
   const singleSeries = () => S.zone !== "all" && S.target !== "all";
   const rawAllowed = () => S.metric === "rel_mae" || singleSeries();
   function unitSuffix() {
@@ -262,6 +296,9 @@
       { k: "d30", label: "Last 30 days", title: "Points over the last 30 days up to the latest scored issue day" },
       { k: "all", label: "All time" },
     ], S.win, (k) => { S.win = k; renderAll(); });
+    seg($("f-agg"), [
+      { k: "mean", label: "Mean", tip: "agg" }, { k: "median", label: "Median", tip: "agg" }, { k: "gmean", label: "Geo. mean", tip: "agg" },
+    ], S.agg, (k) => { S.agg = k; renderAll(); });
     seg($("f-cov"), [
       { k: "all", label: "All" },
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
@@ -383,6 +420,10 @@
     races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or half of the most any model has, is provisional and listed after the ranked ones.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
+    rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
+    relr: () => ["Rel. RMSE", `Like Rel. MAE with squared errors: per series sqrt(sum of squared errors / the baseline's), on the same days. Large misses weigh more. ${aggText()} Lower is better.`],
+    nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts. Relative errors of models with different series are averaged over different sets, so compare them with care."],
+    agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when the filters select more than one series. Mean: the average, moved by a series where a model is very good or very bad. Median: the middle series, so winning it means winning on most series. Geometric mean: the average of the logarithms, which treats halving and doubling the error symmetrically and penalises a model that is bad on one series. Points and ranks do not depend on it."],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
     rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
@@ -452,6 +493,8 @@
     races: { get: (s) => s.races, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
     rel: { get: (s) => s.rel, dir: 1 },
+    relr: { get: (s) => s.relr, dir: 1 },
+    nser: { get: (s) => s.nser, dir: -1 },
     mae: { get: (s) => s.mae, dir: 1 },
     rmse: { get: (s) => s.rmse, dir: 1 },
     pinball: { get: (s) => s.pinball, dir: 1 },
@@ -502,21 +545,22 @@
         <div class="stats">
           <div class="stat"><span data-tip="pts">Score</span><b>${fmt(s.score, 1)}</b></div>
           <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
-          <div class="stat"><span data-tip="rel_mae">Rel. MAE</span><b>${fmt(s.rel, 3)}</b></div>
+          <div class="stat"><span data-tip="rel">Rel. MAE</span><b>${fmt(s.rel, 3)}</b></div>
         </div>
       </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
+    const multi = !singleSeries();   // the series count only matters when more than one series is combined
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("races", "N evaluations", "races")}${sortTh("dm", "DM p vs #1", "dm")}${sortTh("rank", "Avg rank", "rank")}
-      ${sortTh("rel", "Rel. MAE", "rel_mae")}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
+      ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
         <td class="r v">${s.races}</td>${dmCell(dm[s.model], s.model === leader)}<td class="r v">${fmt(s.avgRank, 2)}</td>
-        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
+        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
@@ -534,14 +578,14 @@
     };
     const refRel = filteredRows("rel_mae", true).filter((r) => inPeriod.has(r.issue_date));
     const refs = [...REF].filter((m) => refRel.some((r) => r.model === m));
+    const refStats = pooledStats(inPeriod, true);
     if (refs.length && st.length) {
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
-        const mine = refRel.filter((r) => r.model === m);
-        const mm = (k) => mean(filteredRows(k, true).filter((r) => inPeriod.has(r.issue_date) && r.model === m).map((r) => r[k]));
+        const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
           <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${mine.length}</td>${dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false)}<td class="r v">–</td>
-          <td class="r v">${fmt(mean(mine.map((r) => r.rel_mae)), 3)}</td><td class="r v">${fmt(mm("mae"), 1)}</td><td class="r v">${fmt(mm("rmse"), 1)}</td><td class="r v">${fmt(mm("pinball"), 1)}</td>
+          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
           <td class="r v">–</td><td class="r v">–</td></tr>`;
       }).join(""));
     }
@@ -1056,7 +1100,7 @@
 
   // the metric is no longer a filter: races rank by Rel. MAE (within a race the same order as MAE), and the
   // standings show all four metrics as sortable columns
-  const FILTER_KEYS = ["zone", "target", "phase", "win", "covFilter", "topN", "sort"];
+  const FILTER_KEYS = ["zone", "target", "phase", "win", "agg", "covFilter", "topN", "sort"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -1089,6 +1133,7 @@
     if (!["live", "backtest", "all"].includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
     if (!METRICS.some((m) => m.k === S.metric)) S.metric = "rel_mae";
     if (!(S.win in WINDOWS)) S.win = "all";
+    if (!(S.agg in AGGS)) S.agg = "mean";
 
     document.querySelectorAll("[data-k]").forEach((el) => { if (el.tagName === "SPAN" && D.config[el.dataset.k] != null) el.textContent = D.config[el.dataset.k]; });
     const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
