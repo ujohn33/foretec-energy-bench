@@ -1,0 +1,8 @@
+name: t0_gamma
+author: The Forecasting Company
+description: "The Forecasting Company t0-gamma (about 256M parameters, third public t0 release, October 2026), zero-shot on the target's own history. Runs on tfc-t0 0.6.0, which its weights require."
+family: t0
+inputs: [history]
+runner: subprocess
+env: tfc06
+script: forecaster.py

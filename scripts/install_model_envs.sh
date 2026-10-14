@@ -17,7 +17,9 @@ declare -A PKGS=(
   [toto]="toto-ts|setuptools<81"
   [sundial]="transformers==4.40.1"
   [ttm]="granite-tsfm"
-  [tfc]="tfc-t0>=0.5.0"
+  # t0-alpha/beta stay on 0.5.0 (0.6.0 shifts their forecasts by ~0.3%); t0-gamma needs 0.6.0 (its config keys)
+  [tfc]="tfc-t0==0.5.0"
+  [tfc06]="tfc-t0[torch]>=0.6.0"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"
