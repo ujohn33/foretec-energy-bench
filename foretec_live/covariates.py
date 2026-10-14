@@ -72,11 +72,56 @@ def _nwp_cache(cfg, c: pd.DataFrame, model: str, run: pd.Timestamp) -> Path:
     return Path(cfg["_root"]) / "data" / "cache" / "nwp" / _centroid_hash(c) / model / f"{run:%Y%m%dT%H}.parquet"
 
 
+def _zone_parts(c: pd.DataFrame) -> dict[str, np.ndarray]:
+    """Positions of each zone's centroids in c."""
+    return {z: np.flatnonzero(c["zone"].to_numpy() == z) for z in dict.fromkeys(c["zone"])}
+
+
+def cached_per_zone(c: pd.DataFrame, path_of, fetch) -> pd.DataFrame:
+    """Long-format weather (column `centroid` = position in c) cached per zone: path_of(c_zone) is a zone's cache
+    file, fetch(c_subset) requests the zones still missing, in one go. Adding a zone then fetches only that zone,
+    and the other zones' caches stay valid (they are keyed by their own centroids)."""
+    parts, missing = {}, []
+    for z, pos in _zone_parts(c).items():
+        f = path_of(c.iloc[pos].reset_index(drop=True))
+        if f.exists():
+            parts[z] = pd.read_parquet(f)
+        else:
+            missing.append(z)
+    if missing:
+        cm = c[c["zone"].isin(missing)].reset_index(drop=True)
+        raw = fetch(cm)
+        for z, pos in _zone_parts(cm).items():
+            sub = raw[raw["centroid"].isin(pos)].copy()
+            sub["centroid"] = sub["centroid"].map({p: i for i, p in enumerate(pos)})
+            parts[z] = sub
+            f = path_of(cm.iloc[pos].reset_index(drop=True))
+            if f is not None and getattr(raw, "attrs", {}).get("cache", True):
+                f.parent.mkdir(parents=True, exist_ok=True)
+                sub.to_parquet(f, index=False)
+                if raw.attrs.get("meta"):
+                    f.with_suffix(".json").write_text(json.dumps(raw.attrs["meta"]))
+    out = []
+    for z, pos in _zone_parts(c).items():
+        sub = parts[z].copy()
+        sub["centroid"] = pos[sub["centroid"].to_numpy()]
+        out.append(sub)
+    return pd.concat(out, ignore_index=True)
+
+
+def run_meta(cfg, c: pd.DataFrame, model: str, run: pd.Timestamp) -> dict:
+    """When a run was fetched (the first zone's cache record)."""
+    pos = next(iter(_zone_parts(c).values()))
+    f = _nwp_cache(cfg, c.iloc[pos].reset_index(drop=True), model, run).with_suffix(".json")
+    return json.loads(f.read_text()) if f.exists() else {}
+
+
 def fetch_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFrame:
-    """All centroids for one model run, long format. Cached forever: a run never changes."""
-    f = _nwp_cache(cfg, c, model, run)
-    if f.exists():
-        return pd.read_parquet(f)
+    """All centroids of c for one model run, long format. Cached per zone, forever: a run never changes."""
+    return cached_per_zone(c, lambda cz: _nwp_cache(cfg, cz, model, run), lambda cm: _request_run(model, run, cfg, cm))
+
+
+def _request_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFrame:
     ncfg = cfg["covariates"]["nwp"]
     variables = sorted({v for vs in BUCKET_VARS.values() for v in vs})
     params = {
@@ -121,10 +166,7 @@ def fetch_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFra
         d["centroid"] = i
         frames.append(d)
     out = pd.concat(frames, ignore_index=True)
-    out.attrs = {}
-    f.parent.mkdir(parents=True, exist_ok=True)
-    out.to_parquet(f, index=False)
-    (f.with_suffix(".json")).write_text(json.dumps({"model": model, "run_utc": str(run), "fetched_utc": str(pd.Timestamp.now(tz="UTC"))}))
+    out.attrs = {"meta": {"model": model, "run_utc": str(run), "fetched_utc": str(pd.Timestamp.now(tz="UTC"))}}
     return out
 
 
@@ -270,7 +312,9 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
     out_dir = Path(cfg["_root"]) / "data" / "covariates"
     f, fm = out_dir / f"{issue_date}.parquet", out_dir / f"{issue_date}.json"
     if f.exists() and fm.exists() and not force:
-        return pd.read_parquet(f), json.loads(fm.read_text())
+        meta = json.loads(fm.read_text())
+        if meta.get("zones", ["BE", "NL", "FR"]) == list(cfg["zones"]):   # built for another set of zones: rebuild
+            return pd.read_parquet(f), meta
     # every issue day must see the same kinds of inputs; never cache a frame with a source silently missing
     if not os.environ.get("ENTSOE_TOKEN"):
         raise RuntimeError("ENTSOE_TOKEN is not set: the load forecast would be missing")
@@ -302,8 +346,7 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
                 log.warning("NWP %s: run %s unavailable, using %s (%s)", model, run, used, errors[0])
             agg = _aggregate(raw, c, model).reindex(idx)
             wide.append(agg)
-            meta_f = _nwp_cache(cfg, c, model, used).with_suffix(".json")
-            fetched = json.loads(meta_f.read_text())["fetched_utc"] if meta_f.exists() else None
+            fetched = run_meta(cfg, c, model, used).get("fetched_utc")
             status = "ok" if used == run else f"fallback: the {run:%H} UTC run was unavailable ({errors[0][:120]})"
             runs_used.append({"issue_date": str(d), "model": model, "run_utc": str(used), "fetched_utc": fetched, "status": status})
         w = pd.concat(wide, axis=1) if wide else pd.DataFrame(index=idx)
@@ -334,6 +377,7 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
         "nwp_models": {m: cfg["covariates"]["nwp"]["models"][m] for m in models},
         "nwp_runs": runs_used,
         "centroids_hash": _centroid_hash(c),
+        "zones": list(cfg["zones"]),
         "load_forecast": "ENTSO-E A65 day-ahead total load forecast (published by 10:00 Brussels on D-1 by regulation)"
                          if os.environ.get("ENTSOE_TOKEN") else "not configured",
         "fuel": "oilpriceapi TTF_EUR + CARBON_EUR daily quotes; at each cut-off the last quote dated two days before delivery or earlier" if not fuel.empty else "not configured (OIL_PRICE_KEY missing)",
@@ -343,3 +387,25 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
     cov.to_parquet(f)
     fm.write_text(json.dumps(meta, indent=1))
     return cov, meta
+
+
+def split_combined_cache(cfg, c: pd.DataFrame) -> int:
+    """One-off: split cache files written for the whole centroid set c (before per-zone caching) into per-zone
+    files, for single runs (data/cache/nwp) and previous runs (data/cache/nwp_prev). Returns files written."""
+    n, h = 0, _centroid_hash(c)
+    for kind in ("nwp", "nwp_prev"):
+        for f in sorted((Path(cfg["_root"]) / "data" / "cache" / kind / h).glob("*/*.parquet")):
+            raw = pd.read_parquet(f)
+            meta = f.with_suffix(".json")
+            for z, pos in _zone_parts(c).items():
+                out = Path(cfg["_root"]) / "data" / "cache" / kind / _centroid_hash(c.iloc[pos].reset_index(drop=True)) / f.parent.name / f.name
+                if out.exists():
+                    continue
+                sub = raw[raw["centroid"].isin(pos)].copy()
+                sub["centroid"] = sub["centroid"].map({p: i for i, p in enumerate(pos)})
+                out.parent.mkdir(parents=True, exist_ok=True)
+                sub.to_parquet(out, index=False)
+                if meta.exists():
+                    out.with_suffix(".json").write_text(meta.read_text())
+                n += 1
+    return n

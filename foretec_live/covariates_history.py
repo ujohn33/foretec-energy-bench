@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from .covariates import (BUCKET_VARS, _aggregate, _centroid_hash, _ensemble_stats, centroids, fetch_run,
+from .covariates import (BUCKET_VARS, _aggregate, _centroid_hash, _ensemble_stats, cached_per_zone, centroids, fetch_run,
                          load_forecast, select_run)
 from .timeutil import as_date, delivery_index, issue_timestamp
 
@@ -51,10 +51,13 @@ def _months(a: dt.date, b: dt.date) -> list[dt.date]:
 
 # ---------------------------------------------------------------- previous runs (ICON-EU, GFS)
 def fetch_previous_month(model: str, month: dt.date, cfg, c: pd.DataFrame) -> pd.DataFrame:
-    """All centroids, all variables, previous_day1 and previous_day2, one calendar month (UTC). Cached once complete."""
-    f = Path(cfg["_root"]) / "data" / "cache" / "nwp_prev" / _centroid_hash(c) / model / f"{month:%Y-%m}.parquet"
-    if f.exists():
-        return pd.read_parquet(f)
+    """All centroids, all variables, previous_day1 and previous_day2, one calendar month (UTC). Cached per zone
+    once the month is complete."""
+    path = lambda cz: Path(cfg["_root"]) / "data" / "cache" / "nwp_prev" / _centroid_hash(cz) / model / f"{month:%Y-%m}.parquet"
+    return cached_per_zone(c, path, lambda cm: _request_previous_month(model, month, cfg, cm))
+
+
+def _request_previous_month(model: str, month: dt.date, cfg, c: pd.DataFrame) -> pd.DataFrame:
     end = (month + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
     end_req = min(end, dt.date.today() + dt.timedelta(days=7))   # the API refuses end dates far in the future
     ncfg = cfg["covariates"]["nwp"]
@@ -92,9 +95,7 @@ def fetch_previous_month(model: str, month: dt.date, cfg, c: pd.DataFrame) -> pd
         d["centroid"] = i
         frames.append(d)
     out = pd.concat(frames, ignore_index=True)
-    if end < dt.date.today() - dt.timedelta(days=3):      # a month still filling up is not cached
-        f.parent.mkdir(parents=True, exist_ok=True)
-        out.to_parquet(f, index=False)
+    out.attrs = {"cache": end < dt.date.today() - dt.timedelta(days=3)}   # a month still filling up is not cached
     return out
 
 

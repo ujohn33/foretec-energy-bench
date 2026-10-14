@@ -500,3 +500,23 @@ def test_previous_runs_lead_matching(cfg):
         lead = (got["time_utc"] - select_run(model, d - dt.timedelta(days=1), cfg)).dt.total_seconds() / 3600
         assert (got.loc[lead < 36, "wind_speed_100m"] == 1).all() and (got.loc[lead > 36, "wind_speed_100m"] == 2).all()
     assert set(got.columns) == {"time_utc", "centroid", *VARIABLES}
+
+
+def test_weather_cache_per_zone(cfg, tmp_path):
+    """A run is cached per zone: adding a zone fetches only that zone; the result equals one combined request."""
+    from foretec_live.covariates import cached_per_zone
+
+    c = pd.DataFrame({"zone": ["BE", "BE", "NL", "FR", "FR"], "bucket": "solar", "cluster_id": [0, 1, 0, 0, 1],
+                      "latitude": [50.0, 51.0, 52.0, 45.0, 46.0], "longitude": [4.0, 5.0, 5.0, 2.0, 3.0]})
+    calls = []
+
+    def fetch(cm):
+        calls.append(sorted(set(cm["zone"])))
+        return pd.DataFrame({"centroid": range(len(cm)), "v": cm["latitude"].to_numpy()})
+
+    path = lambda cz: tmp_path / f"{cz['zone'].iloc[0]}.parquet"
+    first = cached_per_zone(c[c.zone != "FR"].reset_index(drop=True), path, fetch)
+    both = cached_per_zone(c, path, fetch)
+    assert calls == [["BE", "NL"], ["FR"]]                         # the second call fetched FR only
+    assert list(both.sort_values("centroid")["v"]) == list(c["latitude"])
+    assert list(first.sort_values("centroid")["v"]) == [50.0, 51.0, 52.0]
