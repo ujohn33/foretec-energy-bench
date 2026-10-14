@@ -8,6 +8,7 @@
     { k: "rmse", label: "RMSE", d: 1 },
     { k: "pinball", label: "Pinball", d: 2 },
   ];
+  const zoneLabel = (z) => (D.config && D.config.zone_labels && D.config.zone_labels[z]) || z;   // DE -> DE-LU
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
     zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
@@ -284,7 +285,7 @@
   }
 
   function renderControls() {
-    options($("f-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: z }))], S.zone);
+    options($("f-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.zone);
     options($("f-target"), [{ k: "all", label: "All targets" }, ...Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t }))], S.target);
     const hasLive = ROWS.some((r) => r.phase === "live");
     seg($("f-phase"), [
@@ -996,7 +997,7 @@
     if (S.phase !== "all") ds = ds.filter((d) => D.days[d] === S.phase);
     if (!ds.includes(S.x.day)) S.x.day = ds[0];
     options($("x-day"), ds.map((d) => ({ k: d, label: `${d} → ${addDays(d, 1)} · ${D.days[d]}` })), S.x.day);
-    options($("x-zone"), D.config.zones.map((z) => ({ k: z, label: z })), S.x.zone);
+    options($("x-zone"), D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) })), S.x.zone);
     options($("x-target"), Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t })), S.x.target);
   }
   async function renderExplorerChart() {

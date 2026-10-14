@@ -4,6 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -520,3 +521,20 @@ def test_weather_cache_per_zone(cfg, tmp_path):
     assert calls == [["BE", "NL"], ["FR"]]                         # the second call fetched FR only
     assert list(both.sort_values("centroid")["v"]) == list(c["latitude"])
     assert list(first.sort_values("centroid")["v"]) == [50.0, 51.0, 52.0]
+
+
+def test_inactive_zones_and_coarse_scoring(tmp_path, monkeypatch):
+    """Zones with active: false are skipped unless FORETEC_ALL_ZONES is set; a series scored at 1 h compares
+    hourly means, so 15-minute detail its hourly actuals do not have is not penalised."""
+    from foretec_live.score import metrics
+
+    shutil.copy(REPO / "config.yaml", tmp_path / "config.yaml")
+    monkeypatch.delenv("FORETEC_ALL_ZONES", raising=False)
+    assert "DE" not in load_config(tmp_path / "config.yaml")["zones"]
+    monkeypatch.setenv("FORETEC_ALL_ZONES", "1")
+    assert {"DE", "DK1", "DK2"} <= set(load_config(tmp_path / "config.yaml")["zones"])
+    idx = pd.date_range("2026-09-20 22:00", periods=96, freq="15min")
+    shape = np.tile([-1.0, 1.0, -1.0, 1.0], 24) * 50                 # intra-hour wiggle around the hourly level
+    y = pd.Series(np.repeat(np.arange(24.0) * 10, 4), index=idx)      # hourly actuals, stepwise
+    fc = pd.DataFrame({"delivery_utc": idx, "point": y.to_numpy() + shape})
+    assert metrics(fc, y)["mae"] == 50 and metrics(fc, y, "1h")["mae"] == 0

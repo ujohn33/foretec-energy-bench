@@ -346,6 +346,7 @@ def build_site(cfg) -> Path:
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
         "config": {
             "zones": list(cfg["zones"]),
+            "zone_labels": {z: v.get("label", z) for z, v in cfg["zones"].items()},
             "targets": {t: {"unit": v["unit"]} for t, v in cfg["targets"].items()},
             "issue_time": cfg["issue_time"], "gate": cfg.get("gate", cfg["issue_time"]), "timezone": cfg["timezone"], "baseline": cfg["baseline"],
             "context_days": cfg["context_days"], "source": cfg["source"],

@@ -5,7 +5,9 @@ family: tso
 inputs: [tso_forecast]
 targets: [wind, solar, load]
 # FR wind/solar: RTE publishes its next-day forecast only at 16:15, after the gate.
-exclude: [FR_wind, FR_solar]
+# DE wind/solar: no TSO forecast before the gate (ENTSO-E A69 is due 18:00); DK: Energinet's day-ahead forecast
+# is to be verified as published before 11:30 before it is used
+exclude: [FR_wind, FR_solar, DE_wind, DE_solar, DK1_wind, DK1_solar, DK2_wind, DK2_solar]
 # live only: a published 'as of 11:00' value cannot be verified after the fact, so no backtest
 live_only: true
 runner: subprocess

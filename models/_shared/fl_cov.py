@@ -8,7 +8,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-ZONES = ("BE", "NL", "FR")
+ZONES = ("BE", "NL", "FR")   # fallback; the zones are read from the covariate columns
+
+
+def zones_of(cols) -> list[str]:
+    """Zones present in the covariates: those with weather buckets."""
+    return sorted({c.split(".")[0] for c in cols if c.count(".") == 3 and c.split(".")[1] in ("wind_onshore", "solar")})
 
 
 def load_covariates(req: dict) -> pd.DataFrame:
@@ -27,8 +32,9 @@ def full_features(cols, zone: str, target: str) -> list[str]:
         pre = [f"{zone}.load.", f"{zone}.load_fc."]
     else:  # price: own load, residual-load drivers in all coupled zones, fuel
         pre = [f"{zone}.load.", f"{zone}.load_fc.", "fuel."]
-        pre += [f"{z}.{b}.ens_" for z in ZONES for b in ("wind_onshore", "wind_offshore", "solar")]
-        pre += [f"{z}.load_fc." for z in ZONES if z != zone]
+        zs = zones_of(cols) or list(ZONES)
+        pre += [f"{z}.{b}.ens_" for z in zs for b in ("wind_onshore", "wind_offshore", "solar")]
+        pre += [f"{z}.load_fc." for z in zs if z != zone]
     return [c for c in cols if any(c.startswith(p) for p in pre)]
 
 
@@ -45,9 +51,10 @@ def compact_features(cols, zone: str, target: str) -> list[str]:
                 f"{zone}.load.ens_mean.shortwave_radiation", f"{zone}.load.ens_mean.cloud_cover"]
     else:
         want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m", "fuel.ccgt.srmc.eur_mwh"]
-        want += [f"{z}.wind_onshore.ens_mean.wind_speed_100m" for z in ZONES]
-        want += [f"{z}.wind_offshore.ens_mean.wind_speed_100m" for z in ZONES]
-        want += [f"{z}.solar.ens_mean.global_tilted_irradiance" for z in ZONES]
+        zs = zones_of(cols) or list(ZONES)
+        want += [f"{z}.wind_onshore.ens_mean.wind_speed_100m" for z in zs]
+        want += [f"{z}.wind_offshore.ens_mean.wind_speed_100m" for z in zs]
+        want += [f"{z}.solar.ens_mean.global_tilted_irradiance" for z in zs]
     return [c for c in want if c in cols]
 
 

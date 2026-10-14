@@ -17,6 +17,9 @@ def load_config(path: str | Path | None = None) -> dict:
     with open(path) as f:
         cfg = yaml.safe_load(f)
     cfg["_root"] = str(path.parent.resolve())
+    # zones with active: false are defined but not run, unless FORETEC_ALL_ZONES=1 (to build their history first)
+    if not os.environ.get("FORETEC_ALL_ZONES"):
+        cfg["zones"] = {z: v for z, v in cfg["zones"].items() if v.get("active", True)}
     return cfg
 
 

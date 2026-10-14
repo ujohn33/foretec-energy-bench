@@ -90,8 +90,12 @@ def pinball(y: np.ndarray, qf: pd.DataFrame) -> float:
     return float(np.mean(losses))
 
 
-def metrics(fc: pd.DataFrame, y: pd.Series) -> dict:
+def metrics(fc: pd.DataFrame, y: pd.Series, resolution: str | None = None) -> dict:
     m = fc.set_index("delivery_utc").reindex(y.index).dropna(axis=1, how="all")
+    if resolution:   # actuals published coarser than 15 min: compare averages over their resolution
+        num = m.select_dtypes("number")
+        m = num.resample(resolution).mean()
+        y = y.resample(resolution).mean().reindex(m.index)
     mask = y.notna() & m["point"].notna()
     yy, pp = y[mask].values, m.loc[mask, "point"].values
     err = pp - yy
@@ -215,7 +219,7 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
             if y is None:
                 continue
             for model in todo:
-                r = metrics(grp[grp["model"] == model], y)
+                r = metrics(grp[grp["model"] == model], y, (cfg.get("score_resolution") or {}).get(f"{zone}_{target}"))
                 rows.append({"issue_date": issue_date, "model": model, "zone": zone, "target": target, **r})
     if not rows:
         return scores
