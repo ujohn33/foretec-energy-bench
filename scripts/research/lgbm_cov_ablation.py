@@ -85,14 +85,48 @@ def train_rows(cov: pd.DataFrame, cov_day: pd.Series, first: dt.date, last: dt.d
     return cov[(cov_day >= first) & (cov_day <= last)]
 
 
-def fit_predict(key: str, cov_train: pd.DataFrame, issue: dt.date, params: dict, half_life: float | None) -> pd.Series:
+CAP_DIR = ROOT / "data" / "static" / "capacity"
+
+
+def scale_series(key: str, kind: str | None) -> pd.Series | None:
+    """Per local delivery day: what wind/solar output is divided by. proxy = the highest output in days D-91..D-2
+    (known at the cut-off); capacity = installed capacity on D-1 (data/static/capacity, build_capacity.py)."""
+    if kind is None:
+        return None
+    if kind == "proxy":
+        y = Y[key]
+        daily = y.groupby(y.index.tz_localize("UTC").tz_convert(cfg["timezone"]).normalize().tz_localize(None)).max()
+        daily = daily.reindex(pd.date_range(daily.index.min(), daily.index.max() + pd.Timedelta(days=3), freq="D"))
+        return daily.rolling(90, min_periods=60).max().shift(2)
+    f = CAP_DIR / f"{key}.parquet"
+    return pd.read_parquet(f)["mw"].shift(1) if f.exists() else None
+
+
+def per_row(scale: pd.Series, index: pd.DatetimeIndex) -> np.ndarray:
+    days = index.tz_localize("UTC").tz_convert(cfg["timezone"]).normalize().tz_localize(None)
+    return scale.reindex(days).to_numpy(dtype=float)
+
+
+_MODELS: dict = {}
+
+
+def fit_predict(key: str, cov_train: pd.DataFrame, issue: dt.date, params: dict, half_life: float | None,
+                scale_kind: str | None = None, cache_key=None) -> pd.Series:
     zone, target = key.split("_")
     y = Y[key]
+    sc = scale_series(key, scale_kind)
     X = design(cov_train, cov_train.index, zone, target, y)
-    yy = y.reindex(cov_train.index).to_numpy(dtype=float)
-    ok = ~np.isnan(yy)
-    w = recency_weights(X.index[ok], half_life) if half_life else None
-    m = lgb.LGBMRegressor(**params).fit(X[ok], yy[ok], sample_weight=w)
+    if cache_key is not None and cache_key in _MODELS:
+        m = _MODELS[cache_key]
+    else:
+        yy = y.reindex(cov_train.index).to_numpy(dtype=float)
+        if sc is not None:
+            yy = yy / per_row(sc, cov_train.index)
+        ok = ~np.isnan(yy) & np.isfinite(yy)
+        w = recency_weights(X.index[ok], half_life) if half_life else None
+        m = lgb.LGBMRegressor(**params).fit(X[ok], yy[ok], sample_weight=w)
+        if cache_key is not None:
+            _MODELS[cache_key] = m
     live = pd.read_parquet(ROOT / "data" / "covariates" / f"{issue}.parquet")
     live.index = pd.to_datetime(live.index)
     idx = delivery_index(issue, cfg)
@@ -100,24 +134,31 @@ def fit_predict(key: str, cov_train: pd.DataFrame, issue: dt.date, params: dict,
                                                                                      "cal_weekend", "lvl_7d", "max_28d", "price_lag_1d")])
     Xt = Xt.reindex(columns=X.columns)
     p = m.predict(Xt)
+    if sc is not None:
+        p = p * per_row(sc, idx)
     if target != "price":
         p = np.clip(p, 0, None)
     return pd.Series(p, index=idx)
 
 
 def evaluate(name: str, cov: pd.DataFrame, cov_day: pd.Series, window: int, params: dict, half_life=None, keys=KEYS,
-             days=TEST_DAYS) -> list[dict]:
+             days=TEST_DAYS, train_end: dt.date | None = None, scale_kind: str | None = None) -> list[dict]:
+    """train_end: fixed last training day (monthly retraining: one model per series for every test day);
+    otherwise retrained for every test day on the `window` days before it."""
     rows = []
     for issue in days:
         pause_for_gate()
-        tr = train_rows(cov, cov_day, issue - dt.timedelta(days=window), issue - dt.timedelta(days=1))
+        last = train_end or issue - dt.timedelta(days=1)
+        tr = train_rows(cov, cov_day, last - dt.timedelta(days=window - 1), last)
         for key in keys:
             y = actual(issue, key)
             zone, target = key.split("_")
             base = BASE.get((str(issue), zone, target))
             if y is None or base is None or y.notna().mean() < 0.95:
                 continue
-            p = fit_predict(key, tr, issue, params, half_life)
+            if scale_kind and scale_series(key, scale_kind) is None:
+                continue
+            p = fit_predict(key, tr, issue, params, half_life, scale_kind, cache_key=(name, key) if train_end else None)
             rows.append({"config": name, "issue_date": str(issue), "key": key, "zone": zone, "target": target,
                          "mae": mae(p, y, key), "mae_base": float(base), "train_rows": len(tr)})
         log(name, issue, "done")
@@ -193,10 +234,11 @@ if part in ("C", "all"):
     space = {"num_leaves": [15, 31, 63, 127, 255], "learning_rate": [0.02, 0.03, 0.05, 0.08], "min_child_samples": [20, 50, 100, 200, 400],
              "colsample_bytree": [0.3, 0.5, 0.7, 0.9], "subsample": [0.6, 0.8, 1.0], "reg_lambda": [0.0, 1.0, 5.0, 20.0],
              "max_bin": [63, 127, 255]}
-    N_TRIALS = int(os.environ.get("ABLATION_TRIALS", 24))
-    v_end = TEST_DAYS[0] - dt.timedelta(days=1)            # validation: the 60 days before the first test day
-    v_start = v_end - dt.timedelta(days=59)
-    tr_start = v_start - dt.timedelta(days=730)
+    N_TRIALS = int(os.environ.get("ABLATION_TRIALS", 8))
+    # validation like daily retraining: weekly folds right before the test days, each trained on the 730 days before
+    # it (a single fit validated over many weeks would reward parameters that age well, i.e. monthly retraining)
+    folds = [(TEST_DAYS[0] - dt.timedelta(days=14), TEST_DAYS[0] - dt.timedelta(days=8)),
+             (TEST_DAYS[0] - dt.timedelta(days=7), TEST_DAYS[0] - dt.timedelta(days=1))]
     best = {}
     trials = []
     for target in cfg["targets"]:
@@ -206,27 +248,28 @@ if part in ("C", "all"):
         for i, prm in enumerate(cands):
             pause_for_gate()
             errs, iters = [], []
-            for key in keys:
-                zone, _ = key.split("_")
-                y = Y[key]
-                tr = train_rows(COV, COV_DAY, tr_start, v_start - dt.timedelta(days=1))
+            for v_start, v_end in folds:
+                tr = train_rows(COV, COV_DAY, v_start - dt.timedelta(days=730), v_start - dt.timedelta(days=1))
                 va = train_rows(COV, COV_DAY, v_start, v_end)
-                X, Xv = design(tr, tr.index, zone, target, y), design(va, va.index, zone, target, y)
-                yy, yv = y.reindex(tr.index).to_numpy(float), y.reindex(va.index).to_numpy(float)
-                ok, okv = ~np.isnan(yy), ~np.isnan(yv)
-                w = recency_weights(X.index[ok], 120)
-                m = lgb.LGBMRegressor(**prm)
-                if i == 0:   # the current parameters, as they are
-                    m.fit(X[ok], yy[ok], sample_weight=w)
-                else:
-                    m.fit(X[ok], yy[ok], sample_weight=w, eval_set=[(Xv[okv], yv[okv])], eval_metric="l1",
-                          callbacks=[lgb.early_stopping(100, verbose=False)])
-                    iters.append(m.best_iteration_)
-                base = np.nanmean(np.abs(yv[okv] - y.reindex(va.index - pd.Timedelta("7D")).to_numpy(float)[okv]))
-                errs.append(np.mean(np.abs(m.predict(Xv[okv]) - yv[okv])) / base)
+                for key in keys:
+                    zone, _ = key.split("_")
+                    y = Y[key]
+                    X, Xv = design(tr, tr.index, zone, target, y), design(va, va.index, zone, target, y)
+                    yy, yv = y.reindex(tr.index).to_numpy(float), y.reindex(va.index).to_numpy(float)
+                    ok, okv = ~np.isnan(yy), ~np.isnan(yv)
+                    w = recency_weights(X.index[ok], 120)
+                    m = lgb.LGBMRegressor(**prm)
+                    if i == 0:   # the current parameters, as they are
+                        m.fit(X[ok], yy[ok], sample_weight=w)
+                    else:
+                        m.fit(X[ok], yy[ok], sample_weight=w, eval_set=[(Xv[okv], yv[okv])], eval_metric="l1",
+                              callbacks=[lgb.early_stopping(100, verbose=False)])
+                        iters.append(m.best_iteration_)
+                    base = np.nanmean(np.abs(yv[okv] - y.reindex(va.index - pd.Timedelta("7D")).to_numpy(float)[okv]))
+                    errs.append(np.mean(np.abs(m.predict(Xv[okv]) - yv[okv])) / base)
             score = float(np.mean(errs))
             rec = {"target": target, "trial": i, "val_rel_mae": score, "n_estimators": int(np.median(iters)) if iters else prm["n_estimators"],
-                   **{k: prm[k] for k in space}}
+                   **{k: prm.get(k) for k in space}}
             trials.append(rec)
             log("C", target, i, round(score, 4), rec)
             if target not in best or score < best[target]["val_rel_mae"]:
@@ -235,10 +278,33 @@ if part in ("C", "all"):
     (OUT / "lgbm_cov_ablation_C_best.json").write_text(json.dumps(best, indent=1, default=str))
     rows = []
     for target, b in best.items():
-        prm = {**LGBM, **{k: b[k] for k in space}, "n_estimators": int(b["n_estimators"])}
+        prm = {**LGBM, **{k: b[k] for k in space if b.get(k) is not None}, "n_estimators": int(b["n_estimators"])}
         keys = [k for k in KEYS if k.endswith(target)]
         rows += evaluate("window_730_recency120_tuned", COV, COV_DAY, 730, prm, half_life=120, keys=keys)
     df = pd.DataFrame(rows)
     df.to_csv(OUT / "lgbm_cov_ablation_C.csv", index=False)
     log("C: tuned parameters\n" + summary(df).to_string())
     log("best parameters per target:\n" + json.dumps(best, indent=1, default=str))
+
+# ---------------------------------------------------------------- D: monthly retraining, with and without recency
+MONTHLY_END = TEST_DAYS[0].replace(day=1) - dt.timedelta(days=1)     # 31 Aug: what a monthly model has in September
+if part in ("D", "all"):
+    rows = evaluate("monthly_730_uniform", COV, COV_DAY, 730, LGBM, train_end=MONTHLY_END)
+    rows += evaluate("monthly_730_recency120", COV, COV_DAY, 730, LGBM, half_life=120, train_end=MONTHLY_END)
+    df = pd.DataFrame(rows)
+    df.to_csv(OUT / "lgbm_cov_ablation_D.csv", index=False)
+    log("D: monthly retraining (compare A's window_730 / window_730_recency120, retrained daily)\n" + summary(df).to_string())
+
+# ---------------------------------------------------------------- E: capacity-scaled wind and solar targets
+if part in ("E", "all"):
+    keys = [k for k in KEYS if k.endswith(("_wind", "_solar"))]
+    rows = []
+    for retrain, end in (("daily", None), ("monthly", MONTHLY_END)):
+        for kind in (None, "proxy", "capacity"):
+            rows += evaluate(f"{retrain}_{kind or 'unscaled'}", COV, COV_DAY, 730, LGBM, half_life=120, keys=keys,
+                             train_end=end, scale_kind=kind)
+    df = pd.DataFrame(rows)
+    df.to_csv(OUT / "lgbm_cov_ablation_E.csv", index=False)
+    log("E: all wind/solar series (capacity configs only where a capacity series exists)\n" + summary(df).to_string())
+    have_cap = sorted(df.loc[df.config.str.endswith("capacity"), "key"].unique())
+    log("E: the series with real capacity only " + str(have_cap) + "\n" + summary(df[df.key.isin(have_cap)]).to_string())
