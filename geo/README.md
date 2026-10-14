@@ -1,4 +1,4 @@
-# Weather-point centroids for BE, NL and FR
+# Weather-point centroids for BE, NL, FR, DE-LU, DK1 and DK2
 
 `centroids.csv` lists the points where we fetch numerical weather prediction (NWP)
 forecasts for Belgium (BE), the Netherlands (NL) and France (FR). For each zone and
@@ -310,3 +310,25 @@ are combined)
 - **Coarse distance metric:** the k-means uses degrees as a planar metric. At about
   50° N, one degree of longitude is about 0.64 of a degree of latitude, so clusters
   stretch slightly east–west. This keeps it identical to the existing predico centroids.
+
+## DE-LU, DK1 and DK2 (`build_centroids_north.py`)
+
+Built with the same buckets, cluster counts and weighted k-means (imported from `build_centroids.py`), merged into
+`centroids.csv` without touching the BE/NL/FR rows, whose weather caches are keyed by their own points. Zone key
+`DE` is the DE-LU bidding zone. A point that holds more than 1/k of a bucket's weight is split into identical
+copies sharing it before clustering: the weighted centroids are unchanged, but the k-means initialisation (which
+samples k distinct points by weight) works with a few dominant municipalities or farms.
+
+| zone | bucket | source | total |
+|---|---|---|---|
+| DE | wind_onshore | Marktstammdatenregister (Bundesnetzagentur, DL-DE-BY-2.0), turbines in operation with coordinates | 71.3 GW, 31,180 turbines (on + off) |
+| DE | wind_offshore | same, units flagged offshore | 11.5 GW |
+| DE | solar | same; units with public coordinates in 0.05° cells (70.8 GW), the rest (small rooftop, no public coordinates) at their GeoNames postcode centroid (45.2 GW) | 115.9 GW |
+| DE | load | GeoNames cities1000 population, DE and LU | 90.8 M |
+| DK1/DK2 | wind_onshore, solar | Energinet Energi Data Service `CapacityPerMunicipality` (September 2026), at Wikidata municipality coordinates; DK2 = Capital Region and Zealand | DK1 4.2 GW wind, 4.0 GW solar; DK2 0.7 / 1.5 GW |
+| DK1/DK2 | wind_offshore | operating farms by site group (Danish Energy Agency list, centres approximate), incl. Thor | DK1 2.6 GW, DK2 1.0 GW (Energinet: 3.7 GW) |
+| DK1/DK2 | load | GeoNames cities1000 population, split at 10.95° E (Bornholm DK2) | DK2 slightly overstates Copenhagen (districts listed separately) |
+
+The MaStR export (`Gesamtdatenexport_<date>_<version>.zip`, ~3 GB) is downloaded with a browser User-Agent (the
+server resets other clients) and stream-parsed by `parse_units.py` into compact extracts; the Energinet and
+Wikidata tables are saved alongside, because Energi Data Service rate-limits hard.
