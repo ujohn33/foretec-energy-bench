@@ -3,3 +3,6 @@ author: Foretec
 description: Theta on additively deseasonalised data (daily cycle). Works with zeros and negative prices.
 module: forecaster.py
 family: baseline
+enabled: false
+retired: "Retired 14 Oct 2026: classical univariate models are not meaningful on 15-minute data with a 96-step daily cycle; the classical benchmark is now linear regression (lin_lags, lin_cov)."
+hidden: true   # left out of the website entirely (results kept on disk)

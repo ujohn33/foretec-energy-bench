@@ -48,6 +48,16 @@ def _round(a, nd=1):
     return [None if not np.isfinite(v) else round(float(v), nd) for v in a]
 
 
+def _hidden(cfg) -> set[str]:
+    """Models with `hidden: true` in model.yaml: kept on disk, left out of the whole site."""
+    out = set()
+    for yml in paths(cfg)["models"].glob("*/model.yaml"):
+        r = yaml.safe_load(yml.read_text()) or {}
+        if r.get("hidden"):
+            out.add(r.get("name", yml.parent.name))
+    return out
+
+
 def _scores(cfg) -> pd.DataFrame:
     frames = []
     for phase, sub in PHASES.items():
@@ -57,6 +67,7 @@ def _scores(cfg) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     s = pd.concat(frames, ignore_index=True)
+    s = s[~s["model"].isin(_hidden(cfg))]
     s["issue_date"] = s["issue_date"].astype(str)
     live_days = set(s.loc[s["phase"] == "live", "issue_date"])
     return s[(s["phase"] == "live") | ~s["issue_date"].isin(live_days)]
@@ -79,7 +90,8 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
     idx = delivery_index(issue_date, cfg)
     out = {"issue_date": issue_date, "delivery_date": str(delivery_date(issue_date)),
            "t0": idx[0].isoformat() + "Z", "n": len(idx), "series": {}}
-    fcs = [pd.read_parquet(f) for f in sorted(folder.glob("*.parquet"))]
+    hidden = _hidden(cfg)
+    fcs = [pd.read_parquet(f) for f in sorted(folder.glob("*.parquet")) if f.stem not in hidden]
     fc = pd.concat(fcs, ignore_index=True) if fcs else pd.DataFrame()
     for zone in cfg["zones"]:
         for target in cfg["targets"]:
@@ -186,6 +198,7 @@ def _tracker(cfg) -> dict:
     from .timeutil import gate_timestamp
 
     s = _scores(cfg)
+    hidden = _hidden(cfg)
     scored = set() if s.empty else set(zip(s["issue_date"], s["model"], s["zone"], s["target"]))
     days, cells = [], {}
     for day, (phase, folder) in sorted(_forecast_days(cfg).items()):
@@ -201,6 +214,8 @@ def _tracker(cfg) -> dict:
         due = {(z, t) for z in cfg["zones"] for t in cfg["targets"] if scorable(day, t, cfg)}
         per = {}
         for r in meta.get("runs", []) + ref_runs:
+            if r["model"] in hidden:
+                continue
             c = per.setdefault(r["model"], {"ok": 0, "err": 0, "skip": 0, "due": 0, "scored": 0, "void": 0, "sec": 0.0, "msgs": [],
                                             "s": {}, "why": {}})
             key = f"{r.get('zone', '')}_{r.get('target', '')}"
@@ -299,11 +314,12 @@ def build_site(cfg) -> Path:
     ]
     days = _forecast_days(cfg)
     settled = str(local_now(cfg).date() - dt.timedelta(days=4))
+    model_cfgs = list(paths(cfg)["models"].glob("*/model.yaml"))   # hiding a model must rewrite every day page
     for issue_date, (phase, folder) in days.items():
         f = site / "data" / "days" / f"{issue_date}.json"
         # older days rarely change: rewrite only recent ones, or when forecasts/inputs are newer than the page data
         if f.exists() and issue_date < settled:
-            sources = list(folder.glob("*.parquet")) + list((Path(cfg["_root"]) / "data" / "covariates").glob(f"{issue_date}.*"))
+            sources = list(folder.glob("*.parquet")) + list((Path(cfg["_root"]) / "data" / "covariates").glob(f"{issue_date}.*")) + model_cfgs
             if max((x.stat().st_mtime for x in sources), default=0) <= f.stat().st_mtime:
                 continue
         js = _day_json(issue_date, folder, cfg)
@@ -314,6 +330,8 @@ def build_site(cfg) -> Path:
     # every model folder, including retired ones: their backtest stays public, with the reason
     for yml in sorted(p["models"].glob("*/model.yaml")):
         r = yaml.safe_load(yml.read_text()) or {}
+        if r.get("hidden"):
+            continue
         spec = SimpleNamespace(name=r.get("name", yml.parent.name))
         models.append({"name": spec.name, "author": r.get("author", ""), "description": r.get("description", ""),
                        "family": r.get("family", spec.name), "inputs": r.get("inputs", ["history"]),
