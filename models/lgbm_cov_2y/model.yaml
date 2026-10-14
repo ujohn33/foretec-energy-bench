@@ -1,0 +1,12 @@
+name: lgbm_cov_2y
+author: Foretec
+description: "The two-year variant of lgbm_cov: LightGBM per series on the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast and calendar; for price also wind/solar in all three zones, fuel cost and yesterday's price. Trained on the last two years and retrained monthly (through the end of the previous month), one LightGBM per quantile. Training weather: IFS from its true pre-cut-off run, ICON-EU and GFS from Open-Meteo's previous-runs archive at the matching lead time; forecasts always use only runs published before the cut-off."
+family: nwp
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: _self
+script: ../_shared/fl_covmodel.py
+regressor: lgbm
+train_days: 730
+timeout: 3600
+half_life_days: 120

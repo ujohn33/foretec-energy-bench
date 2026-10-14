@@ -1,0 +1,13 @@
+name: lin_cov_2y
+author: Foretec
+description: "The two-year variant of lin_cov: Linear regression (ridge, penalty by cross-validation) on exactly the lgbm_cov inputs and training: the NWP ensemble, ENTSO-E load forecast, calendar (for price also wind/solar in all zones, fuel and yesterday's price), the last two years, retrained monthly. Intervals from the residuals of the last 120 training days per hour of day."
+family: nwp
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: _self
+script: ../_shared/fl_covmodel.py
+regressor: ridge
+train_days: 730
+holdout_days: 120
+timeout: 3600
+half_life_days: 120
