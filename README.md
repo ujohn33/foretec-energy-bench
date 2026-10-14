@@ -118,9 +118,9 @@ Add the env to `scripts/install_model_envs.sh`. The foundation models in this re
 - **Where:** capacity-weighted k-means centroids per zone and bucket (`geo/centroids.csv`, built by `geo/build_centroids.py`, sources in `geo/README.md`). Zone values are capacity-weighted means; across the models we add the ensemble mean, std, min, max, range, coefficient of variation and pairwise differences (the predico recipe).
 - **Same vintage for training:** the values for each past delivery day come from the runs that were available at that day's own cut-off, so models train on forecasts with the lead time they forecast with.
 - **ENTSO-E day-ahead load forecast** (A65; TSOs publish it 2 h before the gate). Backtests use the currently published version.
-- **Fuel cost:** TTF and EUA from oilpriceapi, a quote counting only from the end of its date, plus a CCGT short-run cost.
+- **Fuel cost:** TTF gas (`TTF=F`, ICE Dutch front month) and EU carbon (`CO2.L`, EUA ETC) daily closes from Yahoo Finance, a close counting only from the end of its date, plus a CCGT short-run cost.
 
-API keys come from the environment (`OPENMETEOKEY`, `ENTSOE_TOKEN`, `OIL_PRICE_KEY`); the systemd units read them from `/root/.env`.
+API keys come from the environment (`OPENMETEOKEY`, `ENTSOE_TOKEN`, `NED_NL_KEY`, `RTE_DATA_KEY`); the systemd units read them from `/root/.env`.
 
 ## Running it
 
@@ -159,7 +159,7 @@ The first time, pass the domain for HTTPS and any extra names that should redire
 sudo bash scripts/setup_server.sh --domain=energybench.foretec.co --alias=transparency.foretec.co
 ```
 
-API keys (`ENTSOE_TOKEN`, `OPENMETEOKEY`, `OIL_PRICE_KEY`) live in `/root/.env` on the server, never in the repo.
+API keys (`ENTSOE_TOKEN`, `OPENMETEOKEY`, `NED_NL_KEY`, `RTE_DATA_KEY`) live in `/root/.env` on the server, never in the repo.
 
 ## Layout
 

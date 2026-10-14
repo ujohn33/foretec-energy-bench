@@ -703,7 +703,7 @@
       ...inp.runs.map((r) => [inp.nwp_models[r.model].label, `run ${fmtUtc(r.run_utc)}`, r.status === "ok" ? lagNote(r.model) : `<b>${esc(r.status)}</b>`,
         r.fetched_utc ? fmtUtc(r.fetched_utc) + (bt ? " (archive)" : "") : "–"]),
       ["Load forecast", esc(inp.load_forecast), bt ? "backtest: currently published version" : "fetched at the cut-off", "ENTSO-E A65"],
-      ["Fuel cost", esc(inp.fuel), "quotes count from the end of their date", "oilpriceapi"],
+      ["Fuel cost", esc(inp.fuel), "daily closes count from the end of their date", "Yahoo Finance: TTF=F, CO2.L"],
     ];
     t.innerHTML = head + `<tbody>` +
       `<tr><td>Cut-off / gate</td><td class="wrap">${fmtUtc(inp.cutoff_utc)} · gate ${esc(D.config.gate)} Brussels</td><td class="wrap">${inp.n_columns} covariate columns frozen at the cut-off</td>` +

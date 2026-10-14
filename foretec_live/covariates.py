@@ -11,7 +11,7 @@ that were available at the cut-off of issue day D'-1. So a model trained on the 
 features with the same lead time and the same NWP models as on the day it forecasts.
 
 Also: ENTSO-E day-ahead total load forecast (A65, must be published 2 h before the 12:00 gate)
-and, when OIL_PRICE_KEY is set, TTF gas and EUA carbon (last quote before the cut-off).
+and TTF gas and EUA carbon from Yahoo Finance daily closes (last close known before the cut-off).
 
 Output per issue day: data/covariates/<issue_date>.parquet (time_utc x columns "<zone>.<bucket>.<what>.<variable>")
 and data/covariates/<issue_date>.json (which runs, documents and quotes were used, and when they were fetched).
@@ -253,48 +253,42 @@ def load_forecast(zone: str, delivery: dt.date, cfg) -> pd.Series:
 
 
 # ---------------------------------------------------------------- fuel (optional)
-_FUEL_FETCHED: set = set()   # (code, chunk start) already requested by this process
+YAHOO_FUEL = {"TTF_EUR": "TTF=F",      # ICE Dutch TTF natural gas, front-month future, EUR/MWh
+              "CARBON_EUR": "CO2.L"}   # SparkChange physical carbon EUA ETC, EUR (tracks the EUA price)
+
+
+def _yahoo_daily(symbol: str, rng: str) -> list[dict]:
+    """Daily closes from Yahoo Finance's chart API, stamped with the exchange date."""
+    r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}", params={"range": rng, "interval": "1d"},
+                     headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+    r.raise_for_status()
+    res = r.json()["chart"]["result"][0]
+    tz = res["meta"].get("exchangeTimezoneName", "UTC")
+    days = pd.to_datetime(res["timestamp"], unit="s", utc=True).tz_convert(tz).normalize().tz_localize(None)
+    return [{"time_utc": d, "price": float(c)} for d, c in zip(days, res["indicators"]["quote"][0]["close"]) if c is not None]
 
 
 def fuel_quotes(cfg, upto: pd.Timestamp) -> pd.DataFrame:
-    """TTF gas (EUR/MWh) and EUA carbon (EUR/t) quotes from oilpriceapi, stamped at or before `upto`.
+    """TTF gas (EUR/MWh) and EUA carbon (EUR/t) daily closes from Yahoo Finance, known at or before `upto`.
 
-    Quota-aware like the predico builder: the free plan allows 50 calls a day, so every quote is kept in a
-    permanent cache, past 28-day chunks that are already covered are never fetched again, and a chunk is
-    requested at most once per process.
+    Kept in a permanent cache, topped up at most twice a day (one request per series, the last month; five years on
+    the first fetch). No key, no quota.
     """
-    key = os.environ.get("OIL_PRICE_KEY")
     cache = Path(cfg["_root"]) / "data" / "cache" / "fuel_quotes.parquet"
-    have = pd.read_parquet(cache) if cache.exists() else pd.DataFrame({"time_utc": pd.Series(dtype="datetime64[ns]"), "code": [], "price": []})
-    if key:
-        lo = (upto - pd.Timedelta(days=cfg["context_days"] + 7)).normalize()
-        now = pd.Timestamp.now(tz="UTC").tz_localize(None)
-        new_rows = []
-        for code in ("TTF_EUR", "CARBON_EUR"):
-            mine = have[have["code"] == code]["time_utc"]
-            cur = lo
-            while cur < upto:
-                chunk_end = min(cur + pd.Timedelta(days=28), upto.normalize() + pd.Timedelta(days=1))
-                covered = ((mine >= cur) & (mine < chunk_end)).sum() >= max(1, int((chunk_end - cur).days * 5 / 7 * 0.6))
-                if (covered and chunk_end < now - pd.Timedelta(days=2)) or (code, cur) in _FUEL_FETCHED:
-                    cur = chunk_end
-                    continue
-                _FUEL_FETCHED.add((code, cur))
-                try:
-                    r = requests.get("https://api.oilpriceapi.com/v1/prices/historical", headers={"Authorization": f"Token {key}"},
-                                     params={"by_code": code, "start": f"{cur:%Y-%m-%d}", "end": f"{chunk_end:%Y-%m-%d}"}, timeout=90)
-                    r.raise_for_status()
-                    data = r.json().get("data") or {}
-                    for x in (data.get("prices") if isinstance(data, dict) else data) or []:
-                        new_rows.append({"time_utc": pd.Timestamp(x["created_at"]).tz_convert("UTC").tz_localize(None),
-                                         "code": code, "price": float(x["price"])})
-                except Exception as e:  # keep what we have; the next run tops up
-                    log.warning("oilpriceapi %s %s: %s", code, f"{cur:%Y-%m-%d}", str(e)[:150])
-                    break
-                cur = chunk_end
-                time.sleep(0.25)
-        if new_rows:
-            have = pd.concat([have, pd.DataFrame(new_rows)], ignore_index=True)
+    have = pd.read_parquet(cache) if cache.exists() else pd.DataFrame({"time_utc": pd.Series(dtype="datetime64[ns]"), "code": [], "price": [], "source": []})
+    if "source" not in have or (have["source"] != "yahoo").any():       # quotes from the previous provider: start over
+        have = have.iloc[0:0].assign(source=pd.Series(dtype=str))
+    fresh = cache.exists() and time.time() - cache.stat().st_mtime < 12 * 3600 and len(have)
+    if not fresh:
+        rows = []
+        for code, symbol in YAHOO_FUEL.items():
+            try:
+                rng = "1mo" if (have["code"] == code).sum() > 500 else "5y"
+                rows += [{**x, "code": code, "source": "yahoo"} for x in _yahoo_daily(symbol, rng)]
+            except Exception as e:  # keep what we have; the next run tops up
+                log.warning("yahoo %s: %s", symbol, str(e)[:150])
+        if rows:
+            have = pd.concat([have, pd.DataFrame(rows)], ignore_index=True)
             have = have.drop_duplicates(["time_utc", "code"], keep="last").sort_values("time_utc")
             cache.parent.mkdir(parents=True, exist_ok=True)
             have.to_parquet(cache, index=False)
@@ -380,7 +374,7 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
         "zones": list(cfg["zones"]),
         "load_forecast": "ENTSO-E A65 day-ahead total load forecast (published by 10:00 Brussels on D-1 by regulation)"
                          if os.environ.get("ENTSOE_TOKEN") else "not configured",
-        "fuel": "oilpriceapi TTF_EUR + CARBON_EUR daily quotes; at each cut-off the last quote dated two days before delivery or earlier" if not fuel.empty else "not configured (OIL_PRICE_KEY missing)",
+        "fuel": "Yahoo Finance daily closes, TTF=F (ICE Dutch TTF front month) and CO2.L (EUA ETC); at each cut-off the last quote dated two days before delivery or earlier" if not fuel.empty else "unavailable",
         "columns": len(cov.columns),
     }
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@ Environment=FORETEC_HOME=/srv/foretec/foretec-live
 Environment=HF_HOME=/srv/foretec/.hf-cache
 Environment=PYTHONWARNINGS=ignore::FutureWarning
 EnvironmentFile=-/srv/foretec/foretec.env
-# API keys (OPENMETEOKEY, ENTSOE_TOKEN, OIL_PRICE_KEY), read by systemd as root before dropping to User=
+# API keys (OPENMETEOKEY, ENTSOE_TOKEN, NED_NL_KEY, RTE_DATA_KEY), read by systemd as root before dropping to User=
 EnvironmentFile=-/root/.env
 # references published after the gate (TSO final day-ahead forecast) first, so they are scored too
 ExecStart=-/srv/foretec/venv/bin/foretec-live reference

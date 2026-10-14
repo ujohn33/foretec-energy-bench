@@ -12,8 +12,7 @@ their cut-off. These frames are only what models train on, one slice per deliver
                 Training values are therefore close to, not identical with, what the model sees live; the size
                 of the difference is measured where both archives overlap (validate_previous_runs).
   load_fc       ENTSO-E A65, the same cached day files as the live builder.
-  fuel          the cached TTF and EUA quotes known at each day's cut-off; the cache is topped up within the
-                oilpriceapi quota, so the oldest days may still lack fuel (NaN).
+  fuel          the cached TTF and EUA daily closes (Yahoo Finance) known at each day's cut-off.
 
 Output: data/static/cov_history/<YYYY-MM>.parquet, one frame per month (time_utc x columns).
 """
@@ -164,37 +163,17 @@ def _add_fuel(cov: pd.DataFrame, cfg) -> pd.DataFrame:
     return cov
 
 
-def extend_fuel(cfg, start: dt.date, max_calls: int = 40) -> int:
-    """Fill the fuel quote cache backwards to `start`, 28-day chunks, at most max_calls requests (free-plan quota)."""
-    key = os.environ.get("OIL_PRICE_KEY")
-    cache = Path(cfg["_root"]) / "data" / "cache" / "fuel_quotes.parquet"
-    if not key or not cache.exists():
-        return 0
-    have = pd.read_parquet(cache)
-    calls, rows = 0, []
-    for code in ("TTF_EUR", "CARBON_EUR"):
-        first = pd.to_datetime(have.loc[have["code"] == code, "time_utc"]).min()
-        cur = (first if pd.notna(first) else pd.Timestamp.now()).normalize()
-        while cur.date() > start and calls < max_calls:
-            a = cur - pd.Timedelta(days=28)
-            calls += 1
-            try:
-                r = requests.get("https://api.oilpriceapi.com/v1/prices/historical", headers={"Authorization": f"Token {key}"},
-                                 params={"by_code": code, "start": f"{a:%Y-%m-%d}", "end": f"{cur:%Y-%m-%d}"}, timeout=90)
-                r.raise_for_status()
-                data = r.json().get("data") or {}
-                got = [{"time_utc": pd.Timestamp(x["created_at"]).tz_convert("UTC").tz_localize(None), "code": code,
-                        "price": float(x["price"])} for x in (data.get("prices") if isinstance(data, dict) else data) or []]
-            except Exception as e:  # quota or outage: keep what we have, the next night continues
-                log.warning("oilpriceapi %s %s: %s", code, f"{a:%Y-%m-%d}", str(e)[:150])
-                break
-            rows += got
-            cur = a
-            time.sleep(0.25)
-    if rows:
-        have = pd.concat([have, pd.DataFrame(rows)], ignore_index=True).drop_duplicates(["time_utc", "code"], keep="last")
-        have.sort_values("time_utc").to_parquet(cache, index=False)
-    return calls
+def refresh_fuel(cfg) -> int:
+    """Re-apply the (now complete) fuel quotes to every monthly training frame. Returns frames rewritten."""
+    from .covariates import fuel_quotes
+    fuel_quotes(cfg, pd.Timestamp.now())                    # tops up the cache (five years on the first call)
+    n = 0
+    for f in sorted((Path(cfg["_root"]) / "data" / "static" / "cov_history").glob("*.parquet")):
+        cov = pd.read_parquet(f)
+        cov = _add_fuel(cov.drop(columns=[c for c in cov.columns if c.startswith("fuel.")]), cfg)
+        cov.to_parquet(f)
+        n += 1
+    return n
 
 
 def build_history(cfg, start: dt.date, end: dt.date, workers: int = 3) -> list[Path]:

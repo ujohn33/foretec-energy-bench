@@ -177,11 +177,10 @@ def cmd_reference(cfg, args):
 
 def cmd_covhist(cfg, args):
     """Training covariates for long-history covariate models (see covariates_history.py); fetched once, kept."""
-    from .covariates_history import build_history, extend_fuel
+    from .covariates_history import build_history, refresh_fuel
 
-    calls = extend_fuel(cfg, args.start)
     written = build_history(cfg, args.start, args.end)
-    print(f"fuel: {calls} quota calls; covariate history: {len(written)} month files written")
+    print(f"covariate history: {len(written)} month files written, fuel refreshed in {refresh_fuel(cfg)}")
     return 0
 
 
