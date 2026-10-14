@@ -100,7 +100,9 @@ class EntsoeSource(Source):
                 continue
             if r.status_code == 200 or "No matching data" in r.text:
                 return r.text
-            if r.status_code in (429, 503):
+            if r.status_code in (429, 503, 599) or (r.status_code == 400 and attempt < 2):
+                # ENTSO-E's gateway answers some requests with a transient 400 or 599 (connect timeout); the same
+                # request succeeds moments later (seen for DK load, October 2026)
                 time.sleep(15 * (attempt + 1))
                 continue
             raise RuntimeError(f"entsoe HTTP {r.status_code}: {r.text[:200]}")
