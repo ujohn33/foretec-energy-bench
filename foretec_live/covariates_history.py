@@ -56,10 +56,11 @@ def fetch_previous_month(model: str, month: dt.date, cfg, c: pd.DataFrame) -> pd
     if f.exists():
         return pd.read_parquet(f)
     end = (month + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
+    end_req = min(end, dt.date.today() + dt.timedelta(days=7))   # the API refuses end dates far in the future
     ncfg = cfg["covariates"]["nwp"]
     params = {"latitude": ",".join(f"{x:.4f}" for x in c["latitude"]), "longitude": ",".join(f"{x:.4f}" for x in c["longitude"]),
               "models": model, "minutely_15": ",".join(f"{v}_previous_day{n}" for v in VARIABLES for n in (1, 2)),
-              "start_date": str(month), "end_date": str(end), "timezone": "GMT", "tilt": ncfg.get("tilt", 35), "azimuth": 0}
+              "start_date": str(month), "end_date": str(end_req), "timezone": "GMT", "tilt": ncfg.get("tilt", 35), "azimuth": 0}
     key = os.environ.get("OPENMETEOKEY")
     host = PREV_HOST if key else PREV_HOST.replace("customer-", "")
     if key:
@@ -212,6 +213,9 @@ def build_history(cfg, start: dt.date, end: dt.date, workers: int = 3) -> list[P
             log.warning("prefetch %s %s: %s", mr[0], mr[1], str(e)[:120])
     with ThreadPoolExecutor(workers) as ex:
         list(ex.map(_get, todo))
+    # the ENTSO-E load forecasts too (one cached request per zone and day; the slow part when done one by one)
+    with ThreadPoolExecutor(6) as ex:
+        list(ex.map(lambda zd: load_forecast(zd[0], zd[1], cfg), [(z, d) for z in cfg["zones"] for d in days]))
     written = []
     for month in _months(start, end):
         f = out_dir / f"{month:%Y-%m}.parquet"

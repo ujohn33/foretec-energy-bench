@@ -104,6 +104,8 @@ def fetch_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFra
                 why = f"incomplete reply ({len(got)} of {len(c)} locations with data)"
             else:
                 why = f"HTTP {r.status_code} {r.text[:200]}"
+                if r.status_code == 400 and "not available" in r.text:   # the archive lacks this run: retrying won't help
+                    break
         except (requests.RequestException, ValueError) as e:   # ValueError: the body is not JSON
             why = f"{type(e).__name__}: {e}"
         log.warning("open-meteo %s %s (try %d): %s", model, run, attempt + 1, why)

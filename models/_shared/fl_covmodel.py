@@ -69,7 +69,7 @@ def fit_series(kind: str, X: pd.DataFrame, y: np.ndarray, quantiles, holdout_day
     X, y = X[keep], y[keep]
     fill = X.median()
     day = X.index.tz_localize("UTC").tz_convert(tz).normalize()
-    hold = (day > day.max() - pd.Timedelta(days=holdout_days)).to_numpy()
+    hold = np.asarray(day > day.max() - pd.Timedelta(days=holdout_days))
     m = _ridge().fit(X[~hold], y[~hold])
     res = y[hold] - m.predict(X[hold])
     hour = X.index[hold].tz_localize("UTC").tz_convert(tz).hour

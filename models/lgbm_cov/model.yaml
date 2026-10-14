@@ -1,9 +1,11 @@
 name: lgbm_cov
 author: Foretec
-description: LightGBM per series on the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast and calendar; for price also wind/solar in all three zones and fuel cost. Trained on the 28-day window, one model per quantile.
+description: "LightGBM per series on the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast and calendar; for price also wind/solar in all three zones, fuel cost and yesterday's price. Trained on the last two years and retrained monthly (through the end of the previous month), one LightGBM per quantile. Training weather: IFS from its true pre-cut-off run, ICON-EU and GFS from Open-Meteo's previous-runs archive at the matching lead time; forecasts always use only runs published before the cut-off. Before 14 Oct 2026: trained on the 28-day window."
 family: nwp
 inputs: [history, nwp, load_forecast, fuel, calendar]
 runner: subprocess
 env: _self
-script: forecaster.py
-caveat: "Trained only on the 28-day window every model gets (one LightGBM per quantile). A production NWP model would be trained on years of history, so this understates what the approach can do."
+script: ../_shared/fl_covmodel.py
+regressor: lgbm
+train_days: 730
+timeout: 3600
