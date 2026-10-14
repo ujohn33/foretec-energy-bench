@@ -26,34 +26,46 @@ MIN_HISTORY_DAYS = 7
 
 def take_snapshot(issue_date, cfg, source=None, save=True, targets=None) -> dict[tuple[str, str], pd.Series]:
     """Collect the history every model is allowed to see, and store it so the run can be repeated exactly."""
+    from concurrent.futures import ThreadPoolExecutor
+
     source = source or get_source(cfg)
     p = paths(cfg)
     out = {}
-    for zone in cfg["zones"]:
-        for target in targets or cfg["targets"]:
-            end = availability_cutoff(issue_date, target, cfg)
-            start = end - pd.Timedelta(days=cfg["context_days"])
-            try:
-                s = source.fetch(zone, target, start, end)
-            except Exception as e:
-                log.error("snapshot %s %s failed: %s", zone, target, e)
-                continue
-            s = s[s.index < end]
-            s = s.reindex(pd.date_range(start, end, freq=FREQ, inclusive="left")).ffill(limit=8)
-            s = s[s.first_valid_index():] if s.first_valid_index() is not None else s.iloc[0:0]
-            if s.isna().any():
-                s = s.interpolate(limit_direction="both")
-            if len(s) < MIN_HISTORY_DAYS * 96:
-                log.error("snapshot %s %s: only %d points, skipping", zone, target, len(s))
-                continue
-            s.index.name = "time_utc"
-            s.name = "value"
-            out[(zone, target)] = s
-            if save:
-                d = p["snapshots"] / str(issue_date)
-                d.mkdir(parents=True, exist_ok=True)
-                s.to_frame().to_parquet(d / f"{zone}_{target}.parquet")
-                record_provenance(source, zone, target, d)
+    keys = [(zone, target) for zone in cfg["zones"] for target in targets or cfg["targets"]]
+
+    def window(target):
+        end = availability_cutoff(issue_date, target, cfg)
+        return end - pd.Timedelta(days=cfg["context_days"]), end
+
+    def get(key):   # the downloads run in parallel (they dominate the run's time before the gate); the rest in order
+        try:
+            return source.fetch(key[0], key[1], *window(key[1])), None
+        except Exception as e:  # noqa: BLE001 - reported below, the series is skipped
+            return None, e
+
+    with ThreadPoolExecutor(int(cfg.get("snapshot_workers", 4))) as ex:
+        fetched = dict(zip(keys, ex.map(get, keys)))
+    for (zone, target), (s, err) in fetched.items():
+        start, end = window(target)
+        if err is not None:
+            log.error("snapshot %s %s failed: %s", zone, target, err)
+            continue
+        s = s[s.index < end]
+        s = s.reindex(pd.date_range(start, end, freq=FREQ, inclusive="left")).ffill(limit=8)
+        s = s[s.first_valid_index():] if s.first_valid_index() is not None else s.iloc[0:0]
+        if s.isna().any():
+            s = s.interpolate(limit_direction="both")
+        if len(s) < MIN_HISTORY_DAYS * 96:
+            log.error("snapshot %s %s: only %d points, skipping", zone, target, len(s))
+            continue
+        s.index.name = "time_utc"
+        s.name = "value"
+        out[(zone, target)] = s
+        if save:
+            d = p["snapshots"] / str(issue_date)
+            d.mkdir(parents=True, exist_ok=True)
+            s.to_frame().to_parquet(d / f"{zone}_{target}.parquet")
+            record_provenance(source, zone, target, d)
     return out
 
 
