@@ -56,6 +56,8 @@ def cmd_probe(cfg, args):
 
 def _site(cfg):
     """Rebuild the website; a failure here must not fail the forecast or scoring run."""
+    if os.environ.get("FORETEC_SKIP_SITE"):   # e.g. a backfill of zones not yet public
+        return
     try:
         build_site(cfg)
     except Exception:  # pragma: no cover

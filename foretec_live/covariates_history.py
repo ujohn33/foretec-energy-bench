@@ -201,8 +201,11 @@ def build_history(cfg, start: dt.date, end: dt.date, workers: int = 3) -> list[P
         f = out_dir / f"{month:%Y-%m}.parquet"
         mdays = [d for d in days if d.replace(day=1) == month]
         if f.exists():
-            have = set(pd.read_parquet(f, columns=[]).index.tz_localize("UTC").tz_convert(cfg["timezone"]).date)
-            if all(d in have for d in mdays):
+            old = pd.read_parquet(f, columns=[])
+            have = set(old.index.tz_localize("UTC").tz_convert(cfg["timezone"]).date)
+            import pyarrow.parquet as pq
+            zones = {c.split(".")[0] for c in pq.read_schema(f).names if c.count(".") == 3 and c.split(".")[1] == "load"}
+            if all(d in have for d in mdays) and set(cfg["zones"]) <= zones:   # complete, and built for every zone
                 continue
         # previous-runs months covering this month's delivery days (UTC days can spill into the next month)
         prev = {}
