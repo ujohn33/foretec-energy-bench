@@ -538,3 +538,18 @@ def test_inactive_zones_and_coarse_scoring(tmp_path, monkeypatch):
     y = pd.Series(np.repeat(np.arange(24.0) * 10, 4), index=idx)      # hourly actuals, stepwise
     fc = pd.DataFrame({"delivery_utc": idx, "point": y.to_numpy() + shape})
     assert metrics(fc, y)["mae"] == 50 and metrics(fc, y, "1h")["mae"] == 0
+
+
+def test_solar_night_zeros_filled_daytime_gaps_kept():
+    """ENTSO-E A75 without solar's night zeros: nights become 0, a daytime outage stays missing."""
+    from foretec_live.data.entsoe import fill_night_zeros
+
+    idx = pd.date_range("2026-03-01", periods=96 * 2, freq="15min")
+    hour = idx.hour + idx.minute / 60
+    solar = pd.Series(np.clip(np.sin((hour - 6) / 12 * np.pi), 0, None) ** 4 * 1000, index=idx)   # slow ramp at dawn
+    published = solar[solar > 0]                                           # night zeros left out
+    published = published.drop(published.index[(published.index.day == 2) & (published.index.hour == 12)])  # outage
+    out = fill_night_zeros(published, idx[0], idx[-1] + pd.Timedelta("15min"))
+    night = (hour < 6) | (hour > 18)
+    assert (out.reindex(idx)[night] == 0).all()
+    assert out.reindex(idx)[(idx.day == 2) & (idx.hour == 12)].isna().all()

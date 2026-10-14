@@ -78,6 +78,35 @@ def _finest(parts: list[tuple[dict, pd.Series]]) -> pd.Series:
     return out.sort_index()
 
 
+def fill_night_zeros(s: pd.Series, start, end) -> pd.Series:
+    """Some TSOs leave solar's night-time zeros out of A75 instead of reporting 0 (Energinet for DK, 2026).
+    A run of missing quarter-hours is filled with 0 when the published values next to it are near zero (at most
+    1 % of the window's peak, or 1 MW): that is the night. A daytime outage, next to large values, stays missing."""
+    if s.empty:
+        return s
+    idx = pd.date_range(pd.Timestamp(start).ceil("15min"), pd.Timestamp(end), freq="15min", inclusive="left")
+    full = s.reindex(idx)
+    low = max(1.0, 0.01 * float(s.max()))
+    miss = full.isna().to_numpy()
+    vals = full.to_numpy(copy=True)
+    i, n = 0, len(vals)
+    while i < n:
+        if not miss[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and miss[j]:
+            j += 1
+        before = vals[i - 1] if i > 0 else None
+        after = vals[j] if j < n else None
+        sides = [v for v in (before, after) if v is not None]
+        if sides and all(v <= low for v in sides) and (j - i) <= 18 * 4:   # nights are shorter than 18 h
+            vals[i:j] = 0.0
+        i = j
+    out = pd.Series(vals, index=idx, name=s.name)
+    return out[out.notna() | out.index.isin(s.index)]
+
+
 class EntsoeSource(Source):
     name = "entsoe"
 
@@ -191,4 +220,5 @@ class EntsoeSource(Source):
             return pd.Series(dtype=float)
         s = pd.concat(parts).sort_index()
         s = s[~s.index.duplicated(keep="last")]
-        return s[(s.index >= start) & (s.index < end)]
+        s = s[(s.index >= start) & (s.index < end)]
+        return fill_night_zeros(s, start, end) if target == "solar" else s
