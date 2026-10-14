@@ -2,7 +2,9 @@
 
 Same inputs as before (fl_cov.full_features: the NWP ensemble at the zone's centroids, ensemble statistics,
 the ENTSO-E load forecast, fuel and calendar; for price also yesterday's price), now trained on the
-`train_days` delivery days up to the end of the previous month instead of the 28-day window.
+`train_days` delivery days up to the end of the previous month instead of the 28-day window, weighted towards
+recent days (half-life `half_life_days`, 120) and with the series' recent level as features (levels()), so a
+model trained across two years of capacity growth and price regimes still knows today's level.
 
   training  data/static/cov_history (foretec_live/covariates_history.py): per delivery day the covariates as
             the live builder lays them out; IFS from its true pre-cut-off run, ICON-EU and GFS from the
@@ -31,13 +33,34 @@ LGBM = dict(n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_sampl
             subsample=0.8, subsample_freq=1, colsample_bytree=0.5, n_jobs=4, verbose=-1)
 
 
+def levels(y: pd.Series, index: pd.DatetimeIndex, tz: str = "Europe/Brussels") -> pd.DataFrame:
+    """The series' recent level as known at the cut-off of each row's issue day: mean of the 7 complete days and
+    maximum of the 28 complete days before it (days D-8..D-2 and D-29..D-2 for delivery day D). Two years of
+    history span capacity growth (solar +20-30 % a year) and price regimes that trees cannot extrapolate; these
+    tell the model where the level is now."""
+    day = y.index.tz_localize("UTC").tz_convert(tz).normalize().tz_localize(None)
+    dm, dx = y.groupby(day).mean(), y.groupby(day).max()
+    full = pd.date_range(dm.index.min(), dm.index.max() + pd.Timedelta(days=3), freq="D")
+    dm, dx = dm.reindex(full), dx.reindex(full)
+    lvl = dm.rolling(7, min_periods=5).mean().shift(2)
+    cap = dx.rolling(28, min_periods=20).max().shift(2)
+    rows = index.tz_localize("UTC").tz_convert(tz).normalize().tz_localize(None)
+    return pd.DataFrame({"lvl_7d": lvl.reindex(rows).to_numpy(), "max_28d": cap.reindex(rows).to_numpy()}, index=index)
+
+
 def design(cov: pd.DataFrame, index: pd.DatetimeIndex, zone: str, target: str, y: pd.Series, cols=None) -> pd.DataFrame:
-    """Feature matrix for `index`: the series' covariates, calendar, and for price yesterday's price."""
+    """Feature matrix for `index`: the series' covariates, calendar, its recent level, and for price yesterday's price."""
     cols = cols if cols is not None else full_features(cov.columns, zone, target)
-    X = cov.reindex(index).reindex(columns=cols).join(calendar(index))
+    X = cov.reindex(index).reindex(columns=cols).join(calendar(index)).join(levels(y, index))
     if target == "price":   # D-1 prices are known before the gate: same quarter-hour one day earlier
         X["price_lag_1d"] = y.reindex(index - pd.Timedelta("1D")).to_numpy()
     return X
+
+
+def recency_weights(index: pd.DatetimeIndex, half_life_days: float) -> np.ndarray:
+    """Training weights halving every half_life_days back from the last training day."""
+    age = (index.max() - index) / pd.Timedelta(days=1)
+    return np.power(0.5, np.asarray(age, dtype=float) / half_life_days)
 
 
 def _ridge():
@@ -55,13 +78,14 @@ def _dummies(X: pd.DataFrame) -> pd.DataFrame:
     return X
 
 
-def fit_series(kind: str, X: pd.DataFrame, y: np.ndarray, quantiles, holdout_days: int, tz: str) -> dict:
+def fit_series(kind: str, X: pd.DataFrame, y: np.ndarray, quantiles, holdout_days: int, tz: str, half_life: float = 120) -> dict:
     ok = ~np.isnan(y)
     X, y = X[ok], y[ok]
     if kind == "lgbm":
         import lightgbm as lgb
-        point = lgb.LGBMRegressor(**LGBM).fit(X, y)
-        qs = [lgb.LGBMRegressor(objective="quantile", alpha=a, **LGBM).fit(X, y) for a in quantiles]
+        w = recency_weights(X.index, half_life)
+        point = lgb.LGBMRegressor(**LGBM).fit(X, y, sample_weight=w)
+        qs = [lgb.LGBMRegressor(objective="quantile", alpha=a, **LGBM).fit(X, y, sample_weight=w) for a in quantiles]
         return {"kind": kind, "cols": list(X.columns), "point": point, "quantiles": qs, "rows": int(len(y))}
     X = _dummies(X)
     X = X.loc[:, X.isna().mean() <= 0.2]                    # drop covariates missing on more than a fifth of the days
@@ -70,12 +94,13 @@ def fit_series(kind: str, X: pd.DataFrame, y: np.ndarray, quantiles, holdout_day
     fill = X.median()
     day = X.index.tz_localize("UTC").tz_convert(tz).normalize()
     hold = np.asarray(day > day.max() - pd.Timedelta(days=holdout_days))
-    m = _ridge().fit(X[~hold], y[~hold])
+    w = recency_weights(X.index, half_life)
+    m = _ridge().fit(X[~hold], y[~hold], ridgecv__sample_weight=w[~hold])
     res = y[hold] - m.predict(X[hold])
     hour = X.index[hold].tz_localize("UTC").tz_convert(tz).hour
     qtab = np.array([np.quantile(res[hour == h], quantiles) if (hour == h).sum() > 20 else np.quantile(res, quantiles)
                      for h in range(24)])
-    return {"kind": kind, "cols": list(X.columns), "point": _ridge().fit(X, y), "qtab": qtab, "fill": fill,
+    return {"kind": kind, "cols": list(X.columns), "point": _ridge().fit(X, y, ridgecv__sample_weight=w), "qtab": qtab, "fill": fill,
             "rows": int(len(y)), "holdout_mae": float(np.mean(np.abs(res)))}
 
 
@@ -109,7 +134,8 @@ def artifact(cfg, spec: dict, issue_date: dt.date, keys: list[str], quantiles) -
         zone, target = key.split("_")
         y = history(cfg, zone, target, end_day, days)
         X = design(cov, cov.index, zone, target, y)
-        art["series"][key] = fit_series(kind, X, y.reindex(cov.index).to_numpy(dtype=float), quantiles, holdout, cfg["timezone"])
+        art["series"][key] = fit_series(kind, X, y.reindex(cov.index).to_numpy(dtype=float), quantiles, holdout, cfg["timezone"],
+                                        float(spec.get("half_life_days", 120)))
         art["series"][key]["seconds"] = round(time.time() - t, 1)
         print(f"{name} {key}: trained through {end_day} on {art['series'][key]['rows']} rows, "
               f"{len(art['series'][key]['cols'])} features ({time.time() - t:.0f}s)", file=sys.stderr, flush=True)

@@ -52,10 +52,10 @@ zones:
   BE: {energycharts_bzn: BE, energycharts_country: be, entsoe: "10YBE----------2"}
   NL: {energycharts_bzn: NL, energycharts_country: nl, entsoe: "10YNL----------L"}
   FR: {energycharts_bzn: FR, energycharts_country: fr, entsoe: "10YFR-RTE------C"}
-  # active: false = defined but not run (history and backtest are built with FORETEC_ALL_ZONES=1 first)
-  DE: {label: DE-LU, energycharts_bzn: DE-LU, energycharts_country: de, entsoe: "10Y1001A1001A82H", active: false}
-  DK1: {energycharts_bzn: DK1, energycharts_country: dk, entsoe: "10YDK-1--------W", active: false}
-  DK2: {energycharts_bzn: DK2, energycharts_country: dk, entsoe: "10YDK-2--------M", active: false}
+  # a zone with active: false is defined but not run (its history and backtest are built with FORETEC_ALL_ZONES=1)
+  DE: {label: DE-LU, energycharts_bzn: DE-LU, energycharts_country: de, entsoe: "10Y1001A1001A82H"}
+  DK1: {energycharts_bzn: DK1, energycharts_country: dk, entsoe: "10YDK-1--------W"}
+  DK2: {energycharts_bzn: DK2, energycharts_country: dk, entsoe: "10YDK-2--------M"}
 # series whose actuals are only published at a coarser resolution: forecasts and actuals are averaged to it before
 # scoring, so 15-minute detail the actuals do not have is neither rewarded nor penalised (ENTSO-E DK load is hourly)
 score_resolution: {DK1_load: 1h, DK2_load: 1h}

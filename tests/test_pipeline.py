@@ -174,10 +174,10 @@ def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
     from foretec_live.covariates import fuel_quotes
 
-    monkeypatch.delenv("OIL_PRICE_KEY", raising=False)
     cache = Path(cfg["_root"]) / "data" / "cache" / "fuel_quotes.parquet"
     cache.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"time_utc": pd.to_datetime(["2026-09-18", "2026-09-19"]), "code": "TTF_EUR", "price": [70.0, 99.0]}).to_parquet(cache)
+    pd.DataFrame({"time_utc": pd.to_datetime(["2026-09-18", "2026-09-19"]), "code": "TTF_EUR", "price": [70.0, 99.0],
+                  "source": "yahoo"}).to_parquet(cache)                # fresh cache: no request is made
     q = fuel_quotes(cfg, pd.Timestamp("2026-09-19 09:30"))      # cut-off of issue day 2026-09-19
     assert q["price"].tolist() == [70.0]
 
@@ -347,7 +347,7 @@ def test_early_scoring_needs_complete_day_and_provisional_actuals(cfg):
     assert not (paths(cfg)["actuals"] / "2026-09-21" / "BE_wind.parquet").exists()
 
     s = score_pending(cfg, results_subdir="results/backtest", now=pd.Timestamp("2026-09-22 07:00"))
-    assert ((s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == 3   # complete day, scored at 07:00
+    assert ((s["target"] == "wind") & (s["issue_date"].astype(str) == "2026-09-20")).sum() == len(cfg["zones"])   # complete day, scored at 07:00
     provisional_actuals(cfg, now=pd.Timestamp("2026-09-22 07:10"))
     assert not prov.exists()                                   # frozen actuals replace the provisional ones
 
@@ -528,11 +528,14 @@ def test_inactive_zones_and_coarse_scoring(tmp_path, monkeypatch):
     hourly means, so 15-minute detail its hourly actuals do not have is not penalised."""
     from foretec_live.score import metrics
 
-    shutil.copy(REPO / "config.yaml", tmp_path / "config.yaml")
+    text = (REPO / "config.yaml").read_text().replace(
+        "zones:\n", 'zones:\n  XX: {entsoe: "10Y-TEST", active: false}\n', 1)
+    (tmp_path / "config.yaml").write_text(text)
     monkeypatch.delenv("FORETEC_ALL_ZONES", raising=False)
-    assert "DE" not in load_config(tmp_path / "config.yaml")["zones"]
+    zones = load_config(tmp_path / "config.yaml")["zones"]
+    assert "XX" not in zones and {"DE", "DK1", "DK2"} <= set(zones)
     monkeypatch.setenv("FORETEC_ALL_ZONES", "1")
-    assert {"DE", "DK1", "DK2"} <= set(load_config(tmp_path / "config.yaml")["zones"])
+    assert "XX" in load_config(tmp_path / "config.yaml")["zones"]
     idx = pd.date_range("2026-09-20 22:00", periods=96, freq="15min")
     shape = np.tile([-1.0, 1.0, -1.0, 1.0], 24) * 50                 # intra-hour wiggle around the hourly level
     y = pd.Series(np.repeat(np.arange(24.0) * 10, 4), index=idx)      # hourly actuals, stepwise
