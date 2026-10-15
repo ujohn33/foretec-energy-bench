@@ -124,7 +124,8 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
         env.setdefault("HF_HOME", str(Path(cfg["_root"]).parent / ".hf-cache"))
         env["PYTHONPATH"] = str(Path(cfg["_root"]) / "models" / "_shared")
         env["FORETEC_HOME"] = str(cfg["_root"])
-        env.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
+        threads = str(cfg.get("_threads_per_model") or os.cpu_count() or 1)   # shared out when models run in parallel
+        env["OMP_NUM_THREADS"] = env["MKL_NUM_THREADS"] = threads
         cmd = [str(external_python(spec, cfg)), str(spec.folder / spec.raw.get("script", "forecaster.py")), str(tmp / "request.json")]
         try:
             r = subprocess.run(cmd, cwd=spec.folder, env=env, capture_output=True, text=True,
@@ -171,8 +172,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
     outdir = p["forecasts"] / str(issue_date)
     outdir.mkdir(parents=True, exist_ok=True)
     log_rows = []
-    covariates = None   # built once per issue day, only if some model asks for more than its own history
     live = results_subdir == "results"
+    specs = []
     for spec in load_models(p["models"], only_models):
         is_ref = bool(spec.raw.get("reference"))
         if live and is_ref != reference_run:
@@ -181,6 +182,23 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             continue
         if live and spec.raw.get("live") is False:   # backtested, not yet run live (e.g. too slow for the gate)
             continue
+        specs.append(spec)
+    # covariates: built once per issue day, before the models run, if any model asks for more than its own history
+    covariates = None
+    needs_cov = lambda sp: sp.raw.get("runner") == "subprocess" and set(sp.raw.get("inputs", ["history"])) - {"history", "calendar"}
+    if any(needs_cov(sp) for sp in specs):
+        try:
+            from .covariates import build_covariates
+            build_covariates(issue_date, cfg)
+            covariates = str(Path(cfg["_root"]) / "data" / "covariates" / f"{issue_date}.parquet")
+        except Exception as e:
+            log.error("covariates for %s unavailable: %s", issue_date, e)
+    # models run model_workers at a time (config), each subprocess with its share of the CPU threads
+    workers = max(1, int(cfg.get("model_workers", 1)))
+    run_cfg = {**cfg, "_threads_per_model": max(1, (os.cpu_count() or 1) // workers)}
+
+    def run_one(spec) -> list[dict]:
+        rows = []
         external = spec.raw.get("runner") == "subprocess"
         if external:
             py = external_python(spec, cfg)
@@ -189,31 +207,21 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             ok, why = spec.dependencies_ok()
         if not ok:
             log.warning("skip %s: %s", spec.name, why)
-            log_rows.append({"model": spec.name, "status": "skipped", "detail": why})
-            continue
+            return [{"model": spec.name, "status": "skipped", "detail": why}]
         frames = []
         items = [((zone, target), y) for (zone, target), y in snaps.items() if spec.applies(zone, target)
                  # live_only_zones: zones whose source only exists live (e.g. a forecast the publisher overwrites)
                  and (live or zone not in (spec.raw.get("live_only_zones") or []))]
         if not items:   # e.g. a wind/solar-only model in a run restricted to load
-            continue
+            return []
         extra = {"issue_date": str(issue_date), "live": live}   # live runs never train (models are trained ahead)
-        if external and set(spec.raw.get("inputs", ["history"])) - {"history", "calendar"}:
-            if covariates is None:
-                try:
-                    from .covariates import build_covariates
-                    build_covariates(issue_date, cfg)
-                    covariates = str(Path(cfg["_root"]) / "data" / "covariates" / f"{issue_date}.parquet")
-                except Exception as e:
-                    log.error("covariates for %s unavailable: %s", issue_date, e)
-                    covariates = ""
+        if needs_cov(spec):
             if not covariates:
-                log_rows.append({"model": spec.name, "status": "skipped", "detail": "covariates unavailable"})
-                continue
+                return [{"model": spec.name, "status": "skipped", "detail": "covariates unavailable"}]
             extra["covariates"] = covariates
         if external:
             t0 = time.time()
-            results = _forecast_external(spec, items, fh_index, cfg, extra)
+            results = _forecast_external(spec, items, fh_index, run_cfg, extra)
             per_series = round((time.time() - t0) / max(len(items), 1), 2)
         for (zone, target), y in items:
             t0 = time.time()
@@ -232,8 +240,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                 status, detail = "error", f"{type(e).__name__}: {e}"
                 log.error("%s %s %s failed: %s", spec.name, zone, target, detail)
                 log.debug(traceback.format_exc())
-            log_rows.append({"model": spec.name, "zone": zone, "target": target, "status": status,
-                             "seconds": per_series if external else round(time.time() - t0, 2), "detail": detail})
+            rows.append({"model": spec.name, "zone": zone, "target": target, "status": status,
+                         "seconds": per_series if external else round(time.time() - t0, 2), "detail": detail})
         if frames:
             out = pd.concat(frames, ignore_index=True)
             out.insert(0, "model", spec.name)
@@ -244,6 +252,16 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                 mine = [in_subset(z, t) for z, t in zip(old["zone"], old["target"])]
                 out = pd.concat([old[[not m for m in mine]], out], ignore_index=True)
             out.to_parquet(target_f, index=False)
+        return rows
+
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(workers) as ex:
+            for rows in ex.map(run_one, specs):   # results in model order, whatever finishes first
+                log_rows += rows
+    else:
+        for spec in specs:
+            log_rows += run_one(spec)
     meta = {
         "issue_date": str(issue_date),
         "run_started_utc": started,

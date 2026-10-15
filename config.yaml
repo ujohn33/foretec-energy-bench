@@ -17,6 +17,7 @@ revision_check: {days: 3, threshold: 0.005}   # wind/solar actuals re-fetched fo
 actuals_locked_through: {NL_wind: 2026-10-12}
 backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
 
+model_workers: 2             # models run two at a time, each subprocess with half the CPU threads
 envs_dir: ../envs             # one Python env per subprocess model family (see models/*/install.sh)
 
 covariates:                   # what covariate models may use; frozen per issue day in data/covariates/
