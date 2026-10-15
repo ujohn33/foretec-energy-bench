@@ -170,6 +170,23 @@ def test_covariate_building_blocks(cfg):
     assert st["BE.solar.ens_cv.shortwave_radiation"].iloc[1] == 0.0   # no division by zero at night
 
 
+def test_load_forecast_is_a_price_input_only():
+    """Load models never get the TSO's load forecast (the benchmark they are meant to beat); price models do."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models" / "_shared"))
+    from fl_cov import compact_features, full_features
+
+    cols = [f"{z}.{b}.ens_mean.{v}" for z in ("BE", "NL") for b, v in
+            (("wind_onshore", "wind_speed_100m"), ("wind_offshore", "wind_speed_100m"), ("solar", "global_tilted_irradiance"),
+             ("load", "temperature_2m"), ("load", "shortwave_radiation"), ("load", "cloud_cover"))]
+    cols += ["BE.load_fc.entsoe.load_mw", "NL.load_fc.entsoe.load_mw", "fuel.ccgt.srmc.eur_mwh"]
+    for zone in ("BE", "NL"):
+        for pick in (compact_features, full_features):
+            load = pick(cols, zone, "load")
+            assert load and not [c for c in load if ".load_fc." in c], (pick.__name__, zone, load)
+            assert f"{zone}.load_fc.entsoe.load_mw" in pick(cols, zone, "price"), (pick.__name__, zone)
+
+
 def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
     from foretec_live.covariates import fuel_quotes

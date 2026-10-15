@@ -1,6 +1,6 @@
 name: tabby_cov
 author: Foretec
-description: "Tabby (paris-noah/Tabby) with known-future covariates in TimesFM's \"xreg + timesfm\" style: a ridge on the NWP ensemble means/spreads, ENTSO-E load forecast and fuel cost explains what the covariates can, Tabby forecasts the residual zero-shot (it has no covariate input of its own), and the ridge forecast is added back to every quantile."
+description: "Tabby (paris-noah/Tabby) with known-future covariates in TimesFM's \"xreg + timesfm\" style: a ridge on the NWP ensemble means/spreads, ENTSO-E load forecast (price only) and fuel cost explains what the covariates can, Tabby forecasts the residual zero-shot (it has no covariate input of its own), and the ridge forecast is added back to every quantile. Load is forecast by Tabby alone: on weather only, the ridge stood in for the daily cycle and cost more than it explained (NL backtest Rel. MAE 1.9 against 0.65)."
 family: tabby
 inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess

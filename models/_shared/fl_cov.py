@@ -2,6 +2,11 @@
 
 Column names are '<zone>.<bucket>.<what>.<variable>', e.g. 'BE.wind_offshore.ens_mean.wind_speed_100m',
 'NL.solar.icon_eu.global_tilted_irradiance', 'FR.load_fc.entsoe.load_mw', 'fuel.ccgt.srmc.eur_mwh'.
+
+The ENTSO-E day-ahead load forecast ('<zone>.load_fc.entsoe.load_mw') is a price input only, never a load input (since
+issue 16 Oct 2026): a load model would be learning the TSO's forecast, the benchmark it is meant to beat, and for NL it
+is a different quantity from the scored load (TenneT's is net of embedded solar, NED's load is gross; their correlation
+was -0.45 in Jul-Sep 2026).
 """
 from __future__ import annotations
 
@@ -28,8 +33,8 @@ def full_features(cols, zone: str, target: str) -> list[str]:
         pre = [f"{zone}.wind_onshore.", f"{zone}.wind_offshore."]
     elif target == "solar":
         pre = [f"{zone}.solar."]
-    elif target == "load":   # weather at the load centres and the TSO's day-ahead load forecast
-        pre = [f"{zone}.load.", f"{zone}.load_fc."]
+    elif target == "load":   # weather at the load centres
+        pre = [f"{zone}.load."]
     else:  # price: own load, residual-load drivers in all coupled zones, fuel
         pre = [f"{zone}.load.", f"{zone}.load_fc.", "fuel."]
         zs = zones_of(cols) or list(ZONES)
@@ -47,8 +52,8 @@ def compact_features(cols, zone: str, target: str) -> list[str]:
         want = [f"{zone}.solar.ens_mean.global_tilted_irradiance", f"{zone}.solar.ens_std.global_tilted_irradiance",
                 f"{zone}.solar.ens_mean.cloud_cover", f"{zone}.solar.ens_mean.temperature_2m"]
     elif target == "load":
-        want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m",
-                f"{zone}.load.ens_mean.shortwave_radiation", f"{zone}.load.ens_mean.cloud_cover"]
+        want = [f"{zone}.load.ens_mean.temperature_2m", f"{zone}.load.ens_mean.shortwave_radiation",
+                f"{zone}.load.ens_mean.cloud_cover"]
     else:
         want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m", "fuel.ccgt.srmc.eur_mwh"]
         zs = zones_of(cols) or list(ZONES)

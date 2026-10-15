@@ -7,8 +7,11 @@ forecast and the first H kept. Weights and remote code are pinned to the revisio
 
 The _cov variants: Tabby takes no covariates (its context_aware option only summarises the target's own history), so
 covariates enter as in TimesFM's "xreg + timesfm" mode: a ridge regression of the history on the known-future
-covariates (NWP ensemble means/spreads, ENTSO-E load forecast, fuel; fl_cov.compact_features) explains what they can,
-Tabby forecasts the residual, and the ridge forecast over the delivery day is added back to every quantile.
+covariates (NWP ensemble means/spreads, fuel; fl_cov.compact_features) explains what they can, Tabby forecasts the
+residual, and the ridge forecast over the delivery day is added back to every quantile. Load is forecast without the
+ridge: with weather alone the ridge stands in for the daily cycle (radiation ~ daytime) and a sunny or cloudy delivery
+day shifts it by up to 2 GW. Backtest 14 Sep - 1 Oct 2026, Rel. MAE vs naive_weekly, Tabby alone against Tabby on the
+weather-ridge residual: NL 0.65 vs 1.9 (1.16 with calendar terms in the ridge), BE 0.64 vs 0.65 (with calendar terms).
 """
 from __future__ import annotations
 
@@ -70,7 +73,7 @@ def run(repo: str, covariates: bool = False) -> None:
         span = max(h, MIN_SPAN)
         y = np.asarray(y, dtype=float)
         base = np.zeros(h)
-        if covariates:
+        if covariates and not key.endswith("_load"):
             _, _, cp, cf, _ = series_frames(req, cov, inp, key)
             fit, base = ridge(cp.astype(float), cf.astype(float), y)
             y = y - fit

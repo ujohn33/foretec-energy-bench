@@ -117,7 +117,7 @@ Add the env to `scripts/install_model_envs.sh`. The foundation models in this re
 - **NWP ensemble:** ICON-EU (DWD), GFS (NOAA) and IFS HRES (ECMWF) from the Open-Meteo single-runs archive. A run counts only if `init <= cut-off - lag_hours` (config), i.e. it was published before the cut-off: at 11:30 that is ICON-EU 06 UTC and GFS/IFS 00 UTC.
 - **Where:** capacity-weighted k-means centroids per zone and bucket (`geo/centroids.csv`, built by `geo/build_centroids.py`, sources in `geo/README.md`). Zone values are capacity-weighted means; across the models we add the ensemble mean, std, min, max, range, coefficient of variation and pairwise differences (the predico recipe).
 - **Same vintage for training:** the values for each past delivery day come from the runs that were available at that day's own cut-off, so models train on forecasts with the lead time they forecast with.
-- **ENTSO-E day-ahead load forecast** (A65; TSOs publish it 2 h before the gate). Backtests use the currently published version.
+- **ENTSO-E day-ahead load forecast** (A65; TSOs publish it 2 h before the gate). Backtests use the currently published version. It is a price input only: load models do not get it (since issue 16 Oct 2026). It is the benchmark they are meant to beat, and for NL it measures something else: TenneT's forecast is net of embedded solar, NED's load is gross, and the two were anti-correlated in Jul–Sep 2026.
 - **Fuel cost:** TTF gas (`TTF=F`, ICE Dutch front month) and EU carbon (`CO2.L`, EUA ETC) daily closes from Yahoo Finance, a close counting only from the end of its date, plus a CCGT short-run cost.
 
 API keys come from the environment (`OPENMETEOKEY`, `ENTSOE_TOKEN`, `NED_NL_KEY`, `RTE_DATA_KEY`); the systemd units read them from `/root/.env`.
