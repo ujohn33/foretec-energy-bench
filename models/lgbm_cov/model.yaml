@@ -6,4 +6,4 @@ inputs: [history, nwp, load_forecast, fuel, calendar]
 runner: subprocess
 env: _self
 script: forecaster.py
-caveat: "Trained on the 28-day window every model gets; lgbm_cov_2y is the same model trained on two years."
+caveat: "Trained on the 28-day window every model gets; lgbm_prod is the production set-up (two years, retrained daily for price and load, capacity-scaled solar)."

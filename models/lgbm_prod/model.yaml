@@ -1,0 +1,14 @@
+name: lgbm_prod
+author: Foretec
+description: "LightGBM per series on the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), the ENTSO-E load forecast, fuel and calendar, set up the way the backtest ablation (Oct 2026) found to matter: two years of history, recency-weighted (half-life 120 days), one LightGBM per quantile; solar trained on its capacity factor (installed capacity from the Marktstammdatenregister, Elia and Energinet for DE-LU, BE, DK1, DK2; a recent-peak proxy for FR and NL); price and load retrained every night on data through the day before, wind and solar monthly. Ablation: daily retraining cut price and load error by 15-23 % against monthly, the capacity factor cut solar error by 12-27 %, tuning the LightGBM parameters gained nothing."
+family: nwp
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: _self
+script: ../_shared/fl_covmodel.py
+regressor: lgbm
+train_days: 730
+half_life_days: 120
+scale: {solar: capacity}
+retrain: {price: daily, load: daily}
+timeout: 3600

@@ -10,3 +10,6 @@ regressor: lgbm
 train_days: 730
 timeout: 3600
 half_life_days: 120
+enabled: false
+retired: "Replaced by lgbm_prod on 15 Oct 2026 (the same two-year model with daily retraining for price and load and capacity-scaled solar)."
+hidden: true
