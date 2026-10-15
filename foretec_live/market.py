@@ -143,8 +143,20 @@ def _committed(fc: pd.DataFrame) -> dict[str, np.ndarray]:
     return {k: np.clip(v, 0, None) for k, v in out.items()}
 
 
+def _capacity(cfg, key: str, d: dt.date) -> float | None:
+    """Installed capacity (MW) of series key on day d: the registered series, else the configured value."""
+    f = Path(cfg["_root"]) / "data" / "static" / "capacity" / f"{key}.parquet"
+    if f.exists():
+        s = pd.read_parquet(f)["mw"]
+        s = s[s.index <= pd.Timestamp(d)]
+        if len(s):
+            return float(s.iloc[-1])
+    return ((cfg.get("value") or {}).get("capacity_mw") or {}).get(key)
+
+
 def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> dict:
-    """series -> {perfect, energy, models: {model: {strategy: revenue}}} for one issue day (EUR, MWh)."""
+    """series -> {perfect, energy, models: {model: {strategy: revenue}}} for one issue day (EUR, MWh), for a virtual
+    asset of value.asset_mw: the zone's output and the forecasts scaled by asset_mw / installed capacity."""
     from .config import paths
     from .timeutil import delivery_date
 
@@ -172,7 +184,11 @@ def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> 
             g = pd.read_parquet(g_f)["value"].reindex(idx).to_numpy(float)
             if not np.isfinite(g).all():
                 continue
-            g = np.clip(g, 0, None)
+            cap = _capacity(cfg, f"{zone}_{target}", d)
+            if not cap:
+                continue
+            k = (cfg.get("value") or {}).get("asset_mw", 100) / cap
+            g = np.clip(g, 0, None) * k
             ser = {"perfect": round(float(h * (g * da).sum()), 1), "energy": round(float(h * g.sum()), 1), "models": {}}
             for model in sorted(models):
                 f = folder / f"{model}.parquet"
@@ -186,6 +202,7 @@ def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> 
                     continue
                 rev = {}
                 for strat, c in _committed(fc).items():
+                    c = c * k
                     dev = g - c
                     rev[strat] = round(float(h * (c * da + np.where(dev > 0, dev * p_long, dev * p_short)).sum()), 1)
                 ser["models"][model] = rev
@@ -213,7 +230,7 @@ def value_export(cfg, days: dict, scored: set, hidden: set) -> dict:
     for (i, m, z, t) in scored:
         if t in VALUE_TARGETS and m not in hidden:
             by_day.setdefault(i, {}).setdefault((z, t), []).append(m)
-    out = {"percentiles": PERCENTILES, "series": {}}
+    out = {"percentiles": PERCENTILES, "asset_mw": (cfg.get("value") or {}).get("asset_mw", 100), "series": {}}
     for issue_date, (phase, folder) in sorted(days.items()):
         sc = by_day.get(issue_date)
         if not sc:
@@ -221,7 +238,8 @@ def value_export(cfg, days: dict, scored: set, hidden: set) -> dict:
         d = str(delivery_date(issue_date))
         inputs = [*folder.glob("*.parquet"), *(p["actuals"] / d).glob("*.parquet"),
                   *(Path(cfg["_root"]) / "data" / "market" / "imbalance" / d).glob("*.parquet")]
-        sig = hashlib.sha1(json.dumps([sorted((z, t, sorted(ms)) for (z, t), ms in sc.items()), phase,
+        sig = hashlib.sha1(json.dumps([sorted((z, t, sorted(ms)) for (z, t), ms in sc.items()), phase, cfg.get("value"),
+                                       [str(f.stat().st_mtime) for f in (Path(cfg["_root"]) / "data" / "static" / "capacity").glob("*.parquet")],
                                        sorted((str(f), f.stat().st_mtime) for f in inputs)]).encode()).hexdigest()
         cf = cache / f"{issue_date}.json"
         day = None

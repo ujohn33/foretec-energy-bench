@@ -19,6 +19,9 @@ actuals_locked_through: {NL_wind: 2026-10-12}
 backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
 
 model_workers: 2             # models run two at a time, each subprocess with half the CPU threads
+# Forecast Value page: a virtual asset of asset_mw in each zone, i.e. the zone's output and every forecast scaled by
+# asset_mw / installed capacity (data/static/capacity where it exists, else capacity_mw: ENTSO-E 14.1.A, 2026)
+value: {asset_mw: 100, capacity_mw: {FR_wind: 25200, FR_solar: 28254, NL_wind: 11917, NL_solar: 29282}}
 envs_dir: ../envs             # one Python env per subprocess model family (see models/*/install.sh)
 
 covariates:                   # what covariate models may use; frozen per issue day in data/covariates/

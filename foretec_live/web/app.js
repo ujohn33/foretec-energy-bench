@@ -1265,12 +1265,14 @@
     const zoneTxt = S.v.zone === "all" ? "all zones" : zoneLabel(S.v.zone);
     $("v-r1-l").textContent = `Committed p${S.v.p} · ${m}`;
     $("v-r1").textContent = pct(at(m));
-    $("v-r1-s").textContent = t ? `€${(t.r / 1e6).toFixed(2)}m of €${(t.perfect / 1e6).toFixed(2)}m · point forecast ${pct(r.point)}` : "";
+    const eur = (v) => (Math.abs(v) >= 1e6 ? `€${(v / 1e6).toFixed(2)}m` : `€${(v / 1e3).toFixed(0)}k`);
+    $("v-r1-s").textContent = t ? `${eur(t.r)} of ${eur(t.perfect)} · point forecast ${pct(r.point)}` : "";
     $("v-r2").textContent = r.bestP != null ? "p" + r.bestP : "–";
     $("v-r2-s").textContent = r.best != null ? `${pct(r.best)} · ${r.bestP === S.v.p ? "you are on it" : `${((r.best - at(m)) * 100).toFixed(1)} pts above p${S.v.p}`}` : "";
     const c = r.cost(t);
     $("v-r3").textContent = c == null ? "–" : `€${c.toFixed(2)}`;
-    $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(0)} GWh in ${zoneTxt}` : "";
+    const nz = valueSeries().filter((x) => x.phase.some((ph, i) => (S.phase === "all" || ph === S.phase) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
+    $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(1)} GWh from ${nz > 1 ? `${nz} assets of ${VAL.asset_mw} MW` : `${VAL.asset_mw} MW`} in ${zoneTxt}` : "";
 
     const all = [...ranked, ...Object.keys(res).filter((x) => REF.has(x))];
     const bestAt = Math.max(...ranked.filter((x) => res[x].quant).map(at).filter((v) => v != null));
@@ -1282,12 +1284,12 @@
         <td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>
         <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td><td class="r num">${q.n}</td></tr>`; }).join("") + "</tbody>";
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
-    $("v-notes").textContent = `An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
+    $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
       "Imbalance cost is what the forecast error cost per MWh produced, against perfect foresight; it is negative when the deviations happened to earn more at the imbalance price than at the day-ahead price. " +
       "Models without quantiles only have the point forecast. Click a row to draw its curve.";
   }
   async function initValue() {
-    try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); }
+    try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); $("v-mw").textContent = VAL.asset_mw || 100; }
     catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
     S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50 };
     const q = new URLSearchParams(location.search);
