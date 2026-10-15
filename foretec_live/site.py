@@ -360,5 +360,13 @@ def build_site(cfg) -> Path:
         "days": {d: ph for d, (ph, _) in days.items()},
     }
     _atomic_write(site / "data" / "summary.json", json.dumps(summary, separators=(",", ":"), allow_nan=False))
+    try:      # the Forecast Value page: revenue of selling each forecast day-ahead, deviations at the imbalance price
+        from .market import value_export
+        scored = set() if s.empty else set(zip(s["issue_date"], s["model"], s["zone"], s["target"]))
+        val = value_export(cfg, days, scored, _hidden(cfg))
+        val["generated_utc"] = summary["generated_utc"]
+        _atomic_write(site / "data" / "value.json", json.dumps(val, separators=(",", ":"), allow_nan=False))
+    except Exception:  # noqa: BLE001 - the value page is extra; never fail the site build on it
+        log.exception("value export failed")
     log.info("site: %d score rows, %d forecast days", len(rows), len(days))
     return site

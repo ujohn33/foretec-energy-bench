@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forecast Value · Foretec Energy Bench</title>
+<meta name="description" content="What each forecast is worth: a wind or solar producer sells a percentile of the forecast day-ahead and settles the error at the imbalance price.">
+<meta name="theme-color" content="#E6F0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1F3A" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://energybench.foretec.co/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Foretec">
+<meta property="og:title" content="Foretec Energy Bench: the live benchmark for energy forecasts">
+<meta property="og:description" content="Every model forecasts the next delivery day from the same public data at the same time, and is scored against what actually happened.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400..700;1,400&family=Source+Serif+4:opsz,wght@8..60,300..700&family=Source+Code+Pro:wght@400&family=Inter:ital,wght@0,600..800;1,600..900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&text=LIVE&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@500&text=0123456789&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="value">
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">
+      <a href="index.html" class="mark" aria-label="Foretec Energy Bench leaderboard">Foretec</a>
+      <span class="brand-rule" aria-hidden="true"></span>
+      <a href="index.html" class="product">Energy <b>Bench</b></a>
+      <span class="onair" role="img" aria-label="Live"><i aria-hidden="true"></i>LIVE</span>
+    </div>
+    <nav class="top-nav" aria-label="Pages">
+      <a href="index.html">Leaderboard</a>
+      <a href="explorer.html">Forecast Explorer</a>
+      <a href="value.html" class="on" aria-current="page">Forecast Value</a>
+      <a href="methodology.html">Methodology</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="filterbar">
+  <div class="wrap filters" role="group" aria-label="Filters">
+    <div class="field"><label for="v-zone">Zone</label><select id="v-zone"></select></div>
+    <div class="field"><span class="lbl">Target</span><div class="seg" id="v-target" role="radiogroup" aria-label="Target"></div></div>
+    <div class="field"><span class="lbl">Period</span><div class="seg" id="v-phase" role="radiogroup" aria-label="Period"></div></div>
+    <div class="field"><label for="v-model">Model</label><select id="v-model"></select></div>
+    <div class="field"><span class="lbl" aria-hidden="true">&nbsp;</span><a class="seg-link" href="methodology.html#value">Methodology</a></div>
+    <div class="status mono">
+      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> Brussels</span>
+      <span>Updated <span id="updated">–</span> · prices ENTSO-E</span>
+    </div>
+  </div>
+</div>
+
+<section id="value" class="first">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20.5h18"/><path d="M4 16c3-7 6-9 8-9s5 2 8 9"/><circle class="a" cx="12" cy="7" r="2.1"/></svg>How much do you sell day-ahead?</h2>
+      <p class="lede" id="v-lede">You own the wind or solar output of a whole zone. Before the 12:00 gate you sell a percentile of a model's forecast on the day-ahead market; whatever you produce above or below it is settled at the imbalance price. The score is the share of the revenue you would have earned with perfect foresight.</p>
+    </div>
+    <div class="panel vcard">
+      <div class="chart-box"><canvas id="c-value" aria-label="Captured share of perfect-foresight revenue by committed percentile"></canvas></div>
+      <div class="legend" id="l-value"></div>
+      <div class="vslider">
+        <label for="v-p" class="lbl">Committed percentile of the day-ahead forecast</label>
+        <input type="range" id="v-p" min="10" max="90" step="5" value="50">
+        <div class="vscale mono"><span>p10</span><span>p50</span><span>p90</span></div>
+      </div>
+      <div class="vread">
+        <div><span class="lbl" id="v-r1-l">Committed p50</span><b class="vnum" id="v-r1">–</b><span class="mono" id="v-r1-s"></span></div>
+        <div><span class="lbl">Best percentile</span><b class="vnum" id="v-r2">–</b><span class="mono" id="v-r2-s"></span></div>
+        <div><span class="lbl">Imbalance cost</span><b class="vnum" id="v-r3">–</b><span class="mono" id="v-r3-s"></span></div>
+      </div>
+    </div>
+
+    <h3 class="sub-h"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20.5h18"/><path d="M3.5 20.5V12h5.5v8.5M9 20.5V9h6v11.5M15 20.5V15h5.5v5.5"/></svg>Every model at <span id="v-p-h">p50</span></h3>
+    <div class="panel tablewrap"><table id="v-table"></table></div>
+    <p class="st-notes" id="v-notes"></p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a href="https://foretec.be/" class="foot-mark">Foretec <span>Energy <b>Bench</b></span></a>
+    <span>Brussels</span>
+    <span>Data: <a href="https://transparency.entsoe.eu" rel="noopener">ENTSO-E Transparency Platform</a>; gaps from <a href="https://opendata.elia.be" rel="noopener">Elia Open Data</a>, <a href="https://odre.opendatasoft.com" rel="noopener">RTE éCO2mix</a> and <a href="https://energy-charts.info" rel="noopener">Energy-Charts</a></span>
+    <span><a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a></span>
+  </div>
+</footer>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="vendor/chart-4.4.1.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

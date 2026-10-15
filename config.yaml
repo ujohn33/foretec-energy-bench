@@ -54,7 +54,7 @@ zones:
   NL: {energycharts_bzn: NL, energycharts_country: nl, entsoe: "10YNL----------L"}
   FR: {energycharts_bzn: FR, energycharts_country: fr, entsoe: "10YFR-RTE------C"}
   # a zone with active: false is defined but not run (its history and backtest are built with FORETEC_ALL_ZONES=1)
-  DE: {label: DE-LU, energycharts_bzn: DE-LU, energycharts_country: de, entsoe: "10Y1001A1001A82H"}
+  DE: {label: DE-LU, energycharts_bzn: DE-LU, energycharts_country: de, entsoe: "10Y1001A1001A82H", imbalance_area: "10Y1001A1001A83F"}
   DK1: {energycharts_bzn: DK1, energycharts_country: dk, entsoe: "10YDK-1--------W"}
   DK2: {energycharts_bzn: DK2, energycharts_country: dk, entsoe: "10YDK-2--------M"}
 # series whose actuals are only published at a coarser resolution: forecasts and actuals are averaged to it before

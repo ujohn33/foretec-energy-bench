@@ -94,6 +94,14 @@ def cmd_score(cfg, args):
     src = get_source(cfg)
     revised = check_revisions(cfg, source=src)
     s = score_pending(cfg, source=src)
+    try:      # imbalance prices for the Forecast Value page: the last week of delivery days, so late publications fill in
+        from .market import update_imbalance
+        today = local_today(cfg)
+        got = update_imbalance(cfg, today - dt.timedelta(days=7), today - dt.timedelta(days=1))
+        if got:
+            print(f"imbalance prices: {len(got)} zone-days stored")
+    except Exception:  # noqa: BLE001 - the value page is extra; never fail scoring on it
+        logging.exception("imbalance price update failed")
     if revised:   # the backtest window shares the actuals, so re-score it too
         score_pending(cfg, results_subdir="results/backtest", source=src)
         write_report(cfg, results_subdir="results/backtest")
