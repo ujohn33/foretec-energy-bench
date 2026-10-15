@@ -1283,21 +1283,39 @@
     const nz = valueSeries().filter((x) => x.phase.some((ph, i) => (S.phase === "all" || ph === S.phase) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
     $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(1)} GWh from ${nz > 1 ? `${nz} assets of ${VAL.asset_mw} MW` : `${VAL.asset_mw} MW`} in ${zoneTxt}` : "";
 
-    const all = [...ranked, ...Object.keys(res).filter((x) => REF.has(x))];
-    const bestAt = Math.max(...ranked.filter((x) => res[x].quant).map(at).filter((v) => v != null));
+    // three groups: models with percentiles (ranked at the slider's percentile), point-only models (ranked on their
+    // point forecast) and the reference entries published after the gate
+    const withQ = ranked.filter((x) => res[x].quant);
+    const pointOnly = ranked.filter((x) => !res[x].quant).sort((a, b) => (res[b].point ?? -1) - (res[a].point ?? -1));
+    const refs = Object.keys(res).filter((x) => REF.has(x));
+    const bestAt = Math.max(...withQ.map(at).filter((v) => v != null));
     const bestPoint = Math.max(...ranked.map((x) => res[x].point).filter((v) => v != null));
-    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">${S.v.mode === "imb" ? "Imbalance cost" : "Error cost"} at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
-      all.map((x, i) => { const q = res[x]; const a = q.quant ? at(x) : null; const cx = q.quant ? q.cost(q.st["p" + S.v.p + VSFX()]) : null;
-        return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
-        <td class="r num">${REF.has(x) ? "ref" : i + 1}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>
-        <td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>
-        <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td><td class="r num">${q.n}</td></tr>`; }).join("") + "</tbody>";
+    const costHead = S.v.mode === "imb" ? "Imbalance cost" : "Error cost";
+    const row = (x, rank) => {
+      const q = res[x], a = q.quant ? at(x) : null;
+      const tq = q.quant ? q.st["p" + S.v.p + VSFX()] : null, cx = tq ? q.cost(tq) : null;
+      const nq = tq ? tq.n : 0;   // evaluations with quantiles; the point forecast counts every evaluation
+      const nCell = q.quant && nq < q.n
+        ? `<td class="r num" title="Percentile columns over the ${nq} evaluations with quantiles; point forecast over all ${q.n}">${nq} / ${q.n}</td>`
+        : `<td class="r num">${q.n}</td>`;
+      const qCells = q.quant
+        ? `<td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>`
+        : `<td class="r po" colspan="3">point only</td>`;
+      return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
+        <td class="r num">${rank}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>${qCells}
+        <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td>${nCell}</tr>`;
+    };
+    const group = (label) => `<tr class="grp"><td colspan="8">${label}</td></tr>`;
+    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">${costHead} at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
+      withQ.map((x, i) => row(x, i + 1)).join("") +
+      (pointOnly.length ? group("Point forecast only: no quantiles to commit a percentile from, ranked on the point forecast") + pointOnly.map((x, i) => row(x, i + 1)).join("") : "") +
+      (refs.length ? group("Reference: published after the gate, not ranked") + refs.map((x) => row(x, "ref")).join("") : "") + "</tbody>";
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
     $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
       (S.v.mode === "imb"
         ? "Deviations are settled at the imbalance price, as the asset would have been paid. A deviation can earn when the imbalance price is on the right side of the day-ahead price, so a share can exceed 100% and the imbalance cost per MWh can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
         : "Error cost only: every deviation costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
-      "Models without quantiles only have the point forecast. Click a row to draw its curve.";
+      "Models without quantiles are ranked separately on their point forecast; a model that published quantiles on only some days shows both counts (with quantiles / all). Click a row to draw its curve.";
   }
   const q0 = (k) => new URLSearchParams(location.search).get(k);
   async function initValue() {

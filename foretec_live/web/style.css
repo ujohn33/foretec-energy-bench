@@ -399,3 +399,5 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 .top-nav a.beta:hover{color:var(--green); border-bottom-color:var(--green-soft)}
 .top-nav a.beta.on{color:var(--green); border-bottom-color:var(--green)}
 .beta-tag{display:inline-block; margin-left:6px; padding:1px 5px 2px; border-radius:2px; background:var(--green-soft); color:var(--green); font-size:.66rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; vertical-align:2px; line-height:1.2}
+#v-table td.po{color:var(--muted); font-style:italic; font-weight:400; text-align:center}
+#v-table tr.grp td{background:var(--raise); color:var(--ink2); font-size:.8rem; font-weight:600; padding:8px 16px; white-space:normal}
