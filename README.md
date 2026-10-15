@@ -28,7 +28,7 @@ This proof of concept scores accuracy only. Trading and money metrics come later
 
 - **Prices:** everything up to the start of the delivery day. Prices for D-1 were published on D-2.
 - **Wind and solar:** actuals up to issue time minus one hour of publication lag.
-- **TSO day-ahead renewable forecasts:** not a model input. EU 543/2013 has TSOs publish them by 18:00 on D-1, after the gate. They enter as benchmarks instead: `tso_cutoff` is Elia's own forecast published at 11:00 (before the gate, ranked), `tso_final` the 18:00 version on ENTSO-E (reference, never ranked).
+- **TSO day-ahead renewable forecasts:** not a model input. EU 543/2013 has TSOs publish them by 18:00 on D-1, after the gate. They enter as benchmarks instead: `tso_cutoff` is Elia's own forecast published at 11:00 (before the gate, ranked), `tso_final` the final day-ahead versions published after the gate (Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and DK, NED in the evening for NL; reference, never ranked).
 
 ## Scoring
 

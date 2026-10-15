@@ -1,12 +1,14 @@
 name: tso_final
-author: RTE, Elia, ENTSO-E / TSOs
-description: "Reference, not ranked: the TSOs' final day-ahead wind and solar forecast, published after the 12:00 gate. FR: RTE's day-ahead forecast published at 16:15 on D-1 (RTE Generation Forecast API); BE: Elia's day-ahead forecast published at 18:00 on D-1 (Elia Open Data, 15 minutes; ENTSO-E only has it hourly). Fetched at the afternoon scoring runs; backtest uses the published version. NL is left out: the NL actuals are NED's national estimates, while TenneT's ENTSO-E forecasts cover a narrower scope."
+author: RTE, Elia, NED.nl, ENTSO-E / TSOs
+description: "Reference, not ranked: the TSOs' final day-ahead wind and solar forecast, published after the 12:00 gate. FR: RTE's day-ahead forecast published at 16:15 on D-1 (RTE Generation Forecast API); BE: Elia's day-ahead forecast published at 18:00 on D-1 (Elia Open Data, 15 minutes; ENTSO-E only has it hourly). DE-LU, DK1, DK2: the TSOs' day-ahead forecast on ENTSO-E (A69), due by 18:00 on D-1. NL: NED.nl's national wind and solar forecast as it stands at the evening scoring run (after 18:00 on D-1), the same quantity as the NL actuals; NED overwrites its forecast, so NL is live only (TenneT's ENTSO-E forecasts cover a narrower scope). Fetched at the evening scoring run, once published; backtest uses the published version."
 family: tso
 inputs: [tso_forecast]
 targets: [wind, solar]
 reference: true
-# NL actuals are NED's national estimates; TenneT's ENTSO-E forecasts cover a narrower (metered) scope
-exclude: [NL_wind, NL_solar]
+# local time on the issue day from which each zone's forecast is published; the reference run waits for it
+published: {FR: "16:15", default: "18:00"}
+# NL: NED's forecast as fetched in the evening run (NED overwrites it), so no backtest
+live_only_zones: [NL]
 runner: subprocess
 env: _self
 script: forecaster.py

@@ -4,14 +4,18 @@ FR: RTE's day-ahead forecast published at 16:15 on D-1 (RTE Generation Forecast 
     solar), so it is there from the 20:45 scoring run. Fallback: ENTSO-E A69.
 BE: Elia's day-ahead forecast published at 18:00 on D-1 (Elia Open Data, 15 minutes; ENTSO-E gets the same
     forecast in hourly values). Fallback: ENTSO-E A69.
-NL: left out (model.yaml): the NL actuals are NED's national estimates, TenneT's ENTSO-E forecasts a narrower scope.
+DE-LU, DK1, DK2: the TSOs' day-ahead forecast on ENTSO-E (A69), due by 18:00 on D-1.
+NL: NED.nl's national wind (onshore + offshore) and solar forecast as it stands at the run, the same quantity as the NL
+    actuals (TenneT's ENTSO-E forecasts cover a narrower scope). NED overwrites its forecast as delivery approaches, so
+    it is taken only between 18:00 on D-1 and the start of D, and NL is live only (model.yaml).
+The reference run starts a series only from its publication time (model.yaml `published`).
 """
 import numpy as np
 import pandas as pd
 from fl_io import read_request, write_output
 from foretec_live.config import load_config
 from foretec_live.data.entsoe import EntsoeSource
-from foretec_live.data.tso import EliaSource, RteForecast
+from foretec_live.data.tso import EliaSource, NedForecast, RteForecast
 
 cfg = load_config()
 req, series = read_request()
@@ -37,9 +41,19 @@ for key in series:
     # Elia's 18:00 field may hold a preliminary value earlier in the afternoon: use it only from 18:00 on D-1
     delivery = (end.tz_localize("UTC").tz_convert(cfg["timezone"]) - pd.Timedelta("1h")).date()
     after_18 = pd.Timestamp.now(tz=cfg["timezone"]) >= pd.Timestamp(f"{delivery - pd.Timedelta(days=1)} 18:00", tz=cfg["timezone"])
-    sources = ([("RTE D-1", lambda: rte(target, idx))] if zone == "FR" else []) + \
-              ([("Elia 18:00", lambda: elia.dayahead_18h(target, idx[0], end))] if zone == "BE" and after_18 else []) + \
-              [("ENTSO-E A69", lambda: src.tso_forecast(zone, target, idx[0], end))]
+
+    def ned():
+        now = pd.Timestamp.now(tz=cfg["timezone"])
+        if not (pd.Timestamp(f"{delivery - pd.Timedelta(days=1)} 18:00", tz=cfg["timezone"]) <= now < pd.Timestamp(str(delivery), tz=cfg["timezone"])):
+            raise RuntimeError("NED's forecast is taken only between 18:00 on D-1 and the start of D (NED overwrites it)")
+        return NedForecast().forecast(target, delivery - pd.Timedelta(days=1), delivery)
+
+    if zone == "NL":   # ENTSO-E's NL forecast is not the quantity scored
+        sources = [("NED.nl", ned)]
+    else:
+        sources = ([("RTE D-1", lambda: rte(target, idx))] if zone == "FR" else []) + \
+                  ([("Elia 18:00", lambda: elia.dayahead_18h(target, idx[0], end))] if zone == "BE" and after_18 else []) + \
+                  [("ENTSO-E A69", lambda: src.tso_forecast(zone, target, idx[0], end))]
     tried = []
     for name, get in sources:
         try:

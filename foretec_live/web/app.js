@@ -675,22 +675,43 @@
     }
   }
 
+  // the issue days the time charts show: the Period filter's phase only (All shows both)
+  const phaseDays = () => (S.phase === "all" ? DAYS : DAYS.filter((x) => x.phase === S.phase));
+  const SMOOTH_DAYS = 7, SMOOTH_MIN = 3, EMPHASIS = 3;
+
   function renderCharts() {
-    const labels = DAYS.map((x) => shortDate(x.d));
-    const band = bandRange(DAYS);
+    const days = phaseDays();
+    const labels = days.map((x) => shortDate(x.d));
+    const band = bandRange(days);
     const md = metricDef();
     const rank = S.view === "rank";
-    const models = MODELS.filter((m) => shown(m) && DAYS.some((x) => x.pts[m] != null));
-    const phaseNote = (i) => (DAYS[i] && DAYS[i].phase === "backtest" ? " · backtest" : " · live");
+    const models = MODELS.filter((m) => shown(m) && days.some((x) => x.pts[m] != null));
+    const phaseNote = (i) => (S.phase !== "all" ? "" : days[i] && days[i].phase === "backtest" ? " · backtest" : " · live");
 
+    // trailing 7-issue-day mean of the daily value (from 3 days on), so day-to-day noise does not hide the trend;
+    // the podium's top three are drawn in full, the rest faint and unlabelled (all of them stay in the tooltip)
+    const top = new Set(standings(DAYS, S.phase).filter((x) => shown(x.model) && !x.provisional).slice(0, EMPHASIS).map((x) => x.model));
+    const smooth = (vals) => vals.map((_, i) => {
+      const w = vals.slice(Math.max(0, i - SMOOTH_DAYS + 1), i + 1).filter((v) => v != null);
+      return vals[i] != null && w.length >= SMOOTH_MIN ? w.reduce((a, b) => a + b, 0) / w.length : null;
+    });
+    const perf = models.map((m) => {
+      const ds = lineDataset(m, smooth(days.map((x) => (rank ? x.avgRank[m] : x.raw[m]) ?? null)), days);
+      Object.assign(ds, { pointRadius: 0, pointHoverRadius: 4, tension: 0.25 });
+      if (!top.has(m)) {
+        const faint = alpha(color(m), 0.3);
+        Object.assign(ds, { borderWidth: 1.25, endLabel: null, borderColor: faint, segment: { ...ds.segment, borderColor: () => faint }, order: 1 });
+      } else Object.assign(ds, { borderWidth: 3, order: 0 });
+      return ds;
+    });
     draw("c-perf", {
       type: "line",
-      data: { labels, datasets: models.map((m) => lineDataset(m, DAYS.map((x) => (rank ? x.avgRank[m] : x.raw[m]) ?? null), DAYS)) },
+      data: { labels, datasets: perf },
       options: (() => {
         const o = baseOptions({
-          band, yTitle: rank ? "Average rank" : md.label + unitSuffix(),
+          band, yTitle: (rank ? "Average rank" : md.label + unitSuffix()) + `, ${SMOOTH_DAYS}-day average`,
           itemSort: (a, b) => a.raw - b.raw,
-          tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, rank ? 2 : md.d)}` },
+          tooltip: { title: (it) => `${SMOOTH_DAYS} issue days to ${days[it[0].dataIndex].d}${phaseNote(it[0].dataIndex)}`, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, rank ? 2 : md.d)}` },
         });
         if (rank) { o.scales.y.reverse = true; o.scales.y.min = 1; o.scales.y.ticks.stepSize = 1; }
         return o;
@@ -702,7 +723,7 @@
     // races up to each issue day. A model's line starts once it has raced on MIN_ELO_DAYS live days, so its first
     // day or two do not swing it to extremes.
     const MIN_ELO_DAYS = 3;
-    const liveDays = DAYS.filter((x) => x.phase === "live");
+    const liveDays = DAYS.filter((x) => x.phase === (S.phase === "backtest" ? "backtest" : "live"));
     const running = liveDays.map((_, i) => eloScores(liveDays.slice(0, i + 1)));
     const race = models.map((m) => {
       let n = 0;
@@ -711,7 +732,7 @@
     draw("c-race", {
       type: "line", data: { labels: liveDays.map((x) => shortDate(x.d)), datasets: race },
       options: baseOptions({
-        band: bandRange(liveDays), yTitle: "Elo (running, live days)", itemSort: (a, b) => b.raw - a.raw,
+        band: bandRange(liveDays), yTitle: `Elo (running, ${S.phase === "backtest" ? "backtest" : "live"} days)`, itemSort: (a, b) => b.raw - a.raw,
         tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
       }),
     });
@@ -719,13 +740,14 @@
   }
 
   function renderHeatmap() {
-    const st = standings(DAYS, "all").filter((x) => shown(x.model));
+    const days = phaseDays();
+    const st = standings(DAYS, S.phase).filter((x) => shown(x.model));
     const t = $("heatmap");
-    if (!DAYS.length) { t.innerHTML = ""; return; }
+    if (!days.length) { t.innerHTML = ""; return; }
     const lerp = (a, b, w) => mix(a, b, w);
-    const head = `<thead><tr><th>Model</th>${DAYS.map((x) => `<th class="${x.phase === "backtest" ? "is-bt" : "live"}" title="${x.d} · ${x.phase}">${esc(shortDate(x.d))}</th>`).join("")}<th><span class="lbl" data-tip="heat">Avg</span></th></tr></thead>`;
+    const head = `<thead><tr><th>Model</th>${days.map((x) => `<th class="${x.phase === "backtest" ? "is-bt" : "live"}" title="${x.d} · ${x.phase}">${esc(shortDate(x.d))}</th>`).join("")}<th><span class="lbl" data-tip="heat">Avg</span></th></tr></thead>`;
     const body = st.map((s) => {
-      const cells = DAYS.map((x) => {
+      const cells = days.map((x) => {
         const r = x.avgRank[s.model];
         if (r == null) return `<td class="cell">–</td>`;
         const w = x.n > 1 ? (x.n - r) / (x.n - 1) : 1;

@@ -178,8 +178,25 @@ def cmd_reference(cfg, args):
     if not (paths(cfg)["forecasts"] / str(d)).exists():
         print(f"no live run for {d}; nothing to add references to")
         return 0
+    # a series runs only once its reference is published (model.yaml `published`: local time on the issue day, per zone
+    # or default), so an earlier scoring run neither marks it failed nor replaces the published version with a preliminary
+    now = pd.Timestamp.now(tz=cfg["timezone"])
+    due, waiting = set(), set()
+    for spec in load_models(paths(cfg)["models"]):
+        if not spec.raw.get("reference"):
+            continue
+        times = spec.raw.get("published") or {}
+        for z in cfg["zones"]:
+            for t in cfg["targets"]:
+                if spec.applies(z, t):
+                    at = pd.Timestamp(f"{d} {times.get(z, times.get('default', '00:00'))}", tz=cfg["timezone"])
+                    (due if now >= at else waiting).add(f"{z}_{t}")
+    if not due:
+        print(f"{d}: no reference published yet")
+        return 0
     # the frozen 11:30 snapshot stays as it is: take a fresh one without saving it
-    meta = run_forecasts(d, cfg, reference_run=True, snapshots=take_snapshot(d, cfg, save=False))
+    meta = run_forecasts(d, cfg, reference_run=True, snapshots=take_snapshot(d, cfg, save=False),
+                         series=sorted(due) if waiting else None)
     ok = sum(r["status"] == "ok" for r in meta["runs"])
     print(f"{d}: {ok} reference series ok, {len(meta['runs']) - ok} not")
     return 0
