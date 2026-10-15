@@ -31,8 +31,9 @@
   // Colour follows the model family, never its rank: one palette slot per foundation-model family,
   // lighter shades for variants within a family, navy ink shades for the classical baselines.
   // slots 1-8 are the validated categorical palette; slot 9 (t0) was chosen with the palette validator to clear
-  // every existing slot (light: normal-vision dE >= 19, CVD dE >= 13; dark step likewise). New families get grey.
-  const FAMILY_ORDER = ["chronos", "timesfm", "moirai", "tirex", "toto", "sundial", "ttm", "nwp", "t0"];
+  // every existing slot (light: normal-vision dE >= 19, CVD dE >= 13; dark step likewise); slots 10 (tabby, brown) and
+  // 11 (tabular deep learning, cyan) clear every slot by dE >= 32. New families get grey.
+  const FAMILY_ORDER = ["chronos", "timesfm", "moirai", "tirex", "toto", "sundial", "ttm", "nwp", "t0", "tabby", "tabnn"];
   let FAM = {};
   // One colour per model, on every page: it depends only on the model's family and its place in the
   // full model list (D.models), never on filters, rank or page. Full-strength ink is reserved for the
