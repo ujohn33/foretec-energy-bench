@@ -369,3 +369,4 @@ tr.prov td{color:var(--ink2)} tr.prov td.pos{font-style:italic; font-size:.82rem
 td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.dm.better{color:var(--blue-ink); font-weight:700} td.dm.lead{color:var(--ink2)}
 .trk.void{background:var(--raise); color:var(--ink2); border-color:var(--rule); border-style:dashed} .trk.grid i.void{background:transparent; box-shadow:inset 0 0 0 1px var(--ink2)}
 .agg{display:flex; align-items:center; gap:10px} .agg .lbl{font-size:.8rem; color:var(--ink2)}
+.tagline{background:var(--surface); border-bottom:1px solid var(--rule); font-size:.86rem; color:var(--ink2); padding:7px 0; line-height:1.45} .tagline a{color:var(--blue-ink); white-space:nowrap; margin-left:6px}
