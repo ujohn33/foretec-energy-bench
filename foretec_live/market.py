@@ -128,7 +128,7 @@ def load_imbalance(cfg, zone: str, delivery: dt.date) -> pd.DataFrame | None:
 PERCENTILES = list(range(10, 95, 5))
 QCOLS = [f"q0.{k}" for k in range(1, 10)]
 VALUE_TARGETS = ("wind", "solar")
-VALUE_VERSION = 3          # bump when the value computation changes: every cached day is recomputed
+VALUE_VERSION = 4          # bump when the value computation changes: every cached day is recomputed
 
 
 def _committed(fc: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -211,10 +211,6 @@ def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> 
                     # error cost only ("<strategy>e"): every deviation costs |deviation| x |imbalance - day-ahead|, so a
                     # deviation can never earn from the gap between the two prices
                     rev[strat + "e"] = round(perfect - float(h * (np.abs(dev) * np.abs(p_imb - da)).sum()), 1)
-                    # dual pricing ("<strategy>d"): a deviation that helps the system is settled at the day-ahead price
-                    # (no gain), one that hurts it pays the gap to the imbalance price of its direction; the costs
-                    # differ by direction, so the best percentile moves off the median where one side costs more
-                    rev[strat + "d"] = round(perfect - float(h * np.clip(dev * (da - p_imb), 0, None).sum()), 1)
                 ser["models"][model] = rev
             out[f"{zone}_{target}"] = ser
     return out

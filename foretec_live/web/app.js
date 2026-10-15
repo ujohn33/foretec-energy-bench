@@ -1162,11 +1162,10 @@
   let VAL = null;
   const VTARGETS = ["wind", "solar"];
   // settlement of the deviations: "err" = error cost only (|deviation| x |imbalance - day-ahead|, never a gain; the
-  // default, it scores the forecast), "dual" = dual pricing (a deviation that helps the system is settled at the
-  // day-ahead price, one that hurts it pays the gap: direction-dependent, so the percentile matters), "imb" = settled
-  // at the imbalance price (what the asset would have earned, gains from the price gap included; these rest on a few spikes)
-  const VSFX = () => ({ imb: "", dual: "d" }[S.v.mode] ?? "e");
-  const costLabel = () => ({ imb: "Imbalance cost", dual: "Penalty" }[S.v.mode] || "Error cost");
+  // default, it scores the forecast), "imb" = the zone's own settlement: its long and short imbalance prices, two
+  // prices where the TSO publishes two (NL, FR), one elsewhere; what the asset would have been paid, gains included
+  const VSFX = () => (S.v.mode === "imb" ? "" : "e");
+  const costLabel = () => (S.v.mode === "imb" ? "Imbalance cost" : "Error cost");
   const pct = (v, d = 1) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(d) + "%");
   function valueSeries() {
     return Object.entries(VAL.series).filter(([k]) => {
@@ -1223,8 +1222,7 @@
     options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
     seg($("v-mode"), [
       { k: "err", label: "Error cost only", title: "Every deviation costs |deviation| x |imbalance price - day-ahead price|: an error never earns" },
-      { k: "dual", label: "Dual pricing", title: "A deviation that helps the system is settled at the day-ahead price, one that hurts it pays the gap to the imbalance price: the cost depends on the direction" },
-      { k: "imb", label: "At imbalance price", title: "Deviations settled at the imbalance price, as the asset would have been paid: includes the gap between imbalance and day-ahead prices" },
+      { k: "imb", label: "Zone settlement", title: "Each zone's own imbalance settlement, as the asset would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
     ], S.v.mode, (k) => { S.v.mode = k; S.v.model = null; renderValue(); });
     seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
     const hasLive = Object.values(VAL.series).some((s) => s.phase.includes("live"));
@@ -1315,10 +1313,8 @@
       (refs.length ? group("Reference: published after the gate, not ranked") + refs.map((x) => row(x, "ref")).join("") : "") + "</tbody>";
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
     $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
-      (S.v.mode === "dual"
-        ? "Dual pricing: a deviation that helps the system (long when the imbalance price is above the day-ahead price, short when it is below) is settled at the day-ahead price and neither earns nor costs; one that hurts it pays the gap. The two directions cost differently, in NL by far the most (separate long and short prices), so the best percentile moves away from the median where one side is costlier. "
-        : S.v.mode === "imb"
-        ? "Deviations are settled at the imbalance price, as the asset would have been paid. A deviation can earn when the imbalance price is on the right side of the day-ahead price, so a share can exceed 100% and the imbalance cost per MWh can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
+      (S.v.mode === "imb"
+        ? "Zone settlement: deviations are settled under each zone's own rules, as the asset would have been paid: a surplus at the long price, a shortfall at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
         : "Error cost only: every deviation costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
       "Models without quantiles are ranked separately on their point forecast; a model that published quantiles on only some days shows both counts (with quantiles / all). Click a row to draw its curve.";
   }
@@ -1327,7 +1323,7 @@
     try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); $("v-mw").textContent = VAL.asset_mw || 100; }
     catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
     S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50, mode: "err" };
-    if (["imb", "dual"].includes(q0("mode"))) S.v.mode = q0("mode");
+    if (["imb", "dual"].includes(q0("mode"))) S.v.mode = "imb";   // dual: an earlier, stylised mode, now part of the zone settlement
     const q = new URLSearchParams(location.search);
     if (q.get("zone") === "all" || D.config.zones.includes(q.get("zone"))) S.v.zone = q.get("zone");
     if (VTARGETS.includes(q.get("target"))) S.v.target = q.get("target");
