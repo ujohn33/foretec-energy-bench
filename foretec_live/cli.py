@@ -23,7 +23,7 @@ from .data import get_source
 from .report import write_report
 from .site import build_site
 from .registry import load_models
-from .run import run_forecasts, take_snapshot
+from .run import pretrain, run_forecasts, take_snapshot
 from .score import check_revisions, locked_before_gate, provisional_actuals, score_pending
 from .timeutil import availability_cutoff, delivery_index, gate_timestamp, issue_timestamp, local_today
 
@@ -194,6 +194,14 @@ def cmd_covhist(cfg, args):
     return 0
 
 
+def cmd_pretrain(cfg, args):
+    """Morning training of the models too slow to train inside the live run (pretrain: true), for today's issue."""
+    d = args.date or local_today(cfg)
+    done = pretrain(d, cfg, args.models)
+    print(f"{d}: trained " + (", ".join(done) if done else "nothing"))
+    return 0
+
+
 def cmd_backfill(cfg, args):
     src = get_source(cfg)
     d = args.start
@@ -226,6 +234,7 @@ def main(argv=None):
     sub.add_parser("site")
     sub.add_parser("catchup")
     p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
+    p = sub.add_parser("pretrain"); p.add_argument("--date", type=_date); p.add_argument("--models", nargs="*")
     p = sub.add_parser("covhist"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
     p.add_argument("--targets", nargs="*", help="only these targets, merged into the existing backtest days (a new target)")
@@ -241,7 +250,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ schedule:                     # Brussels time; must match scripts/systemd/*.time
   forecast: "11:30"
   score: ["07:00", "14:45", "20:45"]
   catchup: "03:30"
+  pretrain: "07:20"          # models too slow to train in the live run, trained on data up to yesterday
 resolution: 15min
 quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 context_days: 28             # history handed to every model

@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import datetime as dt
 import time
 from pathlib import Path
 import traceback
@@ -18,7 +19,7 @@ from sktime.forecasting.base import ForecastingHorizon
 from .config import paths
 from .data import get_source, record_provenance
 from .registry import load_models
-from .timeutil import FREQ, availability_cutoff, delivery_index, issue_timestamp
+from .timeutil import FREQ, as_date, availability_cutoff, delivery_index, issue_timestamp
 
 log = logging.getLogger(__name__)
 MIN_HISTORY_DAYS = 7
@@ -132,6 +133,8 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
                                timeout=int(spec.raw.get("timeout", 1800)))
             if r.returncode != 0:
                 raise RuntimeError(f"exit {r.returncode}: {r.stderr.strip()[-600:]}")
+            if (extra or {}).get("mode") == "train":   # a training run saves a model and forecasts nothing
+                return {}
             res = pd.read_parquet(tmp / "output.parquet")
             ef = tmp / "output.parquet.errors.json"
             reasons = json.loads(ef.read_text()) if ef.exists() else {}
@@ -214,7 +217,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                  and (live or zone not in (spec.raw.get("live_only_zones") or []))]
         if not items:   # e.g. a wind/solar-only model in a run restricted to load
             return []
-        extra = {"issue_date": str(issue_date), "live": live}   # live runs never train (models are trained ahead)
+        extra = {"issue_date": str(issue_date), "live": live,    # live runs never train (models are trained ahead)
+                 "artifact_dir": str(Path(cfg["_root"]) / "data" / "models" / spec.name)}
         if needs_cov(spec):
             if not covariates:
                 return [{"model": spec.name, "status": "skipped", "detail": "covariates unavailable"}]
@@ -285,3 +289,31 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         meta["runs"] = [r for r in old.get("runs", []) if r["model"] not in rerun] + meta["runs"]
     f.write_text(json.dumps(meta, indent=1))
     return meta
+
+
+def pretrain(issue_date, cfg, only_models=None) -> list[str]:
+    """Morning training, outside the gate window, for models with `pretrain: true` in model.yaml (too slow to train
+    inside the live run): each trains on the window of delivery days up to yesterday, from yesterday's frozen
+    covariates and the history public now, and saves its model for today's issue day; the live run only predicts."""
+    p = paths(cfg)
+    specs = [s for s in load_models(p["models"], only_models) if s.raw.get("pretrain") and s.raw.get("live") is not False]
+    if not specs:
+        return []
+    frame = Path(cfg["_root"]) / "data" / "covariates" / f"{as_date(issue_date) - dt.timedelta(days=1)}.parquet"
+    if not frame.exists():
+        raise RuntimeError(f"no covariates of yesterday's run ({frame.name}): nothing to train on")
+    snaps = take_snapshot(issue_date, cfg, save=False)
+    fh_index = delivery_index(issue_date, cfg)
+    done = []
+    for spec in specs:
+        items = [((z, t), y) for (z, t), y in snaps.items() if spec.applies(z, t)]
+        t0 = time.time()
+        res = _forecast_external(spec, items, fh_index, cfg, {
+            "mode": "train", "issue_date": str(issue_date), "covariates": str(frame),
+            "artifact_dir": str(Path(cfg["_root"]) / "data" / "models" / spec.name)})
+        failed = [k for k, v in res.items() if isinstance(v, Exception)]
+        if failed:
+            log.error("pretrain %s failed: %s", spec.name, res[failed[0]])
+        else:
+            done.append(f"{spec.name} ({time.time() - t0:.0f}s)")
+    return done

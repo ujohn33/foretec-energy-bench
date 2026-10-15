@@ -1,0 +1,19 @@
+[Unit]
+Description=Foretec Energy Bench: morning training of models too slow to train inside the live run
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=foretec
+WorkingDirectory=/srv/foretec/foretec-live
+Environment=FORETEC_HOME=/srv/foretec/foretec-live
+Environment=HF_HOME=/srv/foretec/.hf-cache
+Environment=PYTHONWARNINGS=ignore::FutureWarning
+EnvironmentFile=-/srv/foretec/foretec.env
+# API keys (OPENMETEOKEY, ENTSOE_TOKEN, NED_NL_KEY, RTE_DATA_KEY), read by systemd as root before dropping to User=
+EnvironmentFile=-/root/.env
+ExecStart=/srv/foretec/venv/bin/foretec-live pretrain
+# must be done well before the 11:30 run
+TimeoutStartSec=3h
+Nice=5

@@ -228,6 +228,7 @@ def test_schedule_matches_systemd_timers():
     assert times("foretec-forecast.timer") == [sched["forecast"]]
     assert times("foretec-score.timer") == sorted(sched["score"])
     assert times("foretec-catchup.timer") == [sched["catchup"]]
+    assert times("foretec-pretrain.timer") == [sched["pretrain"]]
 
 
 def test_reference_and_live_only_models(cfg):
