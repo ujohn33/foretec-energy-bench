@@ -11,7 +11,7 @@
   const zoneLabel = (z) => (D.config && D.config.zone_labels && D.config.zone_labels[z]) || z;   // DE -> DE-LU
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), pin: new Set(), sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -684,6 +684,34 @@
   const phaseDays = () => (S.phase === "all" ? DAYS : DAYS.filter((x) => x.phase === S.phase));
   const SMOOTH_DAYS = 7, SMOOTH_MIN = 3, EMPHASIS = 3;
 
+  // focus helpers shared by the time charts: lines drawn in full (the leaders, plus models clicked in the legend) are
+  // bold and labelled, the rest faint and unlabelled; the tooltip lists only the full lines and counts the others
+  function styleFocus(ds, m, isFull, faintA = 0.3) {
+    Object.assign(ds, { pointRadius: 0, tension: 0.25 });
+    if (isFull) return Object.assign(ds, { borderWidth: 3, pointHoverRadius: 4, order: 0 });
+    const faint = alpha(color(m), faintA);
+    return Object.assign(ds, { borderWidth: 1.1, pointHoverRadius: 0, endLabel: null, borderColor: faint, segment: { ...ds.segment, borderColor: () => faint }, order: 1 });
+  }
+  function focusTooltip(o, models, isFull) {
+    const n = models.filter((m) => !isFull(m) && !S.hidden.has(m)).length;
+    o.plugins.tooltip.filter = (it) => isFull(it.dataset.label);
+    o.plugins.tooltip.callbacks.footer = () => (n ? `+ ${n} more: click one in the legend to highlight it` : "");
+    Object.assign(o.plugins.tooltip, { footerColor: css("--ink2"), footerFont: { size: 11.5, weight: 400 } });
+    return o;
+  }
+  /** legend: a faint model toggles in `pins` (drawn in full or not); a leading one is hidden or shown */
+  function focusLegend(el, models, lead, pins, isFull, rerender, extra = "") {
+    el.innerHTML = extra + models.map((m) => `<button type="button" data-m="${esc(m)}" class="${isFull(m) ? "" : "faint"}" aria-pressed="${!S.hidden.has(m)}"
+      title="${lead(m) ? "click to hide or show" : pins.has(m) ? "click to fade" : "click to highlight"}"><i style="border-top-color:${color(m)}"></i>${nm(m)}</button>`).join("");
+    el.onclick = (e) => {
+      const b = e.target.closest("button[data-m]"); if (!b) return;
+      const m = b.dataset.m;
+      if (lead(m)) S.hidden.has(m) ? S.hidden.delete(m) : S.hidden.add(m);
+      else pins.has(m) ? pins.delete(m) : pins.add(m);
+      rerender();
+    };
+  }
+
   function renderCharts() {
     const days = phaseDays();
     const labels = days.map((x) => shortDate(x.d));
@@ -694,20 +722,16 @@
     const phaseNote = (i) => (S.phase !== "all" ? "" : days[i] && days[i].phase === "backtest" ? " · backtest" : " · live");
 
     // trailing 7-issue-day mean of the daily value (from 3 days on), so day-to-day noise does not hide the trend;
-    // the podium's top three are drawn in full, the rest faint and unlabelled (all of them stay in the tooltip)
+    // the podium's top three (and models clicked in the legend) are drawn in full, the rest faint
     const top = new Set(standings(DAYS, S.phase).filter((x) => shown(x.model) && !x.provisional).slice(0, EMPHASIS).map((x) => x.model));
+    const isLead = (m) => top.has(m), isFull = (m) => top.has(m) || S.pin.has(m);
+    const faintA = models.length > 8 ? 0.2 : 0.3;
     const smooth = (vals) => vals.map((_, i) => {
       const w = vals.slice(Math.max(0, i - SMOOTH_DAYS + 1), i + 1).filter((v) => v != null);
       return vals[i] != null && w.length >= SMOOTH_MIN ? w.reduce((a, b) => a + b, 0) / w.length : null;
     });
     const perf = models.map((m) => {
-      const ds = lineDataset(m, smooth(days.map((x) => (rank ? x.avgRank[m] : x.raw[m]) ?? null)), days);
-      Object.assign(ds, { pointRadius: 0, pointHoverRadius: 4, tension: 0.25 });
-      if (!top.has(m)) {
-        const faint = alpha(color(m), 0.3);
-        Object.assign(ds, { borderWidth: 1.25, endLabel: null, borderColor: faint, segment: { ...ds.segment, borderColor: () => faint }, order: 1 });
-      } else Object.assign(ds, { borderWidth: 3, order: 0 });
-      return ds;
+      return styleFocus(lineDataset(m, smooth(days.map((x) => (rank ? x.avgRank[m] : x.raw[m]) ?? null)), days), m, isFull(m), faintA);
     });
     draw("c-perf", {
       type: "line",
@@ -719,10 +743,10 @@
           tooltip: { title: (it) => `${SMOOTH_DAYS} issue days to ${days[it[0].dataIndex].d}${phaseNote(it[0].dataIndex)}`, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, rank ? 2 : md.d)}` },
         });
         if (rank) { o.scales.y.reverse = true; o.scales.y.min = 1; o.scales.y.ticks.stepSize = 1; }
-        return o;
+        return focusTooltip(o, models, isFull);
       })(),
     });
-    legend($("l-perf"), models);
+    focusLegend($("l-perf"), models, isLead, S.pin, isFull, renderCharts);
 
     // running Elo over the live days only (the backtest is a separate exercise): the Bradley-Terry fit on the live
     // races up to each issue day. A model's line starts once it has raced on MIN_ELO_DAYS live days, so its first
@@ -732,16 +756,17 @@
     const running = liveDays.map((_, i) => eloScores(liveDays.slice(0, i + 1)));
     const race = models.map((m) => {
       let n = 0;
-      return lineDataset(m, running.map((e, i) => { if (liveDays[i].pts[m]) n += 1; return n >= MIN_ELO_DAYS && e[m] ? e[m].elo : null; }), liveDays);
+      const ds = lineDataset(m, running.map((e, i) => { if (liveDays[i].pts[m]) n += 1; return n >= MIN_ELO_DAYS && e[m] ? e[m].elo : null; }), liveDays);
+      return styleFocus(ds, m, isFull(m), faintA);
     });
     draw("c-race", {
       type: "line", data: { labels: liveDays.map((x) => shortDate(x.d)), datasets: race },
-      options: baseOptions({
+      options: focusTooltip(baseOptions({
         band: bandRange(liveDays), yTitle: `Elo (running, ${S.phase === "backtest" ? "backtest" : "live"} days)`, itemSort: (a, b) => b.raw - a.raw,
         tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
-      }),
+      }), models, isFull),
     });
-    legend($("l-race"), models);
+    focusLegend($("l-race"), models, isLead, S.pin, isFull, renderCharts);
   }
 
   function renderHeatmap() {
