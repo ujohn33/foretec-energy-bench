@@ -180,7 +180,7 @@ def _day_inputs(issue_date: str, idx, cfg) -> dict | None:
 
 
 def _timeline(cfg) -> dict:
-    """What the pipeline diagram draws, straight from the config (CET times, days relative to D)."""
+    """What the pipeline diagram draws, straight from the config (CET/CEST times, days relative to D)."""
     t = cfg["targets"]
     nwp = (cfg.get("covariates") or {}).get("nwp", {}).get("models", {})
     return {

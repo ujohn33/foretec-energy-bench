@@ -49,7 +49,7 @@ def log(*a):
 
 
 def pause_for_gate():
-    """Never compete with the live run (10:45-12:15 CET)."""
+    """Never compete with the live run (10:45-12:15 CET/CEST)."""
     while True:
         h = int(pd.Timestamp.now(tz="Europe/Brussels").strftime("%H%M"))
         if not 1045 <= h <= 1215:

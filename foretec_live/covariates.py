@@ -355,7 +355,7 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
     if not fuel.empty:
         for code, name in (("TTF_EUR", "fuel.gas.ttf.eur_mwh"), ("CARBON_EUR", "fuel.carbon.eua.eur_t")):
             q = fuel[fuel["code"] == code].set_index("available_utc")["price"].sort_index()
-            # each quarter-hour gets the last quote known at the cut-off of its own issue day (D-1, CET)
+            # each quarter-hour gets the last quote known at the cut-off of its own issue day (D-1, CET/CEST)
             delivery = cov.index.tz_localize("UTC").tz_convert(cfg["timezone"]).date
             known = {}
             for d in set(delivery):
@@ -372,7 +372,7 @@ def build_covariates(issue_date, cfg, force: bool = False) -> tuple[pd.DataFrame
         "nwp_runs": runs_used,
         "centroids_hash": _centroid_hash(c),
         "zones": list(cfg["zones"]),
-        "load_forecast": "ENTSO-E A65 day-ahead total load forecast (published by 10:00 CET on D-1 by regulation)"
+        "load_forecast": "ENTSO-E A65 day-ahead total load forecast (published by 10:00 CET/CEST on D-1 by regulation)"
                          if os.environ.get("ENTSOE_TOKEN") else "not configured",
         "fuel": "Yahoo Finance daily closes, TTF=F (ICE Dutch TTF front month) and CO2.L (EUA ETC); at each cut-off the last quote dated two days before delivery or earlier" if not fuel.empty else "unavailable",
         "columns": len(cov.columns),

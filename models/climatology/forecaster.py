@@ -1,4 +1,4 @@
-"""Climatology: same CET time of day, +/-14 calendar days, every year in data/static/climatology_history.parquet."""
+"""Climatology: same CET/CEST time of day, +/-14 calendar days, every year in data/static/climatology_history.parquet."""
 import os
 from pathlib import Path
 

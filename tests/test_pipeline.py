@@ -126,10 +126,10 @@ def test_live_run_after_gate_is_not_scored(cfg):
     p = paths(cfg)
     log = p["forecasts"] / d.isoformat() / "_run.json"
     meta = json.loads(log.read_text())
-    meta["run_finished_utc"] = "2026-09-20 10:30:00+00:00"   # 12:30 CET, after the 12:00 gate
+    meta["run_finished_utc"] = "2026-09-20 10:30:00+00:00"   # 12:30 CET/CEST, after the 12:00 gate
     log.write_text(json.dumps(meta))
     assert score_pending(cfg, now=pd.Timestamp("2026-10-01")).empty
-    meta["run_finished_utc"] = "2026-09-20 09:35:00+00:00"   # 11:35 CET
+    meta["run_finished_utc"] = "2026-09-20 09:35:00+00:00"   # 11:35 CET/CEST
     log.write_text(json.dumps(meta))
     assert len(score_pending(cfg, now=pd.Timestamp("2026-10-01"))) == len(cfg["zones"]) * len(cfg["targets"])
 
@@ -149,7 +149,7 @@ def test_covariate_building_blocks(cfg):
 
     nwp = {"icon_eu": {"cycle_hours": 3, "lag_hours": 3.5}, "ecmwf_ifs": {"cycle_hours": 6, "lag_hours": 7}}
     cfg["covariates"] = {"nwp": {"models": nwp}}
-    # cut-off 11:30 CET = 09:30 UTC in summer, 10:30 UTC in winter
+    # cut-off 11:30 CET/CEST = 09:30 UTC in summer, 10:30 UTC in winter
     assert select_run("icon_eu", "2026-09-20", cfg) == pd.Timestamp("2026-09-20 06:00")
     assert select_run("ecmwf_ifs", "2026-09-20", cfg) == pd.Timestamp("2026-09-20 00:00")
     assert select_run("icon_eu", "2026-12-01", cfg) == pd.Timestamp("2026-12-01 06:00")
@@ -491,7 +491,7 @@ def test_previous_runs_lead_matching(cfg):
     from foretec_live.covariates import select_run
     from foretec_live.covariates_history import VARIABLES, previous_runs_day
 
-    d = dt.date(2026, 9, 21)                                   # delivery day; issue 20 Sep, 11:30 CET
+    d = dt.date(2026, 9, 21)                                   # delivery day; issue 20 Sep, 11:30 CET/CEST
     idx = delivery_index(d - dt.timedelta(days=1), cfg)
     prev = pd.DataFrame({"time_utc": idx.repeat(2), "centroid": [0, 1] * len(idx)})
     for v in VARIABLES:

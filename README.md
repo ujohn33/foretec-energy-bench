@@ -2,7 +2,7 @@
 
 The live benchmark for energy forecasts: an open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2. Live at **https://energybench.foretec.co**. (The Python package and command keep their working names, `foretec_live` and `foretec-live`.)
 
-Every day at 11:30 CET, before the 12:00 SDAC day-ahead gate closure, each model in `models/` forecasts the next delivery day for:
+Every day at 11:30 CET/CEST, before the 12:00 SDAC day-ahead gate closure, each model in `models/` forecasts the next delivery day for:
 
 | | Belgium | Netherlands | France |
 |---|---|---|---|
@@ -17,7 +17,7 @@ This proof of concept scores accuracy only. Trading and money metrics come later
 
 ## How a day works
 
-| When (CET) | What |
+| When (CET/CEST) | What |
 |---|---|
 | D-1 11:30 | **forecast**: snapshot the data that was public at the 11:30 cut-off, run every model, write `results/forecasts/D-1/*.parquet` |
 | D-1 12:00 | **gate**: SDAC day-ahead gate closure. A live run that finishes later is marked late and never scored |
@@ -141,7 +141,7 @@ Set `FORETEC_HOME` to run from outside the repo folder.
 
 ## Server
 
-On Ubuntu (tested on 26.04, Python 3.14) a script installs everything under `/srv/foretec` and adds systemd timers: forecast 11:30, score 14:45 and 20:45, catch-up 03:30 (CET). See the header of `scripts/setup_server.sh`.
+On Ubuntu (tested on 26.04, Python 3.14) a script installs everything under `/srv/foretec` and adds systemd timers: forecast 11:30, score 14:45 and 20:45, catch-up 03:30 (CET/CEST). See the header of `scripts/setup_server.sh`.
 
 ```bash
 sudo bash scripts/setup_server.sh [--foundation] [--web]
