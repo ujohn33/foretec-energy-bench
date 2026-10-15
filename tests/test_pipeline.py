@@ -556,3 +556,13 @@ def test_solar_night_zeros_filled_daytime_gaps_kept():
     night = (hour < 6) | (hour > 18)
     assert (out.reindex(idx)[night] == 0).all()
     assert out.reindex(idx)[(idx.day == 2) & (idx.hour == 12)].isna().all()
+
+
+def test_live_runs_never_train(cfg):
+    """Models are trained ahead (nightly catch-up); a live run without one reports it and trains nothing."""
+    d = dt.date(2026, 9, 20)
+    meta = run_forecasts(d, cfg, only_models=["lin_lags"])              # live: nothing trained ahead
+    runs = [r for r in meta["runs"] if r["model"] == "lin_lags"]
+    assert runs and all(r["status"] != "ok" for r in runs)
+    assert "no trained model" in runs[0].get("detail", "")
+    assert not (Path(cfg["_root"]) / "data" / "models" / "lin_lags").exists()

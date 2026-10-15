@@ -197,7 +197,7 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                  and (live or zone not in (spec.raw.get("live_only_zones") or []))]
         if not items:   # e.g. a wind/solar-only model in a run restricted to load
             continue
-        extra = {"issue_date": str(issue_date)}
+        extra = {"issue_date": str(issue_date), "live": live}   # live runs never train (models are trained ahead)
         if external and set(spec.raw.get("inputs", ["history"])) - {"history", "calendar"}:
             if covariates is None:
                 try:

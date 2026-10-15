@@ -213,12 +213,21 @@ def main():
     cfg = load_config()
     spec = yaml.safe_load((Path.cwd() / "model.yaml").read_text())
     issue = dt.date.fromisoformat(req["issue_date"])
-    art = artifact(cfg, spec, issue, list(series), req["quantiles"])
+    end = train_end_for(issue)
+    f = Path(cfg["_root"]) / "data" / "models" / spec["name"] / f"{end}.pkl"
+    if req.get("live") and not f.exists():   # a live run never trains: the latest model trained ahead (catch-up)
+        older = sorted(p for p in f.parent.glob("*.pkl") if p.stem < str(end)) if f.parent.exists() else []
+        art = pickle.loads(older[-1].read_bytes()) if older else {"series": {}}
+        print(f"{spec['name']}: not trained through {end} ahead of the run, using {older[-1].stem if older else 'nothing'}", file=sys.stderr)
+    else:
+        art = artifact(cfg, spec, issue, list(series), req["quantiles"])
     inp = pd.read_parquet(req["input"])
     results, errors = {}, {}
     for key, y in series.items():
         t_hist = pd.DatetimeIndex(inp.loc[inp["series"] == key, "time_utc"].sort_values())
         try:
+            if key not in art["series"]:
+                raise RuntimeError("no trained model (the nightly catch-up trains them)")
             results[key] = forecast(art["series"][key], y, t_hist, req["horizon"][key], req["quantiles"], cfg["timezone"], key)
         except Exception as e:  # noqa: BLE001 - one series failing must not sink the others
             errors[key] = f"{type(e).__name__}: {e}"[:200]

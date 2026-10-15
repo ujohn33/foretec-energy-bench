@@ -308,3 +308,41 @@ if part in ("E", "all"):
     log("E: all wind/solar series (capacity configs only where a capacity series exists)\n" + summary(df).to_string())
     have_cap = sorted(df.loc[df.config.str.endswith("capacity"), "key"].unique())
     log("E: the series with real capacity only " + str(have_cap) + "\n" + summary(df[df.key.isin(have_cap)]).to_string())
+
+# ---------------------------------------------------------------- F: monthly model + correction from recent errors
+if part in ("F", "all"):
+    rows = []
+    for issue in TEST_DAYS:
+        pause_for_gate()
+        live = pd.read_parquet(ROOT / "data" / "covariates" / f"{issue}.parquet")   # true pre-cut-off runs, past days too
+        live.index = pd.to_datetime(live.index)
+        live_day = pd.Series(live.index.tz_localize("UTC").tz_convert(cfg["timezone"]).date, index=live.index)
+        tr = train_rows(COV, COV_DAY, MONTHLY_END - dt.timedelta(days=729), MONTHLY_END)
+        for key in KEYS:
+            y_act = actual(issue, key)
+            zone, target = key.split("_")
+            base = BASE.get((str(issue), zone, target))
+            if y_act is None or base is None or y_act.notna().mean() < 0.95:
+                continue
+            p = fit_predict(key, tr, issue, LGBM, 120, None, cache_key=("monthly_730_recency120", key))
+            m = _MODELS[("monthly_730_recency120", key)]
+            # the model's errors on the 7 delivery days before the issue day (their actuals are public at the cut-off)
+            past = live[(live_day >= issue - dt.timedelta(days=7)) & (live_day <= issue - dt.timedelta(days=1))]
+            X = design(tr, tr.index, zone, target, Y[key])
+            Xp = design(past, past.index, zone, target, Y[key], cols=[c for c in X.columns if c not in (
+                "cal_qh_sin", "cal_qh_cos", "cal_dow", "cal_weekend", "lvl_7d", "max_28d", "price_lag_1d")]).reindex(columns=X.columns)
+            res = pd.Series(Y[key].reindex(past.index).to_numpy(float) - m.predict(Xp), index=past.index).dropna()
+            rday = pd.Series(res.index.tz_localize("UTC").tz_convert(cfg["timezone"]).date, index=res.index)
+            last3 = res[rday >= issue - dt.timedelta(days=3)].mean()
+            hour = res.index.tz_localize("UTC").tz_convert(cfg["timezone"]).hour
+            by_hour = res.groupby(hour).mean()
+            th = p.index.tz_localize("UTC").tz_convert(cfg["timezone"]).hour
+            clip = (lambda v: v) if target == "price" else (lambda v: v.clip(lower=0))
+            for name, q in (("monthly", p), ("monthly_bias3d", clip(p + last3)),
+                            ("monthly_hourbias7d", clip(p + by_hour.reindex(th).fillna(0).to_numpy()))):
+                rows.append({"config": name, "issue_date": str(issue), "key": key, "zone": zone, "target": target,
+                             "mae": mae(q, y_act, key), "mae_base": float(base), "train_rows": len(tr)})
+        log("F", issue, "done")
+    df = pd.DataFrame(rows)
+    df.to_csv(OUT / "lgbm_cov_ablation_F.csv", index=False)
+    log("F: monthly model + correction from recent errors (compare A window_730_recency120, retrained daily)\n" + summary(df).to_string())
