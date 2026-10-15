@@ -179,6 +179,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
             continue
         if not live and spec.raw.get("live_only"):   # e.g. "as published at the cut-off": unverifiable after the fact
             continue
+        if live and spec.raw.get("live") is False:   # backtested, not yet run live (e.g. too slow for the gate)
+            continue
         external = spec.raw.get("runner") == "subprocess"
         if external:
             py = external_python(spec, cfg)

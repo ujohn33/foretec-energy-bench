@@ -6,3 +6,4 @@ inputs: [history]
 runner: subprocess
 env: tfc06
 script: forecaster.py
+live: false   # backtest only until the live run is gate-safe with it (about 7 min for 24 series)
