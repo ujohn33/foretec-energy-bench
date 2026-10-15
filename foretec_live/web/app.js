@@ -890,6 +890,7 @@
     if (models.some((m) => FAM[m] === "tso")) return "";
     const why = S.x.target === "price" ? "TSOs do not forecast prices"
       : S.x.zone === "FR" ? "RTE publishes its next-day wind and solar forecast at 16:15 on D-1, after the gate"
+      : ["DE", "DK1", "DK2"].includes(S.x.zone) && S.x.target !== "load" ? "published at 18:00 on D-1, after the gate"
       : day.phase === "live" ? "not published yet" : "not available for this day";
     return `<span class="tag pending">TSO forecast: ${esc(why)}</span>`;
   }
@@ -1126,7 +1127,8 @@
     const xt = $("x-top");
     if (xt) { xt.max = String(Math.max(1, cands.length)); xt.value = String(Math.min(S.xTop, cands.length));
       $("x-top-val").textContent = S.xTop >= cands.length ? `All ${cands.length}` : `Top ${S.xTop} of ${cands.length}`; }
-    const bandModels = models.filter((m) => ser.models[m].lo);
+    // the band: by default the best-ranked model that publishes quantiles
+    const bandModels = cands.filter((m) => top.has(m) && ser.models[m].lo);
     if (S.x.band !== "" && !bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
     options($("x-band"), [{ k: "", label: "No band" }, ...bandModels.map((m) => ({ k: m, label: `${m} 10–90%` }))], S.x.band);
 
@@ -1137,14 +1139,18 @@
     if (S.x.band && ser.models[S.x.band]) {
       const c = color(S.x.band);
       datasets.push({ label: "_lo", data: ser.models[S.x.band].lo, borderWidth: 0, pointRadius: 0, fill: false });
-      datasets.push({ label: "_hi", data: ser.models[S.x.band].hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(c, 0.16) });
+      datasets.push({ label: "_hi", data: ser.models[S.x.band].hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: alpha(c, 0.1) });
     }
     const actualLabel = ser.provisional ? "Actual so far" : "Actual";
     if (ser.actual) datasets.push({ label: actualLabel, data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: actualLabel, endColor: actualColor(), order: -1 });
+    // the top EMPHASIS models by Elo (and the TSO yardstick) are drawn in full and labelled, the rest faint and
+    // unlabelled; every model stays in the tooltip and the legend
+    const lead = new Set(cands.slice(0, EMPHASIS));
     for (const m of models) {
-      const c = color(m);
-      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: c, backgroundColor: c, borderWidth: REF.has(m) ? 2 : 1.6,
-        borderDash: REF.has(m) ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, endLabel: REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
+      const c = color(m), tso = REF.has(m) || FAM[m] === "tso", full = lead.has(m) || tso;
+      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: full ? c : alpha(c, 0.28), backgroundColor: c,
+        borderWidth: full ? 2.2 : 1.1, borderDash: tso ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, order: full ? 0 : 1,
+        endLabel: !full ? null : REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
@@ -1171,7 +1177,7 @@
     const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
     const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
     tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
-      models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).map((r) => `<tr class="${bt ? "is-bt" : ""}">
+      models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).sort((a, b) => (a.mae ?? 1e18) - (b.mae ?? 1e18)).map((r) => `<tr class="${bt ? "is-bt" : ""}">
         <td class="model"><i style="background:${color(r.model)}"></i>${nm(r.model)}</td>
         ${["mae", "rmse", "bias", "pinball", "rel_mae"].map((k) => `<td class="num ${(k === "bias" ? Math.abs(r[k]) : r[k]) === best(k) ? "best" : ""}">${fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
       </tr>`).join("") + `</tbody>`;
