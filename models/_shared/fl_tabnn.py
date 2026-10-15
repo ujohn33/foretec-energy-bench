@@ -4,7 +4,7 @@ Same features as lgbm_cov (fl_cov.full_features: the NWP ensemble at the zone's 
 load forecast, fuel; calendar; for price yesterday's price), so these differ from lgbm_cov only in the regressor.
 
 They are too slow to train inside the live run (TabM takes minutes per series on the server's CPUs), so live they are
-trained in the morning, outside the gate window: `foretec-live pretrain` (07:20 Brussels) trains on the window of
+trained in the morning, outside the gate window: `foretec-live pretrain` (07:20 CET) trains on the window of
 delivery days up to yesterday, from yesterday's frozen covariates, and saves the model; the 11:30 run only predicts,
 with today's covariates. If the morning model is missing, the series is reported as not forecast instead of training
 at the gate. Backtests train inside the run (no gate there).

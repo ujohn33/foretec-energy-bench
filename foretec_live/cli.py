@@ -1,7 +1,7 @@
 """Command line: foretec-live <command>.
 
   probe     check the data source returns sensible series (run this first on a new server)
-  forecast  snapshot + run all models for an issue date (default: today, Brussels)
+  forecast  snapshot + run all models for an issue date (default: today, CET)
   score     score every forecast whose actuals are final
   report    rebuild leaderboard CSV and static page
   backfill  forecast + score a range of past issue dates into results/backtest

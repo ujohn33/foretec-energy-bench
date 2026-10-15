@@ -1,7 +1,7 @@
 """Time conventions.
 
 Everything inside the pipeline is UTC, timezone-naive, on a 15-minute grid.
-Local Brussels time is only used to define the issue time and the delivery day,
+Local time (CET) is only used to define the issue time and the delivery day,
 so clock-change days have 92 or 100 quarter-hours instead of 96.
 """
 from __future__ import annotations

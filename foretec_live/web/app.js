@@ -793,7 +793,7 @@
       ["Fuel cost", esc(inp.fuel), "daily closes count from the end of their date", "Yahoo Finance: TTF=F, CO2.L"],
     ];
     t.innerHTML = head + `<tbody>` +
-      `<tr><td>Cut-off / gate</td><td class="wrap">${fmtUtc(inp.cutoff_utc)} · gate ${esc(D.config.gate)} Brussels</td><td class="wrap">${inp.n_columns} covariate columns frozen at the cut-off</td>` +
+      `<tr><td>Cut-off / gate</td><td class="wrap">${fmtUtc(inp.cutoff_utc)} · gate ${esc(D.config.gate)} CET</td><td class="wrap">${inp.n_columns} covariate columns frozen at the cut-off</td>` +
       `<td class="wrap"><a href="${inp.download.covariates}">covariates (CSV)</a> · <a href="${inp.download.meta}">run log (JSON)</a></td></tr>` +
       historyRow(day) +
       rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? "wrap" : ""}">${c}</td>`).join("")}</tr>`).join("") + "</tbody>";
@@ -872,7 +872,7 @@
     return `<span class="tag pending">TSO forecast: ${esc(why)}</span>`;
   }
 
-  // end of the last published quarter-hour of a provisional actual, Brussels time
+  // end of the last published quarter-hour of a provisional actual, CET
   function meteredTo(day, actual) {
     let i = actual.length - 1;
     while (i >= 0 && actual[i] == null) i--;
@@ -896,7 +896,7 @@
     if (!$("timeline")) return;
     const T = D.timeline;
     if (!T) return;
-    // hours relative to D-1 00:00 Brussels; all of D-1 up to 16:00 is zoomed in (runs, cut-off, gate, auction)
+    // hours relative to D-1 00:00 CET; all of D-1 up to 16:00 is zoomed in (runs, cut-off, gate, auction)
     const H = [-24, 0, 16, 24, 48, 72, 96], F = [0, 0.06, 0.58, 0.64, 0.80, 0.90, 1];
     const W = 1000, L = 128, R = 14, top = 74, laneH = 70;
     const x = (h) => { let i = 0; while (i < H.length - 2 && h > H[i + 1]) i++; const f = F[i] + (F[i + 1] - F[i]) * (Math.min(Math.max(h, H[i]), H[i + 1]) - H[i]) / (H[i + 1] - H[i]); return L + f * (W - L - R); };
@@ -976,7 +976,7 @@
       `<span><i style="border-top:2px dashed ${css("--blue-ink")}"></i>data cut-off, models run</span>`,
       `<span><i style="border-top:2px solid ${css("--amber")}"></i>day-ahead gate closure</span>`,
       `<span>○ input available · ● actuals published · ◆ scored</span>`,
-      `<span>D−1 00:00–16:00 is stretched (dashed line); times are Brussels local.</span>`,
+      `<span>D−1 00:00–16:00 is stretched (dashed line); times are CET.</span>`,
     ].join("");
   }
 
@@ -1017,7 +1017,7 @@
     const head = `<thead><tr><th>Model</th>${days.map((d) => {
       const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
       const rv = (d.revised || []).length ? `<small title="actuals revised and re-scored: ${esc(d.revised.join(", "))}">↻ ${d.revised.length} revised</small>` : "";
-      return `<th title="${d.d} · ${d.started ? `run ${localTime(d.started)}–` : "finished "}${localTime(d.finished)} Brussels">${esc(shortDate(d.d))}${b}${rv}</th>`;
+      return `<th title="${d.d} · ${d.started ? `run ${localTime(d.started)}–` : "finished "}${localTime(d.finished)} CET">${esc(shortDate(d.d))}${b}${rv}</th>`;
     }).join("")}</tr></thead>`;
     const zs = trkZones(), ts = trkTargets(), keys = zs.flatMap((z) => ts.map((t) => `${z}_${t}`));
     const cell = (c, d, m) => {
@@ -1051,7 +1051,7 @@
     det.hidden = false;
     det.innerHTML = `<h4>${esc(S.trkSel.m)} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase === "live" ? "Live" : "Backtest"}</span></h4>
       <p>${st.icon} ${esc(st.label)}.</p>
-      <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} Brussels${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
+      <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} CET${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
       <div class="tablewrap"><table class="trk-series"><thead><tr><th></th>${Object.keys(D.config.targets).map((t) => `<th>${esc(TARGET_LABEL[t] || t)}</th>`).join("")}</tr></thead><tbody>${D.config.zones.map((z) => `<tr><td class="model">${z}</td>${Object.keys(D.config.targets).map((t) => {
         const key = `${z}_${t}`, x = serCode(c, d, key), a = (d.act || {})[key];
@@ -1136,7 +1136,7 @@
     const delivered = addDays(day.issue_date, 1);
     $("x-meta").innerHTML = `<span>Locked <b>${day.issue_date} ${esc(D.config.issue_time)}</b></span><span>Gate <b>${esc(D.config.gate || D.config.issue_time)}</b></span><span>Delivery <b>${delivered}</b></span>
       <span class="tag ${bt ? "bt" : "live"}">${bt ? "Backtest" : "Live"}</span>
-      ${ser.actual ? (ser.provisional ? `<span class="tag pending" title="${day.provisional_fetched_utc ? `fetched ${esc(localTime(day.provisional_fetched_utc))} Brussels` : ""}">Provisional actuals to ${esc(meteredTo(day, ser.actual))}, not scored yet</span>` : "") : '<span class="tag pending">Actuals not published yet</span>'}
+      ${ser.actual ? (ser.provisional ? `<span class="tag pending" title="${day.provisional_fetched_utc ? `fetched ${esc(localTime(day.provisional_fetched_utc))} CET` : ""}">Provisional actuals to ${esc(meteredTo(day, ser.actual))}, not scored yet</span>` : "") : '<span class="tag pending">Actuals not published yet</span>'}
       ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
       ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">Actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
