@@ -698,14 +698,21 @@
     });
     legend($("l-perf"), models);
 
-    // running Elo: the Bradley-Terry fit on all races up to each issue day
-    const running = DAYS.map((_, i) => eloScores(DAYS.slice(0, i + 1)));
-    const race = models.map((m) => lineDataset(m, running.map((e, i) => (DAYS[i].pts[m] || DAYS.slice(0, i).some((x) => x.pts[m])) && e[m] ? e[m].elo : null), DAYS));
+    // running Elo over the live days only (the backtest is a separate exercise): the Bradley-Terry fit on the live
+    // races up to each issue day. A model's line starts once it has raced on MIN_ELO_DAYS live days, so its first
+    // day or two do not swing it to extremes.
+    const MIN_ELO_DAYS = 3;
+    const liveDays = DAYS.filter((x) => x.phase === "live");
+    const running = liveDays.map((_, i) => eloScores(liveDays.slice(0, i + 1)));
+    const race = models.map((m) => {
+      let n = 0;
+      return lineDataset(m, running.map((e, i) => { if (liveDays[i].pts[m]) n += 1; return n >= MIN_ELO_DAYS && e[m] ? e[m].elo : null; }), liveDays);
+    });
     draw("c-race", {
-      type: "line", data: { labels, datasets: race },
+      type: "line", data: { labels: liveDays.map((x) => shortDate(x.d)), datasets: race },
       options: baseOptions({
-        band, yTitle: "Elo (running)", itemSort: (a, b) => b.raw - a.raw,
-        tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
+        band: bandRange(liveDays), yTitle: "Elo (running, live days)", itemSort: (a, b) => b.raw - a.raw,
+        tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
       }),
     });
     legend($("l-race"), models);
@@ -1148,6 +1155,152 @@
       </tr>`).join("") + `</tbody>`;
   }
 
+  // ---------- forecast value (value.html) ----------
+  // data/value.json: per series (zone_target) and issue day, the perfect-foresight revenue and each model's revenue
+  // for every strategy (sell the point forecast, or the p10..p90 percentile of its distribution) in EUR. A model's
+  // score over a selection is sum(revenue) / sum(perfect-foresight revenue) over the series-days it delivered.
+  let VAL = null;
+  const VTARGETS = ["wind", "solar"];
+  const pct = (v, d = 1) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(d) + "%");
+  function valueSeries() {
+    return Object.entries(VAL.series).filter(([k]) => {
+      const [z, t] = [k.slice(0, k.lastIndexOf("_")), k.slice(k.lastIndexOf("_") + 1)];
+      return t === S.v.target && (S.v.zone === "all" || z === S.v.zone);
+    }).map(([, s]) => s);
+  }
+  /** model -> strategy -> {r, perfect, energy, n} summed over the selected series and days */
+  function valueTotals() {
+    const out = {};
+    for (const s of valueSeries()) {
+      s.days.forEach((d, i) => {
+        if (S.phase !== "all" && s.phase[i] !== S.phase) return;
+        for (const [m, strats] of Object.entries(s.models)) {
+          for (const [k, arr] of Object.entries(strats)) {
+            if (arr[i] == null) continue;
+            const t = ((out[m] = out[m] || {})[k] = out[m][k] || { r: 0, perfect: 0, energy: 0, n: 0 });
+            t.r += arr[i]; t.perfect += s.perfect[i]; t.energy += s.energy[i]; t.n += 1;
+          }
+        }
+      });
+    }
+    const share = (t) => (t && t.perfect > 0 ? t.r / t.perfect : null);
+    const cost = (t) => (t && t.energy > 0 ? (t.perfect - t.r) / t.energy : null);   // EUR per MWh produced
+    const res = {};
+    for (const [m, st] of Object.entries(out)) {
+      const curve = VAL.percentiles.map((p) => share(st["p" + p]));
+      const ok = curve.filter((v) => v != null);
+      const bestI = ok.length ? curve.indexOf(Math.max(...ok)) : -1;
+      res[m] = { st, curve, share, cost, quant: ok.length > 0, bestP: bestI >= 0 ? VAL.percentiles[bestI] : null, best: bestI >= 0 ? curve[bestI] : null,
+        point: share(st.point), n: (st.point || {}).n || 0 };
+    }
+    return res;
+  }
+  const vCursor = {
+    id: "vCursor",
+    afterDatasetsDraw(chart, _a, o) {
+      if (!o || o.p == null) return;
+      const { ctx, chartArea: a, scales: { x } } = chart;
+      const line = (p, dash, col, text, below) => {
+        const px = x.getPixelForValue(p);
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = dash ? 1 : 1.5; ctx.setLineDash(dash ? [3, 3] : []);
+        ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+        ctx.setLineDash([]); ctx.fillStyle = css("--ink2"); ctx.font = "12px 'Source Code Pro', monospace";
+        ctx.textAlign = px > a.right - 80 ? "right" : "left";
+        ctx.fillText(text, px + (ctx.textAlign === "right" ? -6 : 6), below ? a.bottom - 8 : a.top + 12);
+        ctx.restore();
+      };
+      if (o.best != null && o.best !== o.p) line(o.best, true, css("--ink2"), `best p${o.best}`, false);
+      line(o.p, false, css("--ink"), `p${o.p}`, true);
+    },
+  };
+  function renderValueControls(res) {
+    options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
+    seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
+    const hasLive = Object.values(VAL.series).some((s) => s.phase.includes("live"));
+    seg($("v-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
+      (k) => { S.phase = k; renderValue(); });
+    const ms = MODELS.filter((m) => res[m] && res[m].quant);
+    options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${m} (ref)` : m })), S.v.model);
+  }
+  function renderValue() {
+    if (!VAL) return;
+    const res = valueTotals();
+    const at = (m) => res[m].curve[VAL.percentiles.indexOf(S.v.p)];
+    const ranked = Object.keys(res).filter((m) => !REF.has(m)).sort((a, b) =>
+      (res[b].quant - res[a].quant) || ((res[a].quant ? at(b) - at(a) : res[b].point - res[a].point) || 0));
+    // default: the best model at this percentile that is not a naive baseline (a baseline can win a short window by luck)
+    if (!S.v.model || !res[S.v.model] || !res[S.v.model].quant) S.v.model = ranked.find((m) => res[m].quant && FAM[m] !== "baseline") || ranked.find((m) => res[m].quant) || null;
+    renderValueControls(res);
+    $("v-p").value = String(S.v.p);
+    $("v-p-h").textContent = "p" + S.v.p;
+    const m = S.v.model, r = m && res[m];
+    if (!r) {
+      $("v-table").innerHTML = '<tbody><tr><td class="empty">No priced and scored days for this selection yet.</td></tr></tbody>';
+      ["v-r1", "v-r2", "v-r3"].forEach((id) => { $(id).textContent = "–"; $(id + "-s").textContent = ""; });
+      if (S.charts["c-value"]) { S.charts["c-value"].destroy(); delete S.charts["c-value"]; }
+      return;
+    }
+    // chart: the chosen model bold, the four best others at this percentile thin, the grid operator's point forecast flat
+    const others = ranked.filter((x) => x !== m && res[x].quant).slice(0, 4);
+    const tso = Object.keys(res).filter((x) => FAM[x] === "tso" && res[x].point != null);
+    const xy = (curve) => VAL.percentiles.map((p, i) => ({ x: p, y: curve[i] == null ? null : 100 * curve[i] }));
+    const datasets = [
+      { label: m, data: xy(r.curve), borderColor: color(m), backgroundColor: color(m), borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, order: -1 },
+      { label: `${m} point forecast`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * r.point })), borderColor: color(m), borderWidth: 1.2, borderDash: [2, 3], pointRadius: 0, pointHoverRadius: 0 },
+      ...others.map((x) => ({ label: x, data: xy(res[x].curve), borderColor: alpha(color(x), 0.75), backgroundColor: color(x), borderWidth: 1.3, pointRadius: 0, pointHoverRadius: 3, tension: 0.25 })),
+      ...tso.map((x) => ({ label: `${x} (point)`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * res[x].point })), borderColor: color(x), borderWidth: 1.4, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0 })),
+    ];
+    const o = baseOptions({ yTitle: "Share of perfect-foresight revenue (%)", rightPad: 12, endLabels: false,
+      tooltip: { title: (it) => `committed p${it[0].raw.x}`, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw.y, 1)}%` } });
+    o.scales.x.type = "linear"; o.scales.x.min = VAL.percentiles[0]; o.scales.x.max = VAL.percentiles[VAL.percentiles.length - 1];
+    o.scales.x.ticks.stepSize = 10; o.scales.x.ticks.callback = (v) => "p" + v;
+    o.scales.y.ticks.callback = (v) => v + "%";
+    o.plugins.vCursor = { p: S.v.p, best: r.bestP };
+    o.onClick = (e, _el, chart) => { const p = Math.round(chart.scales.x.getValueForPixel(e.x) / 5) * 5; if (p >= 10 && p <= 90) { S.v.p = p; renderValue(); } };
+    if (S.charts["c-value"]) S.charts["c-value"].destroy();
+    S.charts["c-value"] = new Chart($("c-value").getContext("2d"), { type: "line", data: { datasets }, options: o, plugins: [vCursor] });
+    $("l-value").innerHTML = datasets.map((ds, i) => `<span style="display:inline-flex;align-items:center;gap:7px;margin-right:16px"><i style="display:inline-block;width:18px;border-top:${i === 0 ? 3 : 2}px ${ds.borderDash ? "dashed" : "solid"} ${ds.borderColor}"></i>${esc(ds.label)}</span>`).join("");
+
+    const t = r.st["p" + S.v.p];
+    const zoneTxt = S.v.zone === "all" ? "all zones" : zoneLabel(S.v.zone);
+    $("v-r1-l").textContent = `Committed p${S.v.p} · ${m}`;
+    $("v-r1").textContent = pct(at(m));
+    $("v-r1-s").textContent = t ? `€${(t.r / 1e6).toFixed(2)}m of €${(t.perfect / 1e6).toFixed(2)}m · point forecast ${pct(r.point)}` : "";
+    $("v-r2").textContent = r.bestP != null ? "p" + r.bestP : "–";
+    $("v-r2-s").textContent = r.best != null ? `${pct(r.best)} · ${r.bestP === S.v.p ? "you are on it" : `${((r.best - at(m)) * 100).toFixed(1)} pts above p${S.v.p}`}` : "";
+    const c = r.cost(t);
+    $("v-r3").textContent = c == null ? "–" : `€${c.toFixed(2)}`;
+    $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(0)} GWh in ${zoneTxt}` : "";
+
+    const all = [...ranked, ...Object.keys(res).filter((x) => REF.has(x))];
+    const bestAt = Math.max(...ranked.filter((x) => res[x].quant).map(at).filter((v) => v != null));
+    const bestPoint = Math.max(...ranked.map((x) => res[x].point).filter((v) => v != null));
+    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">Imbalance cost at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
+      all.map((x, i) => { const q = res[x]; const a = q.quant ? at(x) : null; const cx = q.quant ? q.cost(q.st["p" + S.v.p]) : null;
+        return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
+        <td class="r num">${REF.has(x) ? "ref" : i + 1}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>
+        <td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>
+        <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td><td class="r num">${q.n}</td></tr>`; }).join("") + "</tbody>";
+    $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
+    $("v-notes").textContent = `An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
+      "Imbalance cost is what the forecast error cost per MWh produced, against perfect foresight; it is negative when the deviations happened to earn more at the imbalance price than at the day-ahead price. " +
+      "Models without quantiles only have the point forecast. Click a row to draw its curve.";
+  }
+  async function initValue() {
+    try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); }
+    catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
+    S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50 };
+    const q = new URLSearchParams(location.search);
+    if (q.get("zone") === "all" || D.config.zones.includes(q.get("zone"))) S.v.zone = q.get("zone");
+    if (VTARGETS.includes(q.get("target"))) S.v.target = q.get("target");
+    if (q.get("model")) S.v.model = q.get("model");
+    if (+q.get("p") >= 10 && +q.get("p") <= 90) S.v.p = Math.round(+q.get("p") / 5) * 5;
+    $("v-zone").onchange = (e) => { S.v.zone = e.target.value; renderValue(); };
+    $("v-model").onchange = (e) => { S.v.model = e.target.value; renderValue(); };
+    $("v-p").oninput = (e) => { S.v.p = +e.target.value; renderValue(); };
+    renderValue();
+  }
+
   // ---------- wiring ----------
   let SHOWN = new Set();
   // the top-N slider lives on the leaderboard; elsewhere every model is shown
@@ -1262,6 +1415,11 @@
       renderExplorerControls();
       changed();
       renderExplorerChart();
+    }
+    if (PAGE === "value") {
+      await initValue();
+      afterFonts = () => renderValue();
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderValue);
     }
     if (PAGE === "methodology") {
       renderTimeline();
