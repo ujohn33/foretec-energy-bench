@@ -211,7 +211,12 @@ td.kind{font-family:var(--mono); font-size:.8rem; color:var(--ink2); font-weight
 tr.is-bt td,tr.is-bt td.v.best{color:var(--bt-ink)}
 tr.is-bt td.v.best{font-weight:600}
 td.pos{font-weight:400; color:var(--ink2); width:36px}
-.bar{display:flex; align-items:center; gap:10px; min-width:140px}
+.bar{display:flex; align-items:center; gap:10px}
+.bar em{display:block; width:90px; flex:none}
+.bar em span{display:block}
+th.elo,td.elo{width:1%; white-space:nowrap}
+td.elo.note{white-space:normal; min-width:150px; font-weight:400; font-size:.82rem; color:var(--ink2)}
+@media(max-width:640px){ th.hide-sm,td.hide-sm{display:none} .bar em{width:45px} }
 .bar span{height:6px; border-radius:1px}
 .bar b{font-weight:600; font-size:.9rem}
 td.empty{padding:28px; text-align:center; color:var(--ink2); font-weight:400; white-space:normal}

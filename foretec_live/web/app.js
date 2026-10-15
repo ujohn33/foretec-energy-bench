@@ -596,10 +596,10 @@
       return c * dir || a.pos - b.pos;
     });
   }
-  function sortTh(key, label, tip, right = true) {
+  function sortTh(key, label, tip, right = true, cls = "") {
     const on = sortKey() === key, dir = on && key === S.sort.k ? S.sort.dir : 1;
     const aria = on ? (dir < 0 ? "descending" : "ascending") : "none";
-    return `<th class="${right ? "r" : ""}" aria-sort="${aria}"><button type="button" class="sort" data-sort="${key}" ${tip ? `data-tip="${tip}"` : ""}>` +
+    return `<th class="${[right ? "r" : "", cls].join(" ").trim()}" aria-sort="${aria}"><button type="button" class="sort" data-sort="${key}" ${tip ? `data-tip="${tip}"` : ""}>` +
       `<span class="${tip ? "lbl" : ""}">${esc(label)}</span><i aria-hidden="true">${on ? (dir < 0 ? "▼" : "▲") : "↕"}</i></button></th>`;
   }
 
@@ -635,14 +635,14 @@
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
     const multi = !singleSeries();   // the series count only matters when more than one series is combined
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false)}${sortTh("ci", "95% interval", "ci")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${sortTh("ci", "95% interval", "ci", true, "hide-sm")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td><div class="bar"><span style="width:${Math.round(Math.min(90, Math.max(0, (s.score - 700) * 0.15)))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 0)}</b></div></td>
-        <td class="r v">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="elo"><div class="bar"><em><span style="width:${Math.round(Math.min(100, Math.max(0, (s.score - 700) / 6)))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span></em><b>${fmt(s.score, 0)}</b></div></td>
+        <td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td><td class="r v">${s.races}</td>
       </tr>`).join("") + "</tbody>";
@@ -667,7 +667,7 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">–</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
+          <td class="elo note">Reference, not ranked: published after the gate${only}</td><td class="r v hide-sm">–</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
           <td class="r v">–</td><td class="r v">–</td><td class="r v">${mine.length}</td></tr>`;
       }).join(""));
