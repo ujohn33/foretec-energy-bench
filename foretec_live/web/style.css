@@ -167,6 +167,7 @@ section{padding:78px 0; border-top:1px solid var(--rule)}
 .legend button{display:flex; align-items:center; gap:7px; background:none; border:0; padding:2px 0; color:inherit; font:inherit; cursor:pointer; border-radius:0}
 .legend button:hover{color:var(--ink); opacity:1}
 .legend button[aria-pressed="false"]{opacity:.38; text-decoration:line-through}
+.legend button.faint{opacity:.5}
 .legend i{display:inline-block; width:22px; border-top:2.4px solid currentColor}
 .legend .actual i{border-top:3px solid var(--ink)}
 

@@ -11,7 +11,7 @@
   const zoneLabel = (z) => (D.config && D.config.zone_labels && D.config.zone_labels[z]) || z;   // DE -> DE-LU
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -1145,19 +1145,27 @@
     if (ser.actual) datasets.push({ label: actualLabel, data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: actualLabel, endColor: actualColor(), order: -1 });
     // the top EMPHASIS models by Elo (and the TSO yardstick) are drawn in full and labelled, the rest faint and
     // unlabelled; every model stays in the tooltip and the legend
+    // models clicked in the legend (S.xPin) are drawn in full too; the faint lines fade further when there are many
     const lead = new Set(cands.slice(0, EMPHASIS));
+    const isTso = (m) => REF.has(m) || FAM[m] === "tso";
+    const full = (m) => lead.has(m) || isTso(m) || S.xPin.has(m);
+    const faintA = models.length > 8 ? 0.16 : 0.28;
     for (const m of models) {
-      const c = color(m), tso = REF.has(m) || FAM[m] === "tso", full = lead.has(m) || tso;
-      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: full ? c : alpha(c, 0.28), backgroundColor: c,
-        borderWidth: full ? 2.2 : 1.1, borderDash: tso ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: 4, tension: 0, order: full ? 0 : 1,
-        endLabel: !full ? null : REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
+      const c = color(m), tso = isTso(m), f = full(m);
+      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: f ? c : alpha(c, faintA), backgroundColor: c,
+        borderWidth: f ? 2.2 : 1, borderDash: tso ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: f ? 4 : 0, tension: 0, order: f ? 0 : 1,
+        endLabel: !f ? null : REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
       itemSort: (a, b) => (b.dataset.label === "Actual") - (a.dataset.label === "Actual"),
       tooltip: { label: (c) => (c.dataset.label.startsWith("_") ? null : ` ${c.dataset.label}: ${fmt(c.raw, 1)} ${unit}`) },
     });
-    o.plugins.tooltip.filter = (it) => !it.dataset.label.startsWith("_");
+    // the tooltip lists the actual and the lines drawn in full; the faint ones are counted
+    const nFaint = models.filter((m) => !full(m) && !S.hidden.has(m)).length;
+    o.plugins.tooltip.filter = (it) => !it.dataset.label.startsWith("_") && (!ser.models[it.dataset.label] || full(it.dataset.label));
+    o.plugins.tooltip.callbacks.footer = () => (nFaint ? `+ ${nFaint} faint model${nFaint > 1 ? "s" : ""}: click one in the legend to highlight it` : "");
+    Object.assign(o.plugins.tooltip, { footerColor: css("--ink2"), footerFont: { size: 11.5, weight: 400 } });
     o.scales.x.ticks.maxTicksLimit = 13;
     draw("c-day", { type: "line", data: { labels, datasets }, options: o });
 
@@ -1168,7 +1176,18 @@
       ${ser.actual ? `<span>Actuals <b>${esc(actualSource(day, key))}</b></span>` : ""}
       ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">Actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
-    legend($("l-day"), models, ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>${actualLabel}</span>` : "");
+    // explorer legend: click a faint model to draw it in full (again to fade it); click a leading or TSO model to hide it
+    const ld = $("l-day");
+    ld.innerHTML = (ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>${actualLabel}</span>` : "") +
+      models.map((m) => `<button type="button" data-m="${esc(m)}" class="${full(m) ? "" : "faint"}" aria-pressed="${!S.hidden.has(m)}"
+        title="${lead.has(m) || isTso(m) ? "click to hide or show" : S.xPin.has(m) ? "click to fade" : "click to highlight"}"><i style="border-top-color:${color(m)}"></i>${nm(m)}</button>`).join("");
+    ld.onclick = (e) => {
+      const b = e.target.closest("button[data-m]"); if (!b) return;
+      const m = b.dataset.m;
+      if (lead.has(m) || isTso(m)) S.hidden.has(m) ? S.hidden.delete(m) : S.hidden.add(m);
+      else S.xPin.has(m) ? S.xPin.delete(m) : S.xPin.add(m);
+      renderExplorerChart();
+    };
 
     renderInputs(day);
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);
