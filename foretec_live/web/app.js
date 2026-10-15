@@ -381,6 +381,11 @@
     seg($("f-agg"), [
       { k: "mean", label: "Mean", tip: "agg" }, { k: "median", label: "Median", tip: "agg" }, { k: "gmean", label: "Geo. mean", tip: "agg" },
     ], S.agg, (k) => { S.agg = k; renderAll(); });
+    // one zone and one target: a single series, so mean, median and geometric mean are the same number
+    const one = singleSeries();
+    $("f-agg").classList.toggle("off", one);
+    $("f-agg").querySelectorAll("button").forEach((x) => { x.disabled = one; });
+    $("f-agg").title = one ? "One series selected (one zone, one target): nothing to aggregate. Pick all zones or all targets." : "";
     seg($("f-cov"), [
       { k: "all", label: "All" },
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },

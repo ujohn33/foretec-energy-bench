@@ -143,6 +143,8 @@ select:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var
 .seg button:first-child{border-left:0}
 .seg button:hover{color:var(--ink); background:var(--raise)}
 .seg button[aria-checked="true"]{background:var(--ink); color:var(--ground)}
+.seg.off{opacity:.4}
+.seg.off button{cursor:not-allowed}
 .seg button:disabled{opacity:.4; cursor:not-allowed; background:none}
 .seg button:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 
