@@ -1,0 +1,8 @@
+name: tabby_pretrain_cov
+author: Foretec
+description: "Tabby-Pretrain (paris-noah/Tabby-Pretrain) with known-future covariates in TimesFM's \"xreg + timesfm\" style: a ridge on the NWP ensemble means/spreads, ENTSO-E load forecast and fuel cost explains what the covariates can, the backbone forecasts the residual zero-shot, and the ridge forecast is added back to every quantile."
+family: tabby
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: tabby
+script: forecaster.py

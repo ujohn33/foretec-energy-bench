@@ -22,7 +22,6 @@ declare -A PKGS=(
   [tfc06]="tfc-t0[torch]>=0.6.0"
   # Tabby / Tabby-Pretrain (Huawei Noah's Ark Paris, CC BY-NC 4.0): HF remote code for Tabby, the package for the backbone
   # RealMLP and TabM (tabular deep learning on the lgbm_cov inputs)
-  [tabnn]="pytabkit[models]|tabm"
   [tabby]="transformers>=4.40,<5|einops|safetensors|huggingface_hub|tabby-tsfm @ git+https://github.com/huawei-noah/trustworthyAI.git@2e0804cb9135ff73d9888f649e8f9248914bfce4#subdirectory=TabbyTSFM"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
