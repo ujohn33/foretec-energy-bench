@@ -379,7 +379,7 @@
       { k: "all", label: "All time" },
     ], S.win, (k) => { S.win = k; renderAll(); });
     seg($("f-agg"), [
-      { k: "mean", label: "Mean", tip: "agg" }, { k: "median", label: "Median", tip: "agg" }, { k: "gmean", label: "Geo. mean", tip: "agg" },
+      { k: "mean", label: "Mean" }, { k: "median", label: "Median" }, { k: "gmean", label: "Geo. mean" },
     ], S.agg, (k) => { S.agg = k; renderAll(); });
     // one zone and one target: a single series, so mean, median and geometric mean are the same number
     const one = singleSeries();
@@ -511,7 +511,7 @@
     rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
     relr: () => ["Rel. RMSE", `Like Rel. MAE with squared errors: per series sqrt(sum of squared errors / the baseline's), on the same days. Large misses weigh more. ${aggText()} Lower is better.`],
     nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts. Relative errors of models with different series are averaged over different sets, so compare them with care."],
-    agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when the filters select more than one series. Mean: the average, moved by a series where a model is very good or very bad. Median: the middle series, so winning it means winning on most series. Geometric mean: the average of the logarithms, which treats halving and doubling the error symmetrically and penalises a model that is bad on one series. Points and ranks do not depend on it."],
+    agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when several zones or targets are selected."],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
     rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
