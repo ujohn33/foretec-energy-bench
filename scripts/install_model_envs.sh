@@ -20,6 +20,8 @@ declare -A PKGS=(
   # t0-alpha/beta stay on 0.5.0 (0.6.0 shifts their forecasts by ~0.3%); t0-gamma needs 0.6.0 (its config keys)
   [tfc]="tfc-t0==0.5.0"
   [tfc06]="tfc-t0[torch]>=0.6.0"
+  # Tabby / Tabby-Pretrain (Huawei Noah's Ark Paris, CC BY-NC 4.0): HF remote code for Tabby, the package for the backbone
+  [tabby]="transformers>=4.40,<5|einops|safetensors|huggingface_hub|tabby-tsfm @ git+https://github.com/huawei-noah/trustworthyAI.git@2e0804cb9135ff73d9888f649e8f9248914bfce4#subdirectory=TabbyTSFM"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"

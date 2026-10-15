@@ -376,3 +376,19 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 .agg{display:flex; align-items:center; gap:10px} .agg .lbl{font-size:.8rem; color:var(--ink2)}
 .tagline{background:var(--surface); border-bottom:1px solid var(--rule); font-size:.86rem; color:var(--ink2); padding:7px 0; line-height:1.45} .tagline a{color:var(--blue-ink); white-space:nowrap; margin-left:6px}
 .seg-link{display:inline-flex; align-items:center; border:1px solid var(--rule); border-radius:2px; background:var(--surface); font-size:.88rem; font-weight:500; color:var(--ink2); padding:6px 13px; text-decoration:none; white-space:nowrap} .seg-link:hover{color:var(--ink); background:var(--raise)}
+/* Forecast Value: curve, slider and read-outs, laid out like the foretec.be widget */
+.vcard{padding:18px 18px 0; overflow:hidden}
+.vcard .chart-box{height:360px}
+.vcard .legend{margin-top:8px; font-size:.86rem; color:var(--ink2)}
+.vslider{padding:18px 0 14px}
+.vslider .lbl{display:block; font-family:var(--mono); font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px}
+.vslider input[type=range]{width:100%; margin:0; accent-color:var(--blue)}
+.vslider input[type=range]:focus-visible{outline:2px solid var(--blue); outline-offset:4px}
+.vscale{display:flex; justify-content:space-between; font-size:.76rem; margin-top:4px}
+.vread{display:grid; grid-template-columns:repeat(3,1fr); margin:0 -18px; border-top:1px solid var(--rule); background:var(--raise)}
+.vread > div{padding:16px 18px; display:grid; gap:4px; align-content:start}
+.vread > div + div{border-left:1px solid var(--rule)}
+.vread .lbl{font-family:var(--mono); font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink2)}
+.vnum{font-family:var(--mono); font-weight:400; font-size:2.1rem; line-height:1.15; color:var(--blue-ink)}
+#v-table tr.on td{background:var(--blue-soft)}
+@media(max-width:720px){ .vread{grid-template-columns:1fr} .vread > div + div{border-left:0; border-top:1px solid var(--rule)} .vnum{font-size:1.7rem} .vcard .chart-box{height:300px} }

@@ -1,0 +1,8 @@
+name: tabby
+author: Huawei Noah's Ark Lab (Paris)
+description: "Tabby (paris-noah/Tabby, September 2026, CC BY-NC 4.0): a PatchTST foundation model (147M parameters) whose frozen pretrained backbone carries a prompt post-trained on GIFT-Eval training tasks; zero-shot on the target's own history, 99 quantiles. Each series is forecast on its own (no covariates)."
+family: tabby
+inputs: [history]
+runner: subprocess
+env: tabby
+script: forecaster.py

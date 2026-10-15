@@ -1,0 +1,8 @@
+name: tabby_pretrain
+author: Huawei Noah's Ark Lab (Paris)
+description: "Tabby-Pretrain (paris-noah/Tabby-Pretrain, CC BY-NC 4.0): the pretrained PatchTST backbone of Tabby without the post-trained prompt (146M parameters), zero-shot on the target's own history through the tabby-tsfm package, 99 quantiles."
+family: tabby
+inputs: [history]
+runner: subprocess
+env: tabby
+script: forecaster.py
