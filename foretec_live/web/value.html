@@ -32,8 +32,7 @@
     <nav class="top-nav" aria-label="Pages">
       <a href="index.html">Leaderboard</a>
       <a href="explorer.html">Forecast Explorer</a>
-      <a href="value.html" class="on" aria-current="page">Forecast Value</a>
-      <a href="methodology.html">Methodology</a>
+      <a href="value.html" class="beta on" aria-current="page">Forecast Value<span class="beta-tag">beta</span></a>
     </nav>
   </div>
 </header>
@@ -45,9 +44,8 @@
     <div class="field"><span class="lbl">Target</span><div class="seg" id="v-target" role="radiogroup" aria-label="Target"></div></div>
     <div class="field"><span class="lbl">Period</span><div class="seg" id="v-phase" role="radiogroup" aria-label="Period"></div></div>
     <div class="field"><label for="v-model">Model</label><select id="v-model"></select></div>
-    <div class="field"><span class="lbl" aria-hidden="true">&nbsp;</span><a class="seg-link" href="methodology.html#value">Methodology</a></div>
     <div class="status mono">
-      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> Brussels</span>
+      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> Brussels · <a href="methodology.html#value">Methodology</a></span>
       <span>Updated <span id="updated">–</span> · prices ENTSO-E</span>
     </div>
   </div>
@@ -86,6 +84,7 @@
     <a href="https://foretec.be/" class="foot-mark">Foretec <span>Energy <b>Bench</b></span></a>
     <span>Brussels</span>
     <span>Data: <a href="https://transparency.entsoe.eu" rel="noopener">ENTSO-E Transparency Platform</a>; gaps from <a href="https://opendata.elia.be" rel="noopener">Elia Open Data</a>, <a href="https://odre.opendatasoft.com" rel="noopener">RTE éCO2mix</a> and <a href="https://energy-charts.info" rel="noopener">Energy-Charts</a></span>
+    <span><a href="methodology.html">Methodology</a></span>
     <span><a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a></span>
   </div>
 </footer>

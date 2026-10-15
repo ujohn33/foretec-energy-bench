@@ -32,8 +32,7 @@
     <nav class="top-nav" aria-label="Pages">
       <a href="index.html" class="on" aria-current="page">Leaderboard</a>
       <a href="explorer.html">Forecast Explorer</a>
-      <a href="value.html">Forecast Value</a>
-      <a href="methodology.html">Methodology</a>
+      <a href="value.html" class="beta">Forecast Value<span class="beta-tag">beta</span></a>
     </nav>
   </div>
 </header>
@@ -49,9 +48,8 @@
     <div class="field"><span class="lbl">Rated over</span><div class="seg" id="f-win" role="radiogroup" aria-label="Rating window"></div></div>
     <div class="field"><span class="lbl">Covariates</span><div class="seg" id="f-cov" role="radiogroup" aria-label="Covariates"></div></div>
     <div class="field"><label for="f-top">Models</label><div class="range"><input type="range" id="f-top" min="1" max="13" value="10" step="1"><span id="f-top-val" class="mono">Top 10</span></div></div>
-    <div class="field"><span class="lbl" aria-hidden="true">&nbsp;</span><a class="seg-link" href="methodology.html#gate-aligned">Methodology</a></div>
     <div class="status mono">
-      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> Brussels</span>
+      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> Brussels · <a href="methodology.html#gate-aligned">Methodology</a></span>
       <span>Updated <span id="updated">–</span> · data ENTSO-E</span>
       <span class="key"><i class="k-bt"></i>Backtest <i class="k-live"></i>Live</span>
     </div>
@@ -114,6 +112,7 @@
     <a href="https://foretec.be/" class="foot-mark">Foretec <span>Energy <b>Bench</b></span></a>
     <span>Brussels</span>
     <span>Data: <a href="https://transparency.entsoe.eu" rel="noopener">ENTSO-E Transparency Platform</a>; gaps from <a href="https://opendata.elia.be" rel="noopener">Elia Open Data</a>, <a href="https://odre.opendatasoft.com" rel="noopener">RTE éCO2mix</a> and <a href="https://energy-charts.info" rel="noopener">Energy-Charts</a></span>
+    <span><a href="methodology.html">Methodology</a></span>
     <span><a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a></span>
   </div>
 </footer>
