@@ -1161,6 +1161,10 @@
   // score over a selection is sum(revenue) / sum(perfect-foresight revenue) over the series-days it delivered.
   let VAL = null;
   const VTARGETS = ["wind", "solar"];
+  // settlement of the deviations: "err" = error cost only (|deviation| x |imbalance - day-ahead|, never a gain; the
+  // default, it scores the forecast), "imb" = settled at the imbalance price (what the asset would have earned,
+  // including the gap between imbalance and day-ahead prices, which over a few weeks rests on a few price spikes)
+  const VSFX = () => (S.v.mode === "imb" ? "" : "e");
   const pct = (v, d = 1) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(d) + "%");
   function valueSeries() {
     return Object.entries(VAL.series).filter(([k]) => {
@@ -1187,11 +1191,11 @@
     const cost = (t) => (t && t.energy > 0 ? (t.perfect - t.r) / t.energy : null);   // EUR per MWh produced
     const res = {};
     for (const [m, st] of Object.entries(out)) {
-      const curve = VAL.percentiles.map((p) => share(st["p" + p]));
+      const curve = VAL.percentiles.map((p) => share(st["p" + p + VSFX()]));
       const ok = curve.filter((v) => v != null);
       const bestI = ok.length ? curve.indexOf(Math.max(...ok)) : -1;
       res[m] = { st, curve, share, cost, quant: ok.length > 0, bestP: bestI >= 0 ? VAL.percentiles[bestI] : null, best: bestI >= 0 ? curve[bestI] : null,
-        point: share(st.point), n: (st.point || {}).n || 0 };
+        point: share(st["point" + VSFX()]), n: (st.point || {}).n || 0 };
     }
     return res;
   }
@@ -1215,6 +1219,10 @@
   };
   function renderValueControls(res) {
     options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
+    seg($("v-mode"), [
+      { k: "err", label: "Error cost only", title: "Every deviation costs |deviation| x |imbalance price - day-ahead price|: an error never earns" },
+      { k: "imb", label: "At imbalance price", title: "Deviations settled at the imbalance price, as the asset would have been paid: includes the gap between imbalance and day-ahead prices" },
+    ], S.v.mode, (k) => { S.v.mode = k; S.v.model = null; renderValue(); });
     seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
     const hasLive = Object.values(VAL.series).some((s) => s.phase.includes("live"));
     seg($("v-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
@@ -1261,7 +1269,7 @@
     S.charts["c-value"] = new Chart($("c-value").getContext("2d"), { type: "line", data: { datasets }, options: o, plugins: [vCursor] });
     $("l-value").innerHTML = datasets.map((ds, i) => `<span style="display:inline-flex;align-items:center;gap:7px;margin-right:16px"><i style="display:inline-block;width:18px;border-top:${i === 0 ? 3 : 2}px ${ds.borderDash ? "dashed" : "solid"} ${ds.borderColor}"></i>${esc(ds.label)}</span>`).join("");
 
-    const t = r.st["p" + S.v.p];
+    const t = r.st["p" + S.v.p + VSFX()];
     const zoneTxt = S.v.zone === "all" ? "all zones" : zoneLabel(S.v.zone);
     $("v-r1-l").textContent = `Committed p${S.v.p} · ${m}`;
     $("v-r1").textContent = pct(at(m));
@@ -1270,6 +1278,7 @@
     $("v-r2").textContent = r.bestP != null ? "p" + r.bestP : "–";
     $("v-r2-s").textContent = r.best != null ? `${pct(r.best)} · ${r.bestP === S.v.p ? "you are on it" : `${((r.best - at(m)) * 100).toFixed(1)} pts above p${S.v.p}`}` : "";
     const c = r.cost(t);
+    $("v-r3-l").textContent = S.v.mode === "imb" ? "Imbalance cost" : "Error cost";
     $("v-r3").textContent = c == null ? "–" : `€${c.toFixed(2)}`;
     const nz = valueSeries().filter((x) => x.phase.some((ph, i) => (S.phase === "all" || ph === S.phase) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
     $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(1)} GWh from ${nz > 1 ? `${nz} assets of ${VAL.asset_mw} MW` : `${VAL.asset_mw} MW`} in ${zoneTxt}` : "";
@@ -1277,21 +1286,25 @@
     const all = [...ranked, ...Object.keys(res).filter((x) => REF.has(x))];
     const bestAt = Math.max(...ranked.filter((x) => res[x].quant).map(at).filter((v) => v != null));
     const bestPoint = Math.max(...ranked.map((x) => res[x].point).filter((v) => v != null));
-    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">Imbalance cost at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
-      all.map((x, i) => { const q = res[x]; const a = q.quant ? at(x) : null; const cx = q.quant ? q.cost(q.st["p" + S.v.p]) : null;
+    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">${S.v.mode === "imb" ? "Imbalance cost" : "Error cost"} at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
+      all.map((x, i) => { const q = res[x]; const a = q.quant ? at(x) : null; const cx = q.quant ? q.cost(q.st["p" + S.v.p + VSFX()]) : null;
         return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
         <td class="r num">${REF.has(x) ? "ref" : i + 1}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>
         <td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>
         <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td><td class="r num">${q.n}</td></tr>`; }).join("") + "</tbody>";
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
     $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
-      "Imbalance cost is what the forecast error cost per MWh produced, against perfect foresight; it is negative when the deviations happened to earn more at the imbalance price than at the day-ahead price. " +
+      (S.v.mode === "imb"
+        ? "Deviations are settled at the imbalance price, as the asset would have been paid. A deviation can earn when the imbalance price is on the right side of the day-ahead price, so a share can exceed 100% and the imbalance cost per MWh can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
+        : "Error cost only: every deviation costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
       "Models without quantiles only have the point forecast. Click a row to draw its curve.";
   }
+  const q0 = (k) => new URLSearchParams(location.search).get(k);
   async function initValue() {
     try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); $("v-mw").textContent = VAL.asset_mw || 100; }
     catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
-    S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50 };
+    S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50, mode: "err" };
+    if (q0("mode") === "imb") S.v.mode = "imb";
     const q = new URLSearchParams(location.search);
     if (q.get("zone") === "all" || D.config.zones.includes(q.get("zone"))) S.v.zone = q.get("zone");
     if (VTARGETS.includes(q.get("target"))) S.v.target = q.get("target");

@@ -128,6 +128,7 @@ def load_imbalance(cfg, zone: str, delivery: dt.date) -> pd.DataFrame | None:
 PERCENTILES = list(range(10, 95, 5))
 QCOLS = [f"q0.{k}" for k in range(1, 10)]
 VALUE_TARGETS = ("wind", "solar")
+VALUE_VERSION = 2          # bump when the value computation changes: every cached day is recomputed
 
 
 def _committed(fc: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -189,7 +190,8 @@ def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> 
                 continue
             k = (cfg.get("value") or {}).get("asset_mw", 100) / cap
             g = np.clip(g, 0, None) * k
-            ser = {"perfect": round(float(h * (g * da).sum()), 1), "energy": round(float(h * g.sum()), 1), "models": {}}
+            perfect = float(h * (g * da).sum())
+            ser = {"perfect": round(perfect, 1), "energy": round(float(h * g.sum()), 1), "models": {}}
             for model in sorted(models):
                 f = folder / f"{model}.parquet"
                 if not f.exists():
@@ -204,7 +206,11 @@ def _value_day(cfg, issue_date: str, phase: str, folder: Path, scored: dict) -> 
                 for strat, c in _committed(fc).items():
                     c = c * k
                     dev = g - c
-                    rev[strat] = round(float(h * (c * da + np.where(dev > 0, dev * p_long, dev * p_short)).sum()), 1)
+                    p_imb = np.where(dev > 0, p_long, p_short)
+                    rev[strat] = round(float(h * (c * da + dev * p_imb).sum()), 1)
+                    # error cost only ("<strategy>e"): every deviation costs |deviation| x |imbalance - day-ahead|, so a
+                    # deviation can never earn from the gap between the two prices
+                    rev[strat + "e"] = round(perfect - float(h * (np.abs(dev) * np.abs(p_imb - da)).sum()), 1)
                 ser["models"][model] = rev
             out[f"{zone}_{target}"] = ser
     return out
@@ -238,7 +244,7 @@ def value_export(cfg, days: dict, scored: set, hidden: set) -> dict:
         d = str(delivery_date(issue_date))
         inputs = [*folder.glob("*.parquet"), *(p["actuals"] / d).glob("*.parquet"),
                   *(Path(cfg["_root"]) / "data" / "market" / "imbalance" / d).glob("*.parquet")]
-        sig = hashlib.sha1(json.dumps([sorted((z, t, sorted(ms)) for (z, t), ms in sc.items()), phase, cfg.get("value"),
+        sig = hashlib.sha1(json.dumps([VALUE_VERSION, sorted((z, t, sorted(ms)) for (z, t), ms in sc.items()), phase, cfg.get("value"),
                                        [str(f.stat().st_mtime) for f in (Path(cfg["_root"]) / "data" / "static" / "capacity").glob("*.parquet")],
                                        sorted((str(f), f.stat().st_mtime) for f in inputs)]).encode()).hexdigest()
         cf = cache / f"{issue_date}.json"
