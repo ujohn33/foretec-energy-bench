@@ -497,7 +497,8 @@
   const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
   const GLOSS = {
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
-    pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. Hover a value for its 95% interval (issue days resampled). A failed run is left out of the race.`],
+    pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. A failed run is left out of the race.`],
+    ci: () => ["95% interval", "How much the Elo score would move if the set of issue days had been different: the 2.5th to 97.5th percentile of 200 refits, each on the period's issue days drawn at random with replacement (a bootstrap over issue days; whole days, because all races of a day share the same weather). Overlapping intervals mean the order of two models is not settled yet. Sorting uses the lower end."],
     races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or half of the most any model has, is provisional and listed after the ranked ones.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
@@ -571,6 +572,7 @@
     pos: { get: (s) => s.pos, dir: 1 },
     model: { get: (s) => s.model, dir: 1 },
     pts: { get: (s) => s.score, dir: -1 },
+    ci: { get: (s) => s.eloLo, dir: -1 },
     races: { get: (s) => s.races, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
     rel: { get: (s) => s.rel, dir: 1 },
@@ -633,16 +635,16 @@
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
     const multi = !singleSeries();   // the series count only matters when more than one series is combined
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false)}${sortTh("races", "N evaluations", "races")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false)}${sortTh("ci", "95% interval", "ci")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
-      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
+      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td title="${s.eloLo != null ? `95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : ""}"><div class="bar"><span style="width:${Math.round(Math.min(90, Math.max(0, (s.score - 700) * 0.15)))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 0)}</b></div></td>
-        <td class="r v">${s.races}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td><div class="bar"><span style="width:${Math.round(Math.min(90, Math.max(0, (s.score - 700) * 0.15)))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 0)}</b></div></td>
+        <td class="r v">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
-        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
+        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td><td class="r v">${s.races}</td>
       </tr>`).join("") + "</tbody>";
     if (!st.length) t.innerHTML = "";
     const starred = st.filter((x) => CAVEAT[x.model]);
@@ -665,9 +667,9 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">${mine.length}</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
+          <td class="wrap">Reference, not ranked: published after the gate${only}</td><td class="r v">–</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
-          <td class="r v">–</td><td class="r v">–</td></tr>`;
+          <td class="r v">–</td><td class="r v">–</td><td class="r v">${mine.length}</td></tr>`;
       }).join(""));
     }
   }
