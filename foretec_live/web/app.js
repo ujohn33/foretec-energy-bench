@@ -85,7 +85,7 @@
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
-  // ---------- race points ----------
+  // ---------- races (Elo score, see below) ----------
   // A race is one issue day x one series. Its field is the models with a scored forecast in it. With n in the
   // field, a model at rank r scores 100 (n - r) / (n - 1), ties sharing the average rank: the winner gets 100
   // whatever the field size. A model whose run failed or was skipped is not in that race at all (no 0), so the
@@ -163,7 +163,7 @@
     return `<td class="r v dm ${cls}" title="Rel. MAE ${r.diff >= 0 ? "+" : ""}${r.diff.toFixed(3)} per day vs #1 over ${r.T} days">${mark}${fmtP(r.p)}</td>`;
   }
 
-  /** Per issue day: race points, average rank and raw mean across the selected series. */
+  /** Per issue day: the head-to-head games, each model's share of games won (in %), average rank and raw mean across the selected series. */
   function dayTable(rows) {
     const byDay = new Map();
     for (const r of rows) {
@@ -175,11 +175,20 @@
     }
     const out = [];
     for (const [d, ser] of [...byDay.entries()].sort()) {
-      const ranks = {}, vals = {}, pts = {};
+      const ranks = {}, vals = {}, pts = {}, pairs = new Map();
       for (const [key, list] of ser) {
         const sorted = [...list].sort((a, b) => a[S.metric] - b[S.metric]);
         const n = sorted.length;
         if (n < 2) continue;
+        // every pair of models in the race is one game: the lower error wins, equal errors split it
+        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+          const a = sorted[i], b = sorted[j];
+          const [x, y, w] = a.model < b.model ? [a.model, b.model, 1] : [b.model, a.model, 0];
+          const g = pairs.get(x + "\t" + y) || { wx: 0, n: 0 };
+          g.wx += a[S.metric] === b[S.metric] ? 0.5 : w;   // sorted: a is never worse than b
+          g.n += 1;
+          pairs.set(x + "\t" + y, g);
+        }
         sorted.forEach((r) => {
           const tied = sorted.filter((x) => x[S.metric] === r[S.metric]).map((x) => sorted.indexOf(x) + 1);
           const rk = mean(tied);
@@ -191,12 +200,81 @@
       const avgRank = {}, raw = {}, points = {};
       for (const m in ranks) { avgRank[m] = mean(ranks[m]); raw[m] = mean(vals[m]); }
       for (const m in pts) points[m] = mean(pts[m]);
-      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, n: Object.keys(pts).length });
+      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, pairs, n: Object.keys(pts).length });
     }
     return out;
   }
 
-  // the points window: all time, or the last N calendar days up to the latest scored issue day of the period
+  // ---------- Elo score: Bradley-Terry on the Elo scale ----------
+  // All pairwise games of the selected races are fitted at once (Bradley-Terry, MM algorithm of Hunter 2004), so the
+  // rating does not depend on the order of the races, unlike a running Elo. One virtual drawn game against an average
+  // opponent keeps a model that wins every game finite. Scale: 1000 = the field's average, +400 = 10:1 odds of winning.
+  // 95% interval: the fit repeated on issue days resampled with replacement (days, not races, are independent).
+  function btMatrices(days) {
+    const models = [...new Set(days.flatMap((x) => Object.keys(x.pts)))];
+    const ix = Object.fromEntries(models.map((m, i) => [m, i]));
+    const k = models.length;
+    const perDay = days.map((x) => {
+      const W = new Float64Array(k * k), N = new Float64Array(k * k);
+      for (const [key, g] of x.pairs) {
+        const [a, b] = key.split("\t"), i = ix[a], j = ix[b];
+        if (i == null || j == null) continue;
+        W[i * k + j] += g.wx; W[j * k + i] += g.n - g.wx;
+        N[i * k + j] += g.n; N[j * k + i] += g.n;
+      }
+      return { W, N };
+    });
+    return { models, k, perDay };
+  }
+  function btFit(k, W, N, start) {
+    let p = start ? Float64Array.from(start) : new Float64Array(k).fill(1);
+    const wins = new Float64Array(k);
+    for (let i = 0; i < k; i++) { let s = 0.5; for (let j = 0; j < k; j++) s += W[i * k + j]; wins[i] = s; }
+    for (let it = 0; it < 300; it++) {
+      const q = new Float64Array(k);
+      let delta = 0;
+      for (let i = 0; i < k; i++) {
+        let den = 1 / (p[i] + 1);                       // the virtual game against an average opponent (strength 1)
+        for (let j = 0; j < k; j++) { const n = N[i * k + j]; if (n) den += n / (p[i] + p[j]); }
+        q[i] = wins[i] / den;
+      }
+      let g = 0; for (let i = 0; i < k; i++) g += Math.log(q[i]);
+      g = Math.exp(g / k);                              // geometric mean 1: the average model rates 1000
+      for (let i = 0; i < k; i++) { q[i] /= g; delta = Math.max(delta, Math.abs(Math.log(q[i] / p[i]))); }
+      p = q;
+      if (delta < 1e-7) break;
+    }
+    return p;
+  }
+  const toElo = (p) => 1000 + 400 * Math.log10(p);
+  function eloScores(days, boot = 0) {
+    const { models, k, perDay } = btMatrices(days);
+    if (k < 2) return {};
+    const sum = (ids) => {
+      const W = new Float64Array(k * k), N = new Float64Array(k * k);
+      for (const d of ids) { const m = perDay[d]; for (let t = 0; t < k * k; t++) { W[t] += m.W[t]; N[t] += m.N[t]; } }
+      return [W, N];
+    };
+    const all = btFit(k, ...sum(perDay.map((_, i) => i)));
+    const out = Object.fromEntries(models.map((m, i) => [m, { elo: toElo(all[i]) }]));
+    if (boot && perDay.length > 1) {
+      const draws = models.map(() => []);
+      let seed = 42;
+      const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);   // reproducible
+      for (let b = 0; b < boot; b++) {
+        const ids = perDay.map(() => Math.floor(rnd() * perDay.length));
+        const p = btFit(k, ...sum(ids), all);
+        p.forEach((v, i) => draws[i].push(toElo(v)));
+      }
+      models.forEach((m, i) => {
+        const s = draws[i].sort((a, b) => a - b);
+        out[m].lo = s[Math.floor(0.025 * (s.length - 1))]; out[m].hi = s[Math.ceil(0.975 * (s.length - 1))];
+      });
+    }
+    return out;
+  }
+
+  // the rating window: all time, or the last N calendar days up to the latest scored issue day of the period
   const WINDOWS = { all: null, d30: 30, d7: 7 };
   function periodDays(days, phase) {
     const sel = days.filter((x) => phase === "all" || x.phase === phase);
@@ -255,9 +333,10 @@
     }
     const list = Object.values(res);
     const need = Math.min(MIN_RACES, Math.ceil(0.5 * Math.max(0, ...list.map((s) => s.races))));
+    const elo = eloScores(sel, 200);
     return list.map((s) => ({
       ...s,
-      score: s.sum / s.races,
+      score: elo[s.model] ? elo[s.model].elo : null, eloLo: elo[s.model] && elo[s.model].lo, eloHi: elo[s.model] && elo[s.model].hi,
       provisional: s.races < need,
       avgRank: mean(s.ranks),
       best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
@@ -294,8 +373,8 @@
       { k: "all", label: "All" },
     ], S.phase, (k) => { S.phase = k; renderAll(); });
     seg($("f-win"), [
-      { k: "d7", label: "Last 7 days", title: "Points over the last 7 days up to the latest scored issue day" },
-      { k: "d30", label: "Last 30 days", title: "Points over the last 30 days up to the latest scored issue day" },
+      { k: "d7", label: "Last 7 days", title: "Rated on the last 7 days up to the latest scored issue day" },
+      { k: "d30", label: "Last 30 days", title: "Rated on the last 30 days up to the latest scored issue day" },
       { k: "all", label: "All time" },
     ], S.win, (k) => { S.win = k; renderAll(); });
     seg($("f-agg"), [
@@ -418,7 +497,7 @@
   const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
   const GLOSS = {
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
-    pts: () => ["Score", `Average race points. A race is one issue day and one series; every model with a scored forecast takes part. With n in the race, a model at rank r scores 100 × (n − r) / (n − 1): the winner 100, the last 0. A failed run is left out of the race rather than counted as 0. The score averages a model's races, so new models and different field sizes compare fairly. Ranked by ${metricDef().label}.`],
+    pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. Hover a value for its 95% interval (issue days resampled). A failed run is left out of the race.`],
     races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or half of the most any model has, is provisional and listed after the ranked ones.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
@@ -431,8 +510,8 @@
     rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
     pinball: () => ["Pinball loss", `Quantile loss averaged over the 10th to 90th percentiles. It scores the whole forecast band: narrow bands score well only if the outcome falls inside them as often as they claim. Only models that publish quantiles have one. Lower is better.${mixedUnits()}`],
     bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
-    best: () => ["Best day", "The model's highest average race points on a single issue day."],
-    worst: () => ["Worst day", "The model's lowest average race points on a single issue day."],
+    best: () => ["Best day", "The model's best issue day: the share of its head-to-head games it won that day, in % (averaged over that day's races)."],
+    worst: () => ["Worst day", "The model's worst issue day: the share of its head-to-head games it won that day, in % (averaged over that day's races)."],
     bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
     value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
@@ -545,7 +624,7 @@
           <div class="name"><i style="background:${color(s.model)}"></i>${nm(s.model)}</div>
           ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
         <div class="stats">
-          <div class="stat"><span data-tip="pts">Score</span><b>${fmt(s.score, 1)}</b></div>
+          <div class="stat"><span data-tip="pts">Elo</span><b>${fmt(s.score, 0)}</b></div>
           <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
           <div class="stat"><span data-tip="rel">Rel. MAE</span><b>${fmt(s.rel, 3)}</b></div>
         </div>
@@ -554,13 +633,13 @@
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
     const multi = !singleSeries();   // the series count only matters when more than one series is combined
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Score", "pts", false)}${sortTh("races", "N evaluations", "races")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false)}${sortTh("races", "N evaluations", "races")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
       ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td><div class="bar"><span style="width:${Math.round(0.9 * Math.max(0, s.score))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 1)}</b></div></td>
+        <td title="${s.eloLo != null ? `95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : ""}"><div class="bar"><span style="width:${Math.round(Math.min(90, Math.max(0, (s.score - 700) * 0.15)))}px;background:${bt ? btColor(s.model) : color(s.model)}"></span><b>${fmt(s.score, 0)}</b></div></td>
         <td class="r v">${s.races}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>
@@ -616,16 +695,14 @@
     });
     legend($("l-perf"), models);
 
-    // running average race points: every model on the same 0-100 scale, however long it has been running
-    const race = models.map((m) => {
-      let sum = 0, n = 0;
-      return lineDataset(m, DAYS.map((x) => { const p = x.pts[m]; if (p) { sum += p.reduce((a, b) => a + b, 0); n += p.length; } return n ? sum / n : null; }), DAYS);
-    });
+    // running Elo: the Bradley-Terry fit on all races up to each issue day
+    const running = DAYS.map((_, i) => eloScores(DAYS.slice(0, i + 1)));
+    const race = models.map((m) => lineDataset(m, running.map((e, i) => (DAYS[i].pts[m] || DAYS.slice(0, i).some((x) => x.pts[m])) && e[m] ? e[m].elo : null), DAYS));
     draw("c-race", {
       type: "line", data: { labels, datasets: race },
       options: baseOptions({
-        band, yTitle: "Average race points (running)", itemSort: (a, b) => b.raw - a.raw,
-        tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 1)}` },
+        band, yTitle: "Elo (running)", itemSort: (a, b) => b.raw - a.raw,
+        tooltip: { title: (it) => DAYS[it[0].dataIndex].d + phaseNote(it[0].dataIndex), label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
       }),
     });
     legend($("l-race"), models);
@@ -982,13 +1059,12 @@
     if (!S.days[d]) S.days[d] = fetch(`data/days/${d}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     return S.days[d];
   }
-  // explorer ranking: points over every scored day (live and backtest) for the explorer's zone and target
+  // explorer ranking: Elo over every scored day (live and backtest) for the explorer's zone and target
   function explorerRanking() {
     const rows = ROWS.filter((r) => !REF.has(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
       && (S.phase === "all" || r.phase === S.phase));
-    const sum = {}, n = {};
-    for (const x of dayTable(rows)) for (const m in x.pts) { sum[m] = (sum[m] || 0) + x.pts[m].reduce((a, b) => a + b, 0); n[m] = (n[m] || 0) + x.pts[m].length; }
-    return Object.keys(sum).sort((a, b) => sum[b] / n[b] - sum[a] / n[a]);
+    const e = eloScores(dayTable(rows));
+    return Object.keys(e).sort((a, b) => e[b].elo - e[a].elo);
   }
 
   function renderExplorerControls() {
