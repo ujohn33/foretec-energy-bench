@@ -584,3 +584,32 @@ def test_live_runs_never_train(cfg):
     assert runs and all(r["status"] != "ok" for r in runs)
     assert "no trained model" in runs[0].get("detail", "")
     assert not (Path(cfg["_root"]) / "data" / "models" / "lin_lags").exists()
+
+
+def test_solar_night_clamp_zeroes_night_and_keeps_day():
+    """Night quarter-hours go to zero; daylight is untouched; quantiles follow."""
+    import pandas as pd
+    from foretec_live.solar_night import clamp_night, max_solar_elevation, solar_points
+
+    idx = pd.date_range("2026-10-15 00:00", "2026-10-15 23:45", freq="15min")
+    df = pd.DataFrame({"delivery_utc": idx, "point": 100.0, "q0.1": 50.0, "q0.9": 150.0})
+    pts = [(52.0, 5.0)]                      # NL-ish
+    out, changed = clamp_night(df.copy(), pts)
+    el = max_solar_elevation(pts, idx)
+    night, day = el < -3.0, el > 10.0
+    assert night.any() and day.any()
+    assert (out.loc[night, ["point", "q0.1", "q0.9"]].to_numpy() == 0).all()
+    assert (out.loc[day, "point"].to_numpy() == 100.0).all()
+    assert changed == int(night.sum())
+    # no points -> no-op, never raises
+    assert clamp_night(df.copy(), [])[1] == 0
+
+
+def test_solar_points_falls_back_when_no_solar_bucket():
+    import pandas as pd
+    from foretec_live.solar_night import solar_points
+    c = pd.DataFrame({"zone": ["NL", "NL", "BE"], "bucket": ["wind_onshore", "solar", "solar"],
+                      "latitude": [52.0, 52.5, 50.8], "longitude": [5.0, 5.5, 4.4]})
+    assert solar_points(c, "NL") == [(52.5, 5.5)]
+    assert solar_points(pd.DataFrame({"zone": ["NL"], "bucket": ["wind_onshore"],
+                                      "latitude": [52.0], "longitude": [5.0]}), "NL") == [(52.0, 5.0)]

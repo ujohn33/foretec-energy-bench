@@ -19,6 +19,7 @@ from sktime.forecasting.base import ForecastingHorizon
 from .config import paths
 from .data import get_source, record_provenance
 from .registry import load_models
+from .solar_night import clamp_night, solar_points
 from .timeutil import FREQ, as_date, availability_cutoff, delivery_index, issue_timestamp
 
 log = logging.getLogger(__name__)
@@ -156,6 +157,21 @@ def _forecast_external(spec, items, fh_index: pd.DatetimeIndex, cfg, extra: dict
     return out
 
 
+_SOLAR_POINTS_CACHE: dict[str, list] = {}
+
+
+def _solar_points_for(zone: str, cfg) -> list:
+    """Capacity-weighted solar centroids of a zone, read once per process."""
+    if zone not in _SOLAR_POINTS_CACHE:
+        try:
+            from .covariates import centroids
+            _SOLAR_POINTS_CACHE[zone] = solar_points(centroids(cfg), zone)
+        except Exception as e:  # never let a missing geo file break a forecast run
+            log.warning("solar night clamp disabled for %s: %s", zone, e)
+            _SOLAR_POINTS_CACHE[zone] = []
+    return _SOLAR_POINTS_CACHE[zone]
+
+
 def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, snapshots=None, source=None, reference_run=False,
                   targets=None, series=None):
     """reference_run: run only `reference: true` models (after the gate) and log to _reference.json, so the
@@ -236,6 +252,11 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
                         raise df
                 else:
                     df = _forecast_one(spec, y, fh_index, target, zone, cfg["quantiles"])
+                if target == "solar":
+                    # no sun, no generation - applied to every model alike
+                    df, n_clamped = clamp_night(df, _solar_points_for(zone, cfg))
+                    if n_clamped:
+                        log.info("%s %s solar: zeroed %d night quarter-hours", spec.name, zone, n_clamped)
                 df.insert(0, "target", target)
                 df.insert(0, "zone", zone)
                 frames.append(df)
