@@ -11,7 +11,7 @@
   const zoneLabel = (z) => (D.config && D.config.zone_labels && D.config.zone_labels[z]) || z;   // DE -> DE-LU
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), pin: new Set(), sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), pin: new Set(), details: false, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -391,10 +391,48 @@
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
       { k: "without", label: "Without", title: "Models that only see the target's own history, plus the benchmarks (baselines and the grid operators' forecasts)" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
+    if ($("f-cols")) seg($("f-cols"), [
+      { k: "key", label: "Key columns" },
+      { k: "all", label: "All columns", title: "Also the 95% interval, MAE, RMSE, pinball, best and worst day" },
+    ], S.details ? "all" : "key", (k) => { S.details = k === "all"; renderAll(); });
+    updateFilterSummary();
     seg($("f-view"), [
       { k: "rank", label: "Avg rank", tip: "rank" },
       { k: "value", label: "Value", tip: "value", disabled: !rawAllowed(), title: rawAllowed() ? "" : "Pick one zone and one target to compare raw values across days" },
     ], S.view, (k) => { S.view = k; renderAll(); });
+  }
+
+  // the "More" button lists the secondary filters' state; the compact bar (while scrolling) summarises all of them
+  function updateFilterSummary() {
+    if (!$("f-sum-text")) return;
+    const win = { d7: "last 7 days", d30: "last 30 days", all: "all time" }[S.win];
+    const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
+    const top = $("f-top-val").textContent;
+    const agg = singleSeries() ? "" : { mean: "", median: "median", gmean: "geo. mean" }[S.agg];
+    $("more-sum").textContent = "· " + [win, cov, top, agg].filter(Boolean).join(" · ");
+    const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
+    const phase = { live: "Live", backtest: "Backtest", all: "Live and backtest" }[S.phase];
+    $("f-sum-text").innerHTML = [zone, target, phase, win, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+  }
+  function setupFilterBar() {
+    const fb = document.querySelector(".filterbar"), more = $("f-more"), panel = $("more-panel");
+    if (!fb || !more) return;
+    more.onclick = () => { const open = panel.hidden; panel.hidden = !open; more.setAttribute("aria-expanded", String(open)); };
+    // while scrolling down the page the bar shrinks to one summary line; a click on it opens the filters again until the
+    // reader scrolls on. Hysteresis and a scroll correction keep the page from jumping when the bar changes height.
+    let openAt = null;
+    const update = () => {
+      if (getComputedStyle(fb).position !== "sticky") { fb.classList.remove("compact"); return; }
+      const y = scrollY, on = fb.classList.contains("compact");
+      if (openAt != null && Math.abs(y - openAt) > 240) openAt = null;
+      const want = openAt == null && (on ? y > 140 : y > 340);
+      if (want === on) return;
+      const h = fb.offsetHeight;
+      fb.classList.toggle("compact", want);
+      if (y > 0) window.scrollBy(0, fb.offsetHeight - h);
+    };
+    addEventListener("scroll", update, { passive: true });
+    $("f-sum").onclick = () => { openAt = scrollY; update(); openAt = scrollY; };
   }
 
   // ---------- chart plumbing ----------
@@ -591,7 +629,8 @@
     best: { get: (s) => s.best, dir: -1 },
     worst: { get: (s) => s.worst, dir: -1 },
   };
-  function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] ? k : "pos"; }
+  const DETAIL_COLS = ["ci", "dm", "nser", "mae", "rmse", "pinball", "best", "worst"];   // shown with "All columns" only
+  function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] && (S.details || !DETAIL_COLS.includes(k)) ? k : "pos"; }
   function sortRows(st) {
     const k = sortKey(), dir = k === S.sort.k ? S.sort.dir : 1, get = SORT_COLS[k].get;
     return [...st].sort((a, b) => {
@@ -625,34 +664,26 @@
     const leadLoss = SHOW_DM && leader ? dailyLoss(dmRows, leader) : null;
     const dm = Object.fromEntries(st.map((s) => [s.model, leadLoss && s.model !== leader ? dmTest(dailyLoss(dmRows, s.model), leadLoss) : null]));
     $("standings").classList.toggle("is-bt", bt);
-    const top = st.filter((x) => !x.provisional).slice(0, 3);
-    $("podium").innerHTML = top.length ? top.map((s, i) => `
-      <div class="pod ${place[s.model] === 1 ? "lead" : ""}">
-        <div class="pod-top"><span class="place" aria-label="place ${place[s.model]}">${place[s.model]}</span>
-          <div class="name"><i style="background:${color(s.model)}"></i>${nm(s.model)}</div>
-          ${bt ? '<span class="tag bt">Backtest</span>' : '<span class="tag live">Live</span>'}</div>
-        <div class="stats">
-          <div class="stat"><span data-tip="pts">Elo</span><b>${fmt(s.score, 0)}</b></div>
-          <div class="stat"><span data-tip="rank">Avg rank</span><b>${fmt(s.avgRank, 2)}</b></div>
-          <div class="stat"><span data-tip="rel">Rel. MAE</span><b>${fmt(s.rel, 3)}</b></div>
-        </div>
-      </div>`).join("") : `<div class="pod" style="grid-column:1/-1;color:var(--ink2)">No scored days for this selection yet.</div>`;
 
     const t = $("standings-table");
     const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
-    const multi = !singleSeries();   // the series count only matters when more than one series is combined
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${sortTh("ci", "95% interval", "ci", true, "hide-sm")}${SHOW_DM ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
-      ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${sortTh("mae", "MAE" + unit, "mae")}${sortTh("rmse", "RMSE" + unit, "rmse")}${sortTh("pinball", "Pinball" + unit, "pinball")}
-      ${sortTh("best", "Best day", "best")}${sortTh("worst", "Worst day", "worst")}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
-      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}">
-        <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : s.pos}</td>
+    const det = S.details;
+    const multi = det && !singleSeries();   // the series count only matters when more than one series is combined
+    const dmOn = det && SHOW_DM;
+    // the Elo bar spans 700..1300; the 95% interval is drawn on it as a whisker
+    const eloX = (v) => Math.min(100, Math.max(0, (v - 700) / 6));
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
+      ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("pinball", "Pinball" + unit, "pinball") : ""}
+      ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
+      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}">
+        <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
-        <td class="elo"><div class="bar"><em><span style="width:${Math.round(Math.min(100, Math.max(0, (s.score - 700) / 6)))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span></em><b>${fmt(s.score, 0)}</b></div></td>
-        <td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>${SHOW_DM ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
-        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
-        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td><td class="r v">${s.races}</td>
-      </tr>`).join("") + "</tbody>";
-    if (!st.length) t.innerHTML = "";
+        <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
+        ${det ? `<td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>` : ""}${dmOn ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
+        <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>` : ""}<td class="r v">${s.races}</td>
+      </tr>`; }).join("") + "</tbody>";
+    if (!st.length) t.innerHTML = `<tbody><tr><td class="empty">No scored days for this selection yet.</td></tr></tbody>`;
     const starred = st.filter((x) => CAVEAT[x.model]);
     $("st-notes").innerHTML = starred.map((x) => `<span>${esc(x.model)}*</span> ${esc(CAVEAT[x.model])}`).join("<br>");
     t.onclick = (e) => {
@@ -673,9 +704,9 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
-          <td class="elo note">Reference, not ranked: published after the gate${only}</td><td class="r v hide-sm">–</td>${SHOW_DM ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
-          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
-          <td class="r v">–</td><td class="r v">–</td><td class="r v">${mine.length}</td></tr>`;
+          <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
+          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
+          <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${mine.length}</td></tr>`;
       }).join(""));
     }
   }
@@ -1445,7 +1476,7 @@
 
   // the metric is no longer a filter: races rank by Rel. MAE (within a race the same order as MAE), and the
   // standings show all four metrics as sortable columns
-  const FILTER_KEYS = ["zone", "target", "phase", "win", "agg", "covFilter", "topN", "sort"];
+  const FILTER_KEYS = ["zone", "target", "phase", "win", "agg", "covFilter", "topN", "sort", "details"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -1497,6 +1528,7 @@
       on("f-zone", "onchange", (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-target", "onchange", (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-top", "oninput", (e) => { S.topN = +e.target.value; renderAll(); });
+      setupFilterBar();
       renderAll();
       renderTracker();
     }

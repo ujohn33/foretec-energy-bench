@@ -63,11 +63,11 @@ body{
 h1,h2,h3{font-family:var(--brand); font-style:italic; text-wrap:balance; margin:0}
 h1{font-size:clamp(2.1rem,4.6vw,3.1rem); font-weight:900; line-height:1.08; letter-spacing:-.034em}
 /* one size for every section and panel title; Standings, the page's headline, is the only larger one */
-h2,h3{font-size:1.35rem; font-weight:800; line-height:1.2; letter-spacing:-.024em}
+h2,h3{font-size:1.2rem; font-weight:800; line-height:1.2; letter-spacing:-.024em}
 /* title icons: line drawings in the brand blue, one red accent, leaning like the italic titles */
 h2 .ico,h3 .ico{width:1.2em; height:1.2em; margin-right:.42em; vertical-align:-.17em; color:var(--blue-ink); transform:skewX(-8deg); overflow:visible; flex:none}
 .ico .a{fill:var(--onair); stroke:none} .ico .as{stroke:var(--onair)} .ico .f9{fill:currentColor; stroke:none} .ico .f5{fill:currentColor; fill-opacity:.5; stroke:none} .ico .f2{fill:currentColor; fill-opacity:.32; stroke:none}
-#standings h2{font-size:clamp(2rem,3.8vw,2.6rem); font-weight:900; letter-spacing:-.034em}
+#standings h2{font-size:clamp(1.55rem,2.6vw,1.85rem); font-weight:900; letter-spacing:-.03em}
 p{margin:0}
 a{color:var(--blue-ink)}
 
@@ -143,13 +143,15 @@ select:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var
 .seg button:first-child{border-left:0}
 .seg button:hover{color:var(--ink); background:var(--raise)}
 .seg button[aria-checked="true"]{background:var(--ink); color:var(--ground)}
-.seg.off{opacity:.4}
+.seg.off{opacity:.5}
 .seg.off button{cursor:not-allowed}
+.seg.off button:disabled{opacity:1}
+.seg button[aria-checked="true"]:disabled{background:var(--raise); color:var(--ink)}
 .seg button:disabled{opacity:.4; cursor:not-allowed; background:none}
 .seg button:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 
 /* ---------- sections (foretec.be) ---------- */
-section{padding:78px 0; border-top:1px solid var(--rule)}
+section{padding:52px 0; border-top:1px solid var(--rule)}
 #standings{border-top:0; padding-top:40px}
 .sec-head{margin-bottom:18px}
 .sec-head .lede{margin-top:12px; max-width:66ch; font-size:1rem}
@@ -404,3 +406,33 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 .beta-tag{display:inline-block; margin-left:6px; padding:1px 5px 2px; border-radius:2px; background:var(--green-soft); color:var(--green); font-size:.66rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; vertical-align:2px; line-height:1.2}
 #v-table td.po{color:var(--muted); font-style:italic; font-weight:400; text-align:center}
 #v-table tr.grp td{background:var(--raise); color:var(--ink2); font-size:.8rem; font-weight:600; padding:8px 16px; white-space:normal}
+
+/* leaderboard: filter bar with the secondary filters under "More", shrunk to a one-line summary while scrolling */
+.more-btn{display:flex; align-items:center; gap:7px; height:34px; padding:0 13px; border:1px solid var(--rule); border-radius:2px; background:var(--surface);
+  color:var(--ink); font:inherit; font-size:.88rem; font-weight:500; cursor:pointer; white-space:nowrap}
+.more-btn:hover,.more-btn[aria-expanded="true"]{background:var(--raise)}
+.more-btn .more-sum{color:var(--ink2); font-weight:400}
+.more-btn i,.fsum i{font-style:normal; font-size:.75rem; color:var(--ink2); transition:transform .15s}
+.more-btn[aria-expanded="true"] i{transform:rotate(180deg)}
+.more-btn:focus-visible,.fsum:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.more-panel{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 22px; padding-bottom:14px}
+.more-panel[hidden]{display:none}
+.fsum-row{display:none}
+.fsum{display:flex; align-items:center; gap:10px; width:100%; padding:9px 0; background:none; border:0; color:var(--ink); font:inherit; font-size:.9rem; text-align:left; cursor:pointer}
+.fsum:hover{color:var(--blue-ink)}
+.filterbar.compact .filters,.filterbar.compact .more-panel{display:none}
+.filterbar.compact .fsum-row{display:block}
+/* standings: intro and status under the title */
+.sec-head .intro{margin:8px 0 0; max-width:72ch; font-size:.95rem; color:var(--ink2); line-height:1.5}
+.sec-head .meta{margin:4px 0 0; font-size:.78rem}
+.sec-head .meta a{color:inherit; text-decoration:underline; text-underline-offset:.15em; text-decoration-color:var(--rule)}
+.sec-head .meta a:hover{color:var(--ink)}
+/* standings: the top three marked in the table (the podium cards are gone), Elo bar with its 95% interval */
+tr.medal td.model{font-weight:600}
+tr.medal td.pos span{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; font-weight:700; font-size:.8rem; color:#0B1F3A}
+tr.m1 td.pos span{background:#E3B341} tr.m2 td.pos span{background:#C3CCD6} tr.m3 td.pos span{background:#D19A66}
+.bar em{position:relative}
+.bar em .ci{position:absolute; top:50%; height:0; border-top:1px solid var(--ink2); opacity:.7}
+.bar em .ci::before,.bar em .ci::after{content:""; position:absolute; top:-4px; height:7px; border-left:1px solid var(--ink2)}
+.bar em .ci::before{left:0} .bar em .ci::after{right:0}
+td.empty{padding:22px 16px; color:var(--ink2)}

@@ -37,33 +37,34 @@
   </div>
 </header>
 
-<div class="tagline"><div class="wrap">Day-ahead forecasts locked before the 12:00 gate, with the weather and other covariates public at 11:30, scored against the grid operators.</div></div>
-
 <main>
 <div class="filterbar">
   <div class="wrap filters" role="group" aria-label="Filters">
     <div class="field"><label for="f-zone">Zone</label><select id="f-zone"></select></div>
     <div class="field"><label for="f-target">Target</label><select id="f-target"></select></div>
     <div class="field"><span class="lbl">Period</span><div class="seg" id="f-phase" role="radiogroup" aria-label="Period"></div></div>
+    <div class="field"><button type="button" class="more-btn" id="f-more" aria-expanded="false" aria-controls="more-panel">More <span class="more-sum" id="more-sum"></span><i aria-hidden="true">▾</i></button></div>
+  </div>
+  <div class="wrap more-panel" id="more-panel" role="group" aria-label="More filters" hidden>
     <div class="field"><span class="lbl">Rated over</span><div class="seg" id="f-win" role="radiogroup" aria-label="Rating window"></div></div>
     <div class="field"><span class="lbl">Covariates</span><div class="seg" id="f-cov" role="radiogroup" aria-label="Covariates"></div></div>
     <div class="field"><label for="f-top">Models</label><div class="range"><input type="range" id="f-top" min="1" max="13" value="10" step="1"><span id="f-top-val" class="mono">Top 10</span></div></div>
-    <div class="status mono">
-      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · <a href="methodology.html#gate-aligned">Methodology</a></span>
-      <span>Updated <span id="updated">–</span> · data ENTSO-E</span>
-      <span class="key"><i class="k-bt"></i>Backtest <i class="k-live"></i>Live</span>
-    </div>
+    <div class="field"><span class="lbl" data-tip="agg">Across series</span><div class="seg" id="f-agg" role="radiogroup" aria-label="Aggregation across series"></div></div>
   </div>
+  <div class="wrap fsum-row"><button type="button" class="fsum" id="f-sum" aria-label="Show the filters"><span id="f-sum-text"></span><i aria-hidden="true">▾</i></button></div>
 </div>
 
 
 <section id="standings">
   <div class="wrap">
     <div class="sec-head row">
-      <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20.5h18"/><path d="M3.5 20.5V12h5.5v8.5M9 20.5V9h6v11.5M15 20.5V15h5.5v5.5"/><path class="a" d="M12 1.6l1.15 2.3 2.5.35-1.8 1.75.42 2.5L12 7.3 9.73 8.5l.42-2.5-1.8-1.75 2.5-.35z"/></svg>Standings</h2>
-      <div class="agg"><span class="lbl" data-tip="agg">Across series</span><div class="seg" id="f-agg" role="radiogroup" aria-label="Aggregation across series"></div></div>
+      <div>
+        <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20.5h18"/><path d="M3.5 20.5V12h5.5v8.5M9 20.5V9h6v11.5M15 20.5V15h5.5v5.5"/><path class="a" d="M12 1.6l1.15 2.3 2.5.35-1.8 1.75.42 2.5L12 7.3 9.73 8.5l.42-2.5-1.8-1.75 2.5-.35z"/></svg>Standings</h2>
+        <p class="intro">Day-ahead forecasts locked before the 12:00 gate, with the weather and other covariates public at 11:30, scored against the grid operators.</p>
+        <p class="meta mono">Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · updated <span id="updated">–</span> · data ENTSO-E · <a href="methodology.html#gate-aligned">Methodology</a></p>
+      </div>
+      <div class="seg" id="f-cols" role="radiogroup" aria-label="Table columns"></div>
     </div>
-    <div class="podium" id="podium"></div>
     <div class="panel tablewrap"><table id="standings-table"></table></div>
     <p class="st-notes" id="st-notes"></p>
   </div>
