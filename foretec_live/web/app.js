@@ -409,10 +409,10 @@
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const top = $("f-top-val").textContent;
     const agg = singleSeries() ? "" : { mean: "", median: "median", gmean: "geo. mean" }[S.agg];
-    $("more-sum").textContent = "· " + [win, cov, top, agg].filter(Boolean).join(" · ");
-    const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
     const phase = { live: "Live", backtest: "Backtest", all: "Live and backtest" }[S.phase];
-    $("f-sum-text").innerHTML = [zone, target, phase, win, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+    $("more-sum").textContent = "· " + [phase, cov, top, agg].filter(Boolean).join(" · ");
+    const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
+    $("f-sum-text").innerHTML = [zone, target, win[0].toUpperCase() + win.slice(1), phase, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
   }
   function setupFilterBar() {
     const fb = document.querySelector(".filterbar"), more = $("f-more"), panel = $("more-panel");
