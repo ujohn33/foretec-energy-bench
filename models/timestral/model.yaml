@@ -1,0 +1,8 @@
+name: timestral
+author: Mistral AI
+description: "Timestral-209M (mistralai/Timestral-209M, October 2026, Modified MIT weights): a causal patch transformer with decoupled forecast tokens and covariate-aware attention, zero-shot on the target's own history, 21 quantiles."
+family: timestral
+inputs: [history]
+runner: subprocess
+env: timestral
+script: forecaster.py

@@ -1,0 +1,8 @@
+name: timestral_cov
+author: Mistral AI
+description: "Timestral-209M zero-shot with its native known-future covariates (NWP ensemble means/spreads, ENTSO-E load forecast, fuel cost) over the history and the delivery day."
+family: timestral
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: timestral
+script: forecaster.py
