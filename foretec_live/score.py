@@ -90,6 +90,33 @@ def pinball(y: np.ndarray, qf: pd.DataFrame) -> float:
     return float(np.mean(losses))
 
 
+def interval_scores(y: np.ndarray, qf: pd.DataFrame) -> dict:
+    """Interval scores from the quantile forecast (Gneiting and Raftery 2007; Bracher et al. 2021).
+
+    wis      weighted interval score: (0.5 |y - median| + sum_k alpha_k / 2 * IS_alpha_k) / (K + 0.5) over the central
+             intervals the quantiles form (0.1-0.9, 0.2-0.8, 0.3-0.7, 0.4-0.6, alpha_k = 2 * lower level)
+    winkler  interval score of the 80% interval (0.1-0.9): width + 2 / 0.2 * the distance by which y falls outside
+    cover    share of quarter-hours with y inside the 80% interval (well calibrated: 0.8)
+    """
+    levels = {round(float(c[1:]), 3): c for c in qf.columns}
+    if 0.1 not in levels or 0.9 not in levels:
+        return {}
+    q = {a: qf[c].to_numpy(dtype=float) for a, c in levels.items()}
+
+    def score(lo, hi, alpha):
+        lo, hi = np.minimum(lo, hi), np.maximum(lo, hi)
+        return (hi - lo) + 2 / alpha * np.maximum(lo - y, 0) + 2 / alpha * np.maximum(y - hi, 0)
+
+    pairs = sorted(a for a in q if a < 0.5 and round(1 - a, 3) in q)
+    total = sum(a * score(q[a], q[round(1 - a, 3)], 2 * a) for a in pairs)   # alpha_k / 2 = a
+    k = len(pairs)
+    if 0.5 in q:
+        total, k = total + 0.5 * np.abs(y - q[0.5]), k + 0.5
+    lo, hi = np.minimum(q[0.1], q[0.9]), np.maximum(q[0.1], q[0.9])
+    return {"wis": float(np.nanmean(total / k)), "winkler": float(np.nanmean(score(q[0.1], q[0.9], 0.2))),
+            "cover": float(np.nanmean((y >= lo) & (y <= hi)))}
+
+
 def metrics(fc: pd.DataFrame, y: pd.Series, resolution: str | None = None) -> dict:
     m = fc.set_index("delivery_utc").reindex(y.index).dropna(axis=1, how="all")
     if resolution:   # actuals published coarser than 15 min: compare averages over their resolution
@@ -104,12 +131,55 @@ def metrics(fc: pd.DataFrame, y: pd.Series, resolution: str | None = None) -> di
         "mae": float(np.mean(np.abs(err))),
         "rmse": float(np.sqrt(np.mean(err ** 2))),
         "bias": float(np.mean(err)),
-        "pinball": np.nan,
+        "pinball": np.nan, "wis": np.nan, "winkler": np.nan, "cover": np.nan,
     }
     qcols = [c for c in m.columns if c.startswith("q")] if "point" in m.columns else []
     if qcols:
         out["pinball"] = pinball(yy, m.loc[mask, qcols])
+        out.update(interval_scores(yy, m.loc[mask, qcols]))
     return out
+
+
+def backfill_interval_scores(cfg, results_subdir="results") -> int:
+    """Adds wis, winkler and cover to score rows scored before they existed, from the stored forecasts and the
+    frozen actuals the rows were scored on (nothing is fetched; a row whose actuals file is gone stays empty)."""
+    p = paths(cfg, results_subdir)
+    if not p["scores"].exists():
+        return 0
+    scores = pd.read_parquet(p["scores"])
+    for c in ("wis", "winkler", "cover"):
+        if c not in scores:
+            scores[c] = np.nan
+    todo = scores["wis"].isna() & scores["pinball"].notna()
+    got = {}
+    for (issue_date, zone, target), idx in scores[todo].groupby(["issue_date", "zone", "target"]).groups.items():
+        f = paths(cfg)["actuals"] / str(delivery_date(str(issue_date))) / f"{zone}_{target}.parquet"
+        if not f.exists():
+            continue
+        y = pd.read_parquet(f)["value"]
+        res = (cfg.get("score_resolution") or {}).get(f"{zone}_{target}")
+        for i in idx:
+            ff = p["forecasts"] / str(issue_date) / f"{scores.at[i, 'model']}.parquet"
+            if not ff.exists():
+                continue
+            fc = pd.read_parquet(ff)
+            fc = fc[(fc["zone"] == zone) & (fc["target"] == target)]
+            if fc.empty:
+                continue
+            r = metrics(fc, y, res)
+            got[tuple(str(scores.at[i, k]) for k in KEY)] = (r["wis"], r["winkler"], r["cover"])
+    # another job (a backfill, the scoring run) may have written the file meanwhile: re-read it and only fill the columns
+    scores = pd.read_parquet(p["scores"])
+    for c in ("wis", "winkler", "cover"):
+        if c not in scores:
+            scores[c] = np.nan
+    keys = list(map(tuple, scores[KEY].astype(str).values))
+    hit = [i for i, k in enumerate(keys) if k in got]
+    if hit:
+        scores.loc[scores.index[hit], ["wis", "winkler", "cover"]] = [got[keys[i]] for i in hit]
+    scores.to_parquet(p["scores"], index=False)
+    log.info("%s: interval scores added to %d rows", results_subdir, len(hit))
+    return len(hit)
 
 
 def locked_before_gate(day_dir, cfg) -> bool:

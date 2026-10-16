@@ -202,6 +202,15 @@ def cmd_reference(cfg, args):
     return 0
 
 
+def cmd_intervals(cfg, args):
+    """One-off: interval scores (WIS, Winkler 80%, coverage) for score rows made before they were computed."""
+    from .score import backfill_interval_scores
+    for sub in ("results", "results/backtest"):
+        print(sub, backfill_interval_scores(cfg, sub), "rows")
+    _site(cfg)
+    return 0
+
+
 def cmd_covhist(cfg, args):
     """Training covariates for long-history covariate models (see covariates_history.py); fetched once, kept."""
     from .covariates_history import build_history, refresh_fuel
@@ -251,6 +260,7 @@ def main(argv=None):
     sub.add_parser("site")
     sub.add_parser("catchup")
     p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
+    sub.add_parser("intervals")
     p = sub.add_parser("pretrain"); p.add_argument("--date", type=_date); p.add_argument("--models", nargs="*")
     p = sub.add_parser("covhist"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
@@ -267,7 +277,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain, "intervals": cmd_intervals}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

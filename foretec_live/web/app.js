@@ -299,21 +299,29 @@
     for (const r of ROWS) {
       if (REF.has(r.model) !== refs || !inSel(r)) continue;
       const key = `${r.zone}_${r.target}`, b = base.get(`${r.issue_date}|${key}`), n = r.n || 96;
-      const a = ((acc[r.model] ||= {})[key] ||= { ae: 0, se: 0, bae: 0, bse: 0, n: 0, pin: 0, npin: 0 });
+      const a = ((acc[r.model] ||= {})[key] ||= { ae: 0, se: 0, bae: 0, bse: 0, n: 0, pin: 0, npin: 0, wis: 0, wink: 0, cov: 0, nw: 0, cw: 0, bw: 0 });
       a.n += n;
       a.ae += n * r.mae; a.se += n * r.rmse * r.rmse;
       if (r.pinball != null) { a.pin += n * r.pinball; a.npin += n; }
+      if (r.wis != null) {
+        a.wis += n * r.wis; a.wink += n * r.winkler; a.cov += n * r.cover; a.nw += n;
+        if (b && b.wis != null) { a.cw += n * r.wis; a.bw += n * b.wis; }
+      }
       if (b) { a.bae += n * b.mae; a.bse += n * b.rmse * b.rmse; a.both = (a.both || 0) + 1; a.cae = (a.cae || 0) + n * r.mae; a.cse = (a.cse || 0) + n * r.rmse * r.rmse; }
     }
     const out = {};
     for (const m in acc) {
       const ser = Object.values(acc[m]);
       const rel = ser.filter((a) => a.bae > 0).map((a) => a.cae / a.bae), relr = ser.filter((a) => a.bse > 0).map((a) => Math.sqrt(a.cse / a.bse));
-      const n = ser.reduce((x, a) => x + a.n, 0), npin = ser.reduce((x, a) => x + a.npin, 0);
+      const n = ser.reduce((x, a) => x + a.n, 0), npin = ser.reduce((x, a) => x + a.npin, 0), nw = ser.reduce((x, a) => x + a.nw, 0);
+      const relw = ser.filter((a) => a.bw > 0).map((a) => a.cw / a.bw);
+      const sum = (k) => ser.reduce((x, a) => x + a[k], 0);
       out[m] = {
         rel: AGGS[S.agg](rel), relr: AGGS[S.agg](relr), nser: ser.length,
         mae: ser.reduce((x, a) => x + a.ae, 0) / n, rmse: Math.sqrt(ser.reduce((x, a) => x + a.se, 0) / n),
         pinball: npin ? ser.reduce((x, a) => x + a.pin, 0) / npin : null,
+        relw: relw.length ? AGGS[S.agg](relw) : null,
+        wis: nw ? sum("wis") / nw : null, winkler: nw ? sum("wink") / nw : null, cover: nw ? sum("cov") / nw : null,
       };
     }
     return out;
@@ -393,7 +401,7 @@
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
     if ($("f-cols")) seg($("f-cols"), [
       { k: "key", label: "Key columns" },
-      { k: "all", label: "All columns", title: "Also the 95% interval, MAE, RMSE, pinball, best and worst day" },
+      { k: "all", label: "All columns", title: "Also the 95% interval, MAE, RMSE, WIS, Winkler 80%, coverage 80%, best and worst day" },
     ], S.details ? "all" : "key", (k) => { S.details = k === "all"; renderAll(); });
     updateFilterSummary();
     seg($("f-view"), [
@@ -547,6 +555,10 @@
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
+    relw: () => ["Rel. WIS", `The weighted interval score of the model's quantiles, relative to ${D.config.baseline} on the same days and series: it rewards a forecast distribution that is both sharp and calibrated. Below 1 beats the baseline. Only models that publish quantiles have one. ${aggText()} Lower is better.`],
+    wis: () => ["WIS", `Weighted interval score: the score of the 10-90%, 20-80%, 30-70% and 40-60% intervals and the median together, in the series' unit (${units()}); equal to twice the average pinball loss. Lower is better.${mixedUnits()}`],
+    winkler: () => ["Winkler 80%", `Interval score of the 10-90% interval: its width, plus 10 times the distance by which the actual falls outside it. Lower is better.${mixedUnits()}`],
+    cover: () => ["Coverage 80%", "Share of quarter-hours with the actual inside the 10-90% interval. A calibrated forecast covers 80%; less is overconfident, more is too wide. Sorted by the distance from 80%."],
     relr: () => ["Rel. RMSE", `Like Rel. MAE with squared errors: per series sqrt(sum of squared errors / the baseline's), on the same days. Large misses weigh more. ${aggText()} Lower is better.`],
     nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts. Relative errors of models with different series are averaged over different sets, so compare them with care."],
     agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when several zones or targets are selected."],
@@ -625,11 +637,15 @@
     mae: { get: (s) => s.mae, dir: 1 },
     rmse: { get: (s) => s.rmse, dir: 1 },
     pinball: { get: (s) => s.pinball, dir: 1 },
+    relw: { get: (s) => s.relw, dir: 1 },
+    wis: { get: (s) => s.wis, dir: 1 },
+    winkler: { get: (s) => s.winkler, dir: 1 },
+    cover: { get: (s) => (s.cover == null ? null : Math.abs(s.cover - 0.8)), dir: 1 },   // closest to 80% first
     dm: { get: (s) => s.dm, dir: -1 },
     best: { get: (s) => s.best, dir: -1 },
     worst: { get: (s) => s.worst, dir: -1 },
   };
-  const DETAIL_COLS = ["ci", "dm", "nser", "mae", "rmse", "pinball", "best", "worst"];   // shown with "All columns" only
+  const DETAIL_COLS = ["ci", "dm", "nser", "mae", "rmse", "pinball", "wis", "winkler", "cover", "best", "worst"];   // shown with "All columns" only
   function sortKey() { const k = S.sort && S.sort.k; return SORT_COLS[k] && (S.details || !DETAIL_COLS.includes(k)) ? k : "pos"; }
   function sortRows(st) {
     const k = sortKey(), dir = k === S.sort.k ? S.sort.dir : 1, get = SORT_COLS[k].get;
@@ -647,6 +663,8 @@
     return `<th class="${[right ? "r" : "", cls].join(" ").trim()}" aria-sort="${aria}"><button type="button" class="sort" data-sort="${key}" ${tip ? `data-tip="${tip}"` : ""}>` +
       `<span class="${tip ? "lbl" : ""}">${esc(label)}</span><i aria-hidden="true">${on ? (dir < 0 ? "▼" : "▲") : "↕"}</i></button></th>`;
   }
+
+  const pctCell = (v) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(0) + "%");
 
   // ---------- sections ----------
   let DAYS = [];
@@ -673,14 +691,14 @@
     // the Elo bar spans 700..1300; the 95% interval is drawn on it as a whisker
     const eloX = (v) => Math.min(100, Math.max(0, (v - 700) / 6));
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
-      ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("pinball", "Pinball" + unit, "pinball") : ""}
+      ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${sortTh("relw", "Rel. WIS", "relw")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("wis", "WIS" + unit, "wis") + sortTh("winkler", "Winkler 80%" + unit, "winkler") + sortTh("cover", "Coverage 80%", "cover") : ""}
       ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}">
         <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
         ${det ? `<td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>` : ""}${dmOn ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
-        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.pinball, 1)}</td>
+        <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td><td class="r v">${fmt(s.relw, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.wis, 1)}</td><td class="r v">${fmt(s.winkler, 1)}</td><td class="r v">${pctCell(s.cover)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>` : ""}<td class="r v">${s.races}</td>
       </tr>`; }).join("") + "</tbody>";
     if (!st.length) t.innerHTML = `<tbody><tr><td class="empty">No scored days for this selection yet.</td></tr></tbody>`;
@@ -705,7 +723,7 @@
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
           <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
-          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.pinball, 1)}</td>
+          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
           <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${mine.length}</td></tr>`;
       }).join(""));
     }
@@ -1254,12 +1272,15 @@
     const sc = ROWS.filter((r) => r.issue_date === day.issue_date && r.zone === S.x.zone && r.target === S.x.target);
     const tb = $("x-table");
     if (!sc.length) { tb.innerHTML = `<tbody><tr><td class="empty">Not scored yet. ${S.x.target === "price" ? "Prices are scored the afternoon of the issue day." : "Wind, solar and load are scored at 07:00 the day after delivery, once the whole day is published."}</td></tr></tbody>`; return; }
-    const best = (k) => Math.min(...sc.map((r) => (k === "bias" ? Math.abs(r[k]) : r[k])).filter((v) => v != null));
+    // best per column: lowest, except bias (closest to 0) and coverage (closest to 80%)
+    const dev = (k, v) => (v == null ? null : k === "bias" ? Math.abs(v) : k === "cover" ? Math.abs(v - 0.8) : v);
+    const best = (k) => Math.min(...sc.map((r) => dev(k, r[k])).filter((v) => v != null));
     const xth = (k, l) => `<th class="r"><span class="lbl" data-tip="${k}">${l}</span></th>`;
-    tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("pinball", "Pinball")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
+    const COLS = ["mae", "rmse", "bias", "wis", "winkler", "cover", "rel_mae"];
+    tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("wis", "WIS")}${xth("winkler", "Winkler 80%")}${xth("cover", "Coverage 80%")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
       models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).sort((a, b) => (a.mae ?? 1e18) - (b.mae ?? 1e18)).map((r) => `<tr class="${bt ? "is-bt" : ""}">
         <td class="model"><i style="background:${color(r.model)}"></i>${nm(r.model)}</td>
-        ${["mae", "rmse", "bias", "pinball", "rel_mae"].map((k) => `<td class="num ${(k === "bias" ? Math.abs(r[k]) : r[k]) === best(k) ? "best" : ""}">${fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
+        ${COLS.map((k) => `<td class="num ${r[k] != null && dev(k, r[k]) === best(k) ? "best" : ""}">${k === "cover" ? pctCell(r[k]) : fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
       </tr>`).join("") + `</tbody>`;
   }
 
