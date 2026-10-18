@@ -76,8 +76,17 @@ the gate. Second, the target drifts away from the market's: hourly values where 
 generation definitions that differ between data providers, actuals that were later revised. Third, nothing stops an
 author from choosing the window, the baseline or the metric after seeing the results.
 
-A live benchmark closes these holes by construction. If the model runs at the real cut-off, on the data really
-available, and its forecast is locked before the real gate, there is no look-ahead to argue about, and the record
+A fourth gap has opened with time-series foundation models. In operational energy forecasting, exogenous inputs are
+the standard, not an option: wind and solar forecasts are built on numerical weather predictions, load forecasts on
+temperature and calendar effects, and day-ahead price forecasts on forecasts of load, renewable infeed and fuel
+cost~\cite{hongreview,weron,lago}. The grid operators' own forecasts, the industry reference, are NWP-driven, and the
+energy forecasting competitions supplied weather forecasts as a matter of course~\cite{gefcom}. The benchmarks on which
+foundation models are compared are, by contrast, mostly univariate. A model that forecasts tomorrow's solar output from
+the last four weeks of solar output alone is being tested on a task no practitioner would set it, and a ranking built
+that way says little about which model to deploy.
+
+A live benchmark that hands every entry the same inputs closes these holes by construction. If the model runs at the
+real cut-off, on the data really available, weather forecasts included, and its forecast is locked before the real gate, there is no look-ahead to argue about, and the record
 accumulates one day at a time in public. The price is patience: a live record is short and its standings are noisy
 on any given day. The design below takes that noise seriously rather than hiding it: errors are pooled before they
 are normalised, ranks come with intervals, and the backtest is kept apart from the live record.
@@ -99,6 +108,15 @@ and their test periods may have been seen, directly or through pretraining corpo
 Retrospective energy studies also often leave the information set implicit: several price-forecasting studies use
 ENTSO-E's day-ahead wind and solar forecasts as inputs although those are published only after 18:00 on $D-1$, six
 hours after the auction closes~\cite{energyarena}.
+
+\paragraph{Covariates.} The value of weather inputs in energy forecasting is long established. Wind and solar power
+forecasting has been NWP-based since its beginnings, and the wind and solar tracks of GEFCom2014 gave every team ECMWF
+forecasts~\cite{gefcom}; load forecasting rests on temperature, and the reviews of price forecasting single out
+forecasts of load and renewable generation as the most informative exogenous drivers~\cite{weron,lago,hongreview}.
+Foundation models have only recently gained the means to use such inputs: Chronos-2, TimesFM, TiRex-2 and the t0
+models accept known-future covariates, by different mechanisms and with different success. Whether and how much they
+benefit is an empirical question that a univariate benchmark cannot answer, and it is the question an operational
+user needs answered first.
 
 \paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome exists, and each
 leaves open a question that Energy Bench is built to answer.
@@ -635,6 +653,10 @@ Data Mining}, 2026. arXiv:2512.20761.
 S.~Lerch, R.~Mikut, J.~Priesmann, M.~Schienle, B.~Schäfer, J.~Weinand, F.~Ziel. Energy-Arena: a dynamic benchmark for
 operational energy forecasting. \emph{22nd International Conference on the European Energy Market (EEM)}, Trondheim,
 2026. arXiv:2604.24705.
+\bibitem{hongreview} T.~Hong, P.~Pinson, Y.~Wang, R.~Weron, D.~Yang, H.~Zareipour. Energy forecasting: a review and
+outlook. \emph{IEEE Open Access Journal of Power and Energy} 7:376--388, 2020.
+\bibitem{weron} R.~Weron. Electricity price forecasting: a review of the state-of-the-art with a look into the future.
+\emph{International Journal of Forecasting} 30(4):1030--1081, 2014.
 \bibitem{lago} J.~Lago, G.~Marcjasz, B.~De~Schutter, R.~Weron. Forecasting day-ahead electricity prices: a review of
 state-of-the-art algorithms, best practices and an open-access benchmark. \emph{Applied Energy} 293:116983, 2021.
 \bibitem{gneiting2011} T.~Gneiting. Making and evaluating point forecasts. \emph{Journal of the American Statistical
