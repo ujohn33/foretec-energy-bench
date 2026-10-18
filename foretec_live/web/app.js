@@ -429,11 +429,11 @@
     $("f-sum-text").innerHTML = [zone, target, rated, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
   }
   function updateValueSummary() {
-    const phase = { live: "live", backtest: "backtest", all: "live and backtest" }[S.phase];
-    const mode = S.v.mode === "imb" ? "remainder at imbalance price" : "remainder as error cost";
-    $("more-sum").textContent = `· ${phase} · ${mode}`;
+    const rated = S.phase === "backtest" ? "Backtest" : { d7: "Last 7 days", d30: "Last 30 days", all: "All time" }[S.win];
+    const mode = S.v.mode === "imb" ? "error at imbalance price" : "error as missed income";
+    $("more-sum").textContent = `· ${mode}`;
     const zone = S.v.zone === "all" ? "All zones" : zoneLabel(S.v.zone);
-    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(S.v.model || "")}</b>`, `p${S.v.p}`, phase, mode].join(" · ");
+    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(rated)}</b>`, esc(S.v.model || ""), `p${S.v.p}`, mode].join(" · ");
   }
   function updateExplorerSummary() {
     const cov = { all: "all models", with: "with covariates", without: "without covariates" }[S.covFilter];
@@ -1342,11 +1342,19 @@
     }).map(([, s]) => s);
   }
   /** model -> strategy -> {r, perfect, energy, n} summed over the selected series and days */
+  // the issue days "Rated over" selects: the live runs of the window (up to the latest live day evaluated), or the backtest
+  function valueDayIn(s, i) {
+    if (s.phase[i] !== S.phase) return false;
+    const n = WINDOWS[S.win];
+    if (!n || S.phase !== "live") return true;
+    const last = Object.values(VAL.series).reduce((a, x) => x.days.reduce((b, d, j) => (x.phase[j] === "live" && d > b ? d : b), a), "");
+    return s.days[i] >= addDays(last, 1 - n);
+  }
   function valueTotals() {
     const out = {};
     for (const s of valueSeries()) {
       s.days.forEach((d, i) => {
-        if (S.phase !== "all" && s.phase[i] !== S.phase) return;
+        if (!valueDayIn(s, i)) return;
         for (const [m, strats] of Object.entries(s.models)) {
           for (const [k, arr] of Object.entries(strats)) {
             if (arr[i] == null) continue;
@@ -1389,13 +1397,21 @@
   function renderValueControls(res) {
     options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
     seg($("v-mode"), [
-      { k: "err", label: "Remainder as error cost", title: "The committed quantity is sold at the day-ahead price; the remainder (output minus committed) costs |remainder| x |imbalance price - day-ahead price|, so an error never earns" },
-      { k: "imb", label: "Remainder at imbalance price", title: "The committed quantity is sold at the day-ahead price; the remainder is settled at the zone's imbalance price as it would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
+      { k: "err", label: "Error as missed income", title: "The committed quantity is sold at the day-ahead price; the error (output minus committed) costs |error| x |imbalance price - day-ahead price| in missed income, so an error never earns" },
+      { k: "imb", label: "Error at imbalance price", title: "The committed quantity is sold at the day-ahead price; the error is settled at the zone's imbalance price as it would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
     ], S.v.mode, (k) => { S.v.mode = k; S.v.model = null; renderValue(); });
     seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
     const hasLive = Object.values(VAL.series).some((s) => s.phase.includes("live"));
-    seg($("v-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
-      (k) => { S.phase = k; renderValue(); });
+    seg($("v-phase"), [
+      { k: "d7", label: "Last 7 days", disabled: !hasLive, title: "Live runs of the last 7 days up to the latest evaluated issue day" },
+      { k: "d30", label: "Last 30 days", disabled: !hasLive, title: "Live runs of the last 30 days up to the latest evaluated issue day" },
+      { k: "all", label: "All time", disabled: !hasLive, title: "Every live run" },
+      { k: "bt", label: "Backtest", title: "The backtest" },
+    ], S.phase === "backtest" ? "bt" : S.win, (k) => {
+      if (k === "bt") { S.phase = "backtest"; S.win = "all"; } else { S.phase = "live"; S.win = k; }
+      saveFilters();
+      renderValue();
+    });
     const ms = MODELS.filter((m) => res[m] && res[m].quant);
     options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${m} (ref)` : m })), S.v.model);
   }
@@ -1437,7 +1453,7 @@
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
-        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle only the remainder" : "Pay for the remainder"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
+        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle the error at the imbalance price" : "Miss income on the error"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the slider to see how the percentile changes the gaps</span></div></li>
       </ol>`;
   }
@@ -1493,7 +1509,7 @@
     const c = r.cost(t);
     $("v-r3-l").textContent = costLabel();
     $("v-r3").textContent = c == null ? "–" : `€${c.toFixed(2)}`;
-    const nz = valueSeries().filter((x) => x.phase.some((ph, i) => (S.phase === "all" || ph === S.phase) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
+    const nz = valueSeries().filter((x) => x.phase.some((ph, i) => valueDayIn(x, i) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
     $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(1)} GWh from ${nz > 1 ? `${nz} assets of ${VAL.asset_mw} MW` : `${VAL.asset_mw} MW`} in ${zoneTxt}` : "";
 
     // three groups: models with percentiles (ranked at the slider's percentile), point-only models (ranked on their
@@ -1526,8 +1542,8 @@
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
     $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
       (S.v.mode === "imb"
-        ? "Remainder at imbalance price: the committed quantity is sold at the day-ahead price and only the remainder is settled at the zone's imbalance price, as the asset would have been paid: a surplus at the long price, a shortfall bought back at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
-        : "Remainder as error cost: the committed quantity is sold at the day-ahead price and the remainder costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
+        ? "Error at imbalance price: the committed quantity is sold at the day-ahead price and only the error is settled at the zone's imbalance price, as the asset would have been paid: a surplus at the long price, a shortfall bought back at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
+        : "Error as missed income: the committed quantity is sold at the day-ahead price and the error costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
       "Models without quantiles are ranked separately on their point forecast; a model that published quantiles on only some days shows both counts (with quantiles / all). Click a row to draw its curve.";
   }
   const q0 = (k) => new URLSearchParams(location.search).get(k);
@@ -1612,8 +1628,8 @@
     S.phase = hasLive ? "live" : "backtest";
     loadFilters();
     // "live and backtest together" is no longer offered: the leaderboard rates live runs or the backtest
-    const phases = PAGE === "leaderboard" ? ["live", "backtest"] : ["live", "backtest", "all"];   // Forecast Value keeps "All"
-    if (!phases.includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
+    // "live and backtest together" is gone from every page: Rated over picks the live runs or the backtest
+    if (!["live", "backtest"].includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
     if (!METRICS.some((m) => m.k === S.metric)) S.metric = "rel_mae";
     if (!(S.win in WINDOWS)) S.win = "all";
     if (!(S.agg in AGGS)) S.agg = "mean";
