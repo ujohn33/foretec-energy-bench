@@ -47,6 +47,7 @@ solar and load** in **{zones}**, and is scored against the grid operators' publi
 - **Live leaderboard:** https://energybench.foretec.co
 - **Methodology:** https://energybench.foretec.co/methodology.html
 - **Code:** https://github.com/ujohn33/foretec-energy-bench
+- **DOI:** [10.57967/hf/11052](https://doi.org/10.57967/hf/11052)
 
 This dataset holds every forecast, the actuals they were scored against, and every score: issue days {first} to
 {last} ({n_live} live issue days; the earlier days are a backtest run the same way), {n_models} models,
@@ -99,6 +100,8 @@ licences (for example Tabby, CC BY-NC 4.0); check them before reusing those mode
   author       = {{Genov, Evgenii}},
   title        = {{Foretec Energy Bench: a live, gate-aligned benchmark of day-ahead forecasts for European power markets}},
   year         = {{2026}},
+  doi          = {{10.57967/hf/11052}},
+  publisher    = {{Hugging Face}},
   howpublished = {{\url{{https://energybench.foretec.co}}}}
 }}
 ```

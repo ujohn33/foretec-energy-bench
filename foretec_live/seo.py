@@ -26,6 +26,7 @@ SITE_URL = "https://energybench.foretec.co"
 LICENSE = ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/")
 REPO = "https://github.com/ujohn33/foretec-energy-bench"
 HF_DATASET = "https://huggingface.co/datasets/ujohn33/foretec-energy-bench"
+DATASET_DOI = "10.57967/hf/11052"
 MIN_RACES = 24                       # as app.js: fewer races (or under half the most) is provisional
 PAGES = {
     "index.html": ("", "Leaderboard"),
@@ -186,7 +187,7 @@ def _dataset(cfg, s: pd.DataFrame, generated: str) -> list[dict]:
                          "from one frozen set of public inputs (history, NWP weather forecasts, load forecast, fuel prices), "
                          "with their scores against the grid operators' actuals: MAE, RMSE, bias, pinball loss, Rel. MAE "
                          "against a seasonal naive baseline, and a Bradley-Terry Elo rating."),
-         "url": SITE_URL + "/", "sameAs": [REPO, HF_DATASET], "license": LICENSE[1], "isAccessibleForFree": True,
+         "url": SITE_URL + "/", "sameAs": [REPO, HF_DATASET], "identifier": f"https://doi.org/{DATASET_DOI}", "license": LICENSE[1], "isAccessibleForFree": True,
          "creator": org, "publisher": org, "dateModified": generated,
          "temporalCoverage": f"{s['issue_date'].min()}/..",
          "spatialCoverage": [{"@type": "Place", "name": f"{z} bidding zone"} for z in zones],
@@ -242,7 +243,7 @@ def _llms(st: pd.DataFrame, bt: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, 
               f"- [Standings (CSV)]({SITE_URL}/leaderboard.csv): live and backtest, one row per model",
               f"- [All scores (JSON)]({SITE_URL}/data/summary.json): every score row (issue day, model, zone, target, metrics), models, config",
               f"- Per issue day: {SITE_URL}/data/days/YYYY-MM-DD.json (actuals and every forecast)",
-              f"- [Full dataset on Hugging Face]({HF_DATASET}): every forecast, actual and score as parquet", ""]
+              f"- [Full dataset on Hugging Face]({HF_DATASET}): every forecast, actual and score as parquet; DOI {DATASET_DOI}", ""]
     return "\n".join(lines)
 
 
