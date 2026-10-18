@@ -3,7 +3,7 @@
 Runs once a day (scripts/systemd/foretec-waitlist-report.timer). It emails when there are new sign-ups since the last
 report, and every Monday in any case, so a silent week still shows the job is alive. Standard library only.
 
-  env (/etc/foretec-waitlist.env, root only)  RESEND_API_KEY, REPORT_TO (your address), REPORT_FROM (optional; without
+  env (/etc/foretec-waitlist.env or /root/.env, root only)  RESEND_API_KEY (or RESEND_KEY), REPORT_TO (your address), REPORT_FROM (optional; without
                                               a verified domain Resend sends from onboarding@resend.dev, and then only
                                               to the address the Resend account was opened with)
   reads    /var/lib/foretec-waitlist/waitlist.jsonl
@@ -49,7 +49,7 @@ def main(argv: list[str]) -> int:
     if "--dry" in argv:
         print(f"Subject: {subject}\n\n{body}")
         return 0
-    key, to = os.environ.get("RESEND_API_KEY"), os.environ.get("REPORT_TO")
+    key, to = os.environ.get("RESEND_API_KEY") or os.environ.get("RESEND_KEY"), os.environ.get("REPORT_TO")
     if not key or not to:
         print("RESEND_API_KEY and REPORT_TO must be set in /etc/foretec-waitlist.env", file=sys.stderr)
         return 1

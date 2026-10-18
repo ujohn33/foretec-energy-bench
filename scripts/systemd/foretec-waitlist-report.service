@@ -5,8 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-# root only to read the waiting list's private state directory; everything else is read-only, no other keys loaded
+# root only to read the waiting list's private state directory; everything else is read-only
 EnvironmentFile=/etc/foretec-waitlist.env
+# the Resend key may also sit with the other keys (RESEND_KEY in /root/.env); this job has no network listener
+EnvironmentFile=-/root/.env
 ExecStart=/usr/bin/python3 -I /srv/foretec/foretec-live/foretec_live/waitlist_report.py
 StateDirectory=foretec-waitlist-report
 Environment=WAITLIST_FILE=/var/lib/private/foretec-waitlist/waitlist.jsonl

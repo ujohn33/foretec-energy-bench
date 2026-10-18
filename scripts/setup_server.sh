@@ -105,10 +105,9 @@ if [ $WEB -eq 1 ]; then
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
   systemctl daemon-reload
   systemctl enable --now foretec-waitlist.service
-  # daily email report of the waiting list: the Resend key goes in /etc/foretec-waitlist.env (root only), never in the repo
+  # daily email report of the waiting list: the Resend key (RESEND_KEY) lives in /root/.env, never in the repo
   [ -f /etc/foretec-waitlist.env ] || install -m 600 /dev/null /etc/foretec-waitlist.env
   grep -q '^REPORT_TO=' /etc/foretec-waitlist.env || echo 'REPORT_TO=evgeny@foretec.be' >> /etc/foretec-waitlist.env
-  grep -q '^RESEND_API_KEY=' /etc/foretec-waitlist.env || echo 'RESEND_API_KEY=' >> /etc/foretec-waitlist.env
   systemctl enable --now foretec-waitlist-report.timer
   systemctl reload caddy || systemctl restart caddy
 fi
