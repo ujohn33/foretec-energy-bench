@@ -1,0 +1,21 @@
+[Unit]
+Description=Foretec Energy Bench: email report of the competition waiting list
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# root only to read the waiting list's private state directory; everything else is read-only, no other keys loaded
+EnvironmentFile=/etc/foretec-waitlist.env
+ExecStart=/usr/bin/python3 -I /srv/foretec/foretec-live/foretec_live/waitlist_report.py
+StateDirectory=foretec-waitlist-report
+Environment=WAITLIST_FILE=/var/lib/private/foretec-waitlist/waitlist.jsonl
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
