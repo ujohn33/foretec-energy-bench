@@ -1,15 +1,17 @@
 # Foretec Energy Bench
 
-The live benchmark for energy forecasts: an open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2. Live at **https://energybench.foretec.co**. (The Python package and command keep their working names, `foretec_live` and `foretec-live`.)
+**Live site: [energybench.foretec.co](https://energybench.foretec.co)** · [Leaderboard](https://energybench.foretec.co/) · [Forecast Explorer](https://energybench.foretec.co/explorer.html) · [Forecast Value](https://energybench.foretec.co/value.html) · [Methodology](https://energybench.foretec.co/methodology.html) · Data: [standings (CSV)](https://energybench.foretec.co/leaderboard.csv), [all scores (JSON)](https://energybench.foretec.co/data/summary.json), [overview for AI agents (llms.txt)](https://energybench.foretec.co/llms.txt)
+
+The live benchmark for energy forecasts: an open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2. (The Python package and command keep their working names, `foretec_live` and `foretec-live`.)
 
 Every day at 11:30 CET/CEST, before the 12:00 SDAC day-ahead gate closure, each model in `models/` forecasts the next delivery day for:
 
-| | Belgium | Netherlands | France |
-|---|---|---|---|
-| Day-ahead price (EUR/MWh) | BE | NL | FR |
-| Wind generation (MW, on + offshore) | BE | NL | FR |
-| Solar generation (MW) | BE | NL | FR |
-| Total load (MW) | BE | NL | FR |
+| | Belgium | Netherlands | France | Germany-Luxembourg | Denmark West | Denmark East |
+|---|---|---|---|---|---|---|
+| Day-ahead price (EUR/MWh) | BE | NL | FR | DE-LU | DK1 | DK2 |
+| Wind generation (MW, on + offshore) | BE | NL | FR | DE-LU | DK1 | DK2 |
+| Solar generation (MW) | BE | NL | FR | DE-LU | DK1 | DK2 |
+| Total load (MW) | BE | NL | FR | DE-LU | DK1 | DK2 |
 
 Forecasts are on the 15-minute day-ahead grid: 96 quarter-hours, or 92/100 on clock-change days. Once the actuals are final they are scored, and the leaderboard is rebuilt.
 
