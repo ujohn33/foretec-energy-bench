@@ -441,7 +441,12 @@
   function setupFilterBar() {
     const fb = document.querySelector(".filterbar"), more = $("f-more"), panel = $("more-panel");
     if (!fb || !more) return;
-    more.onclick = () => { const open = panel.hidden; panel.hidden = !open; more.setAttribute("aria-expanded", String(open)); };
+    more.onclick = () => {
+      const open = panel.hidden;
+      panel.hidden = !open;
+      more.setAttribute("aria-expanded", String(open));
+      more.querySelector(".more-label").textContent = open ? "Less" : "More";
+    };
     // while scrolling down the page the bar shrinks to one summary line; a click on it opens the filters again until the
     // reader scrolls on. Hysteresis and a scroll correction keep the page from jumping when the bar changes height.
     let openAt = null;
