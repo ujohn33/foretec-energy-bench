@@ -51,6 +51,11 @@
     <div class="field"><span class="lbl">Settlement</span><div class="seg" id="v-mode" role="radiogroup" aria-label="How the error is settled"></div></div>
   </div>
   <div class="wrap fsum-row"><button type="button" class="fsum" id="f-sum" aria-label="Show the filters"><span id="f-sum-text"></span><i aria-hidden="true">▾</i></button></div>
+  <div class="wrap pslider">
+    <label for="v-p">Sell percentile</label>
+    <span class="mono">p10</span><input type="range" id="v-p" min="10" max="90" step="5" value="50"><span class="mono">p90</span>
+    <b class="mono" id="v-p-val">p50</b>
+  </div>
 </div>
 
 <section id="value" class="first">
@@ -63,11 +68,6 @@
     <div class="panel vcard">
       <div class="chart-box"><canvas id="c-value" aria-label="Captured share of perfect-foresight revenue by committed percentile"></canvas></div>
       <div class="legend" id="l-value"></div>
-      <div class="vslider">
-        <label for="v-p" class="lbl">Committed percentile of the day-ahead forecast</label>
-        <input type="range" id="v-p" min="10" max="90" step="5" value="50">
-        <div class="vscale mono"><span>p10</span><span>p50</span><span>p90</span></div>
-      </div>
       <div class="vread">
         <div><span class="lbl" id="v-r1-l">Committed p50</span><b class="vnum" id="v-r1">–</b><span class="mono" id="v-r1-s"></span></div>
         <div><span class="lbl">Best percentile</span><b class="vnum" id="v-r2">–</b><span class="mono" id="v-r2-s"></span></div>

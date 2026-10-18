@@ -510,3 +510,14 @@ td.empty{padding:22px 16px; color:var(--ink2)}
   .more-panel > .field{flex:1 1 100%}
   .filterbar .seg button{flex:1 1 0; min-width:0; white-space:normal; line-height:1.25; text-align:center; padding:6px 6px}
 }
+
+/* forecast value: the sell-percentile slider in the filter bar, visible also when the bar is folded */
+.pslider{display:flex; align-items:center; gap:12px; padding-bottom:14px; font-size:.86rem}
+.pslider label{font-size:.8rem; font-weight:600; color:var(--ink2); white-space:nowrap}
+.pslider input[type=range]{flex:1; min-width:0; margin:0; accent-color:var(--blue)}
+.pslider input[type=range]:focus-visible{outline:2px solid var(--blue); outline-offset:4px}
+.pslider .mono{font-size:.76rem}
+.pslider b{font-size:1rem; font-weight:600; color:var(--blue-ink); min-width:2.6em; text-align:right}
+.filterbar.compact .pslider{padding-top:2px; padding-bottom:10px}
+#v-table td small{color:var(--ink2); font-size:.76rem; margin-left:4px}
+#v-table td small.po{text-transform:uppercase; letter-spacing:.04em; font-size:.66rem}

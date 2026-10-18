@@ -1333,7 +1333,7 @@
   // default, it scores the forecast), "imb" = the zone's own settlement: its long and short imbalance prices, two
   // prices where the TSO publishes two (NL, FR), one elsewhere; what the asset would have been paid, gains included
   const VSFX = () => (S.v.mode === "imb" ? "" : "e");
-  const costLabel = () => (S.v.mode === "imb" ? "Imbalance cost" : "Error cost");
+  const costLabel = () => (S.v.mode === "imb" ? "Imbalance cost" : "Missed income");
   const pct = (v, d = 1) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(d) + "%");
   function valueSeries() {
     return Object.entries(VAL.series).filter(([k]) => {
@@ -1454,7 +1454,7 @@
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
         <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle the error at the imbalance price" : "Miss income on the error"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
-        <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the slider to see how the percentile changes the gaps</span></div></li>
+        <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
   }
   function renderValue() {
@@ -1467,7 +1467,7 @@
     if (!S.v.model || !res[S.v.model] || !res[S.v.model].quant) S.v.model = ranked.find((m) => res[m].quant && FAM[m] !== "baseline") || ranked.find((m) => res[m].quant) || null;
     renderValueControls(res);
     $("v-p").value = String(S.v.p);
-    $("v-p-h").textContent = "p" + S.v.p;
+    $("v-p-h").textContent = $("v-p-val").textContent = "p" + S.v.p;
     renderExplainer();
     updateFilterSummary();
     const m = S.v.model, r = m && res[m];
@@ -1518,7 +1518,6 @@
     const pointOnly = ranked.filter((x) => !res[x].quant).sort((a, b) => (res[b].point ?? -1) - (res[a].point ?? -1));
     const refs = Object.keys(res).filter((x) => REF.has(x));
     const bestAt = Math.max(...withQ.map(at).filter((v) => v != null));
-    const bestPoint = Math.max(...ranked.map((x) => res[x].point).filter((v) => v != null));
     const costHead = costLabel();
     const row = (x, rank) => {
       const q = res[x], a = q.quant ? at(x) : null;
@@ -1527,24 +1526,20 @@
       const nCell = q.quant && nq < q.n
         ? `<td class="r num" title="Percentile columns over the ${nq} evaluations with quantiles; point forecast over all ${q.n}">${nq} / ${q.n}</td>`
         : `<td class="r num">${q.n}</td>`;
-      const qCells = q.quant
-        ? `<td class="r v ${a === bestAt ? "best" : ""}">${pct(a)}</td><td class="r num">${q.bestP != null ? "p" + q.bestP : "–"}</td><td class="r num">${pct(q.best)}</td>`
-        : `<td class="r po" colspan="3">point only</td>`;
+      const share = q.quant ? `<td class="r v ${a === bestAt ? "best" : ""}" title="point forecast ${pct(q.point)}">${pct(a)}</td>`
+        : `<td class="r v" title="point forecast: no quantiles">${pct(q.point)} <small class="po">point</small></td>`;
+      const best = q.quant && q.bestP != null ? `<td class="r num">${pct(q.best)} <small>p${q.bestP}</small></td>` : `<td class="r num">–</td>`;
       return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
-        <td class="r num">${rank}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>${qCells}
-        <td class="r v ${q.point === bestPoint ? "best" : ""}">${pct(q.point)}</td><td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td>${nCell}</tr>`;
+        <td class="r num">${rank}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>${share}${best}
+        <td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td>${nCell}</tr>`;
     };
-    const group = (label) => `<tr class="grp"><td colspan="8">${label}</td></tr>`;
-    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">At p${S.v.p}</th><th class="r">Best percentile</th><th class="r">At best</th><th class="r">Point forecast</th><th class="r">${costHead} at p${S.v.p}</th><th class="r">N evaluations</th></tr></thead><tbody>` +
+    const group = (label) => `<tr class="grp"><td colspan="6">${label}</td></tr>`;
+    $("v-table").innerHTML = `<thead><tr><th class="r">#</th><th>Model</th><th class="r">Revenue kept at p${S.v.p}</th><th class="r">Best percentile</th><th class="r">${costHead} per MWh</th><th class="r">N</th></tr></thead><tbody>` +
       withQ.map((x, i) => row(x, i + 1)).join("") +
-      (pointOnly.length ? group("Point forecast only: no quantiles to commit a percentile from, ranked on the point forecast") + pointOnly.map((x, i) => row(x, i + 1)).join("") : "") +
-      (refs.length ? group("Reference: published after the gate, not ranked") + refs.map((x) => row(x, "ref")).join("") : "") + "</tbody>";
+      (pointOnly.length ? group("Point forecast only") + pointOnly.map((x, i) => row(x, i + 1)).join("") : "") +
+      (refs.length ? group("Reference, published after the gate") + refs.map((x) => row(x, "ref")).join("") : "") + "</tbody>";
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
-    $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
-      (S.v.mode === "imb"
-        ? "Error at imbalance price: the committed quantity is sold at the day-ahead price and only the error is settled at the zone's imbalance price, as the asset would have been paid: a surplus at the long price, a shortfall bought back at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
-        : "Error as missed income: the committed quantity is sold at the day-ahead price and the error costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
-      "Models without quantiles are ranked separately on their point forecast; a model that published quantiles on only some days shows both counts (with quantiles / all). Click a row to draw its curve.";
+    $("v-notes").innerHTML = `Click a row to draw its curve. N counts zone-days with prices and actuals (with quantiles / all, where they differ). How the score works: <a href="methodology.html#value">Methodology</a>.`;
   }
   const q0 = (k) => new URLSearchParams(location.search).get(k);
   async function initValue() {
