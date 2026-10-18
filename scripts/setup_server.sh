@@ -65,6 +65,11 @@ if [ $WEB -eq 1 ]; then
   # pages and data revalidate on every load (app.js/style.css are cache-busted by name, vendor/ never changes)
   FRESH=$(printf '  @fresh path / *.html /data/*\n  header @fresh Cache-Control "no-cache"\n')
   FRESH="$FRESH"$'\n'
+  # security headers: HTTPS only, no framing or MIME sniffing, scripts and data from the
+  # site itself, fonts from the site and Google Fonts, map tiles from OpenStreetMap; dotfiles are never served
+  CSP="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+  HEADERS=$(printf '  header {\n    Strict-Transport-Security "max-age=31536000"\n    X-Content-Type-Options "nosniff"\n    X-Frame-Options "DENY"\n    Referrer-Policy "strict-origin-when-cross-origin"\n    Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"\n    Content-Security-Policy "%s"\n    -Server\n  }\n' "$CSP")
+  HEADERS="$HEADERS"$'\n'
   # the domain and aliases are remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
   [ -n "$DOMAIN" ] && echo "$DOMAIN" > $BASE/site_domain
   [ -z "$DOMAIN" ] && [ -f $BASE/site_domain ] && DOMAIN=$(cat $BASE/site_domain)
@@ -86,7 +91,7 @@ if [ $WEB -eq 1 ]; then
     TARGET=${SERVE%%,*}
     echo "== web (Caddy, https://$TARGET${REDIR:+; ${REDIR[*]} redirect there}; plain http on the server IP too)"
     {
-      printf '%s {\n  root * %s/site\n  encode gzip\n%s  file_server\n}\n' "${SERVE//,/, }" "$APP" "$FRESH"
+      printf '%s {\n  root * %s/site\n  encode gzip\n%s%s  file_server {\n    hide .*\n  }\n}\n' "${SERVE//,/, }" "$APP" "$HEADERS" "$FRESH"
       for h in "${REDIR[@]}"; do printf '\n%s {\n  redir https://%s{uri} permanent\n}\n' "$h" "$TARGET"; done
       if [ -n "$IP" ]; then printf '\nhttp://%s {\n  redir https://%s{uri} permanent\n}\n' "$IP" "$TARGET"; fi
     } > /etc/caddy/Caddyfile
