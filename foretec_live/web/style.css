@@ -30,6 +30,7 @@
     --blue:#7DAAC7; --blue-ink:#9CC3D9; --blue-soft:#152F52;
     --amber:#FFC1DD; --amber-soft:#2C1A28;
     --green:#7FCBAA; --green-soft:#12332A;
+    --onair:#EE9483;
     --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
     --muted:#6F8DA6; --grid:#183253;
     --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
@@ -43,6 +44,7 @@
   --blue:#7DAAC7; --blue-ink:#9CC3D9; --blue-soft:#152F52;
   --amber:#FFC1DD; --amber-soft:#2C1A28;
   --green:#7FCBAA; --green-soft:#12332A;
+  --onair:#EE9483;
   --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px -14px rgba(0,0,0,.75);
   --muted:#6F8DA6; --grid:#183253;
   --bt:#7C8C9C; --bt-ink:#8D9DAD; --bt-soft:#172C47; --band:rgba(230,240,242,.05);
@@ -103,8 +105,8 @@ header.top{border-bottom:1px solid var(--rule); background:var(--ground); positi
 /* broadcast "on air" bug next to the product name */
 .onair{align-self:flex-start; margin-top:7px; display:inline-flex; align-items:center; gap:6px; color:var(--onair);
   font-family:var(--sans,system-ui); font-size:.8rem; font-weight:600; line-height:1; white-space:nowrap; flex:none}
-.onair i{width:7px; height:7px; border-radius:50%; background:var(--onair); animation:onair 1.4s ease-in-out infinite}
-@keyframes onair{0%,100%{opacity:1} 50%{opacity:.2}}
+.onair i{width:7px; height:7px; border-radius:50%; background:var(--onair); animation:onair 2.6s ease-in-out infinite}
+@keyframes onair{0%,100%{opacity:1} 50%{opacity:.45}}
 .top-nav{display:flex; gap:24px; align-items:center}
 .top-nav a{font-size:.86rem; color:var(--ink2); text-decoration:none; border-bottom:1px solid transparent; padding-bottom:2px}
 .top-nav a:hover{color:var(--ink); border-bottom-color:var(--rule)}
