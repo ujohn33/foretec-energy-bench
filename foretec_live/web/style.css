@@ -488,3 +488,19 @@ td.empty{padding:22px 16px; color:var(--ink2)}
   text-decoration:underline; text-decoration-color:var(--rule); text-underline-offset:.2em; align-self:flex-end}
 .linkbtn:hover{color:var(--ink); text-decoration-color:var(--ink2)}
 .linkbtn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+
+/* phones: settings folded into one summary line (tap to open all of them), explanatory text left out */
+@media(max-width:600px){
+  .filterbar:not(.m-open) :is(.filters, .more-panel){display:none}
+  .filterbar .fsum-row{display:block}
+  .filterbar.m-open{display:flex; flex-direction:column}
+  .filterbar.m-open > .wrap{width:100%; box-sizing:border-box}
+  .filterbar.m-open .fsum-row{display:block; order:-1; border-bottom:1px solid var(--rule)}
+  .filterbar.m-open .fsum i{transform:rotate(180deg)}
+  .filterbar.m-open .more-panel{display:flex !important}
+  .filterbar.m-open .more-btn{display:none}
+  .filterbar.m-open .filters .field:last-child{display:none}
+  .fsum{padding:11px 0; font-size:.86rem}
+  body:not([data-page="methodology"]) :is(.sec-head .intro, .sec-head .meta, .sec-head .lede, .st-notes, .x-meta, #l-tracker, .vx-steps span, .vscale, .more-sum) {display:none}
+  .foot > span{display:none}
+}

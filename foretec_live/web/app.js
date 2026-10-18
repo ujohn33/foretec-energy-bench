@@ -454,7 +454,16 @@
     // while scrolling down the page the bar shrinks to one summary line; a click on it opens the filters again until the
     // reader scrolls on. Hysteresis and a scroll correction keep the page from jumping when the bar changes height.
     let openAt = null;
+    // phones: every setting starts folded into the summary line; a tap opens all of them, a tap on the summary folds them
+    const phone = matchMedia("(max-width:600px)");
+    const fold = () => {
+      fb.classList.toggle("compact", phone.matches && !fb.classList.contains("m-open"));
+      if (!phone.matches) fb.classList.remove("m-open");
+    };
+    phone.addEventListener("change", fold);
+    fold();
     const update = () => {
+      if (phone.matches) return;
       if (getComputedStyle(fb).position !== "sticky") { fb.classList.remove("compact"); return; }
       const y = scrollY, on = fb.classList.contains("compact");
       if (openAt != null && Math.abs(y - openAt) > 240) openAt = null;
@@ -465,7 +474,10 @@
       if (y > 0) window.scrollBy(0, fb.offsetHeight - h);
     };
     addEventListener("scroll", update, { passive: true });
-    $("f-sum").onclick = () => { openAt = scrollY; update(); openAt = scrollY; };
+    $("f-sum").onclick = () => {
+      if (phone.matches) { fb.classList.toggle("m-open"); fold(); return; }
+      openAt = scrollY; update(); openAt = scrollY;
+    };
   }
 
   // ---------- chart plumbing ----------
