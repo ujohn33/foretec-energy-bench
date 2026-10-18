@@ -1147,11 +1147,9 @@
     if (!$("tracker")) return;
     const T = D.tracker;
     if (!T || !T.days.length) { $("tracker").innerHTML = `<tbody><tr><td class="empty">No runs yet.</td></tr></tbody>`; return; }
+    // live runs only (the backtest has no gate to meet), the latest issue day first
     const hasLive = T.days.some((d) => d.phase === "live");
-    if (!S.trk) S.trk = hasLive ? "live" : "backtest";
-    seg($("trk-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }], S.trk,
-      (k) => { S.trk = k; S.trkSel = null; renderTracker(); });
-    const days = T.days.filter((d) => d.phase === S.trk).slice(-21);
+    const days = T.days.filter((d) => d.phase === (hasLive ? "live" : "backtest")).slice(-21).reverse();
     const models = MODELS.filter((m) => days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
     const head = `<thead><tr><th>Model</th>${days.map((d) => {
       const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
