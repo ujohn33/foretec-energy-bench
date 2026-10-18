@@ -27,9 +27,9 @@ def _now(cfg, now=None) -> pd.Timestamp:
 
 
 def voided(issue_date, zone, target, cfg) -> str | None:
-    """Why a live forecast is never scored (config void_live), or None."""
+    """Why a live forecast is never scored (config void_live: issue days `from` (optional) through `through`), or None."""
     for v in cfg.get("void_live") or []:
-        if f"{zone}_{target}" in v["series"] and str(issue_date) <= str(v["through"]):
+        if f"{zone}_{target}" in v["series"] and str(v.get("from", "")) <= str(issue_date) <= str(v["through"]):
             return v.get("reason", "voided")
     return None
 

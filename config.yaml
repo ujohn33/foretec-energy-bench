@@ -14,8 +14,9 @@ baseline: naive_weekly       # reference for relative MAE (skill)
 rolling_days: 28             # leaderboard window
 revision_check: {days: 3, threshold: 0.005}   # wind/solar actuals re-fetched for 3 days; >0.5% of daily energy -> re-frozen, re-scored
 # actuals frozen under an earlier definition of the series: never re-checked, so their scores stay as they were
-# (NL wind offshore was NED's modelled type 17 through delivery 12 Oct 2026, the metered type 51 since)
-actuals_locked_through: {NL_wind: 2026-10-12}
+# (NL wind offshore was NED's modelled type 17 through delivery 12 Oct 2026, the metered type 51 since; DK wind was
+# ENTSO-E A75 through delivery 17 Oct 2026, Energinet's real-time production since, and the backtest was rebuilt on it)
+actuals_locked_through: {NL_wind: 2026-10-12, DK1_wind: 2026-10-17, DK2_wind: 2026-10-17}
 backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
 
 model_workers: 2             # models run two at a time, each subprocess with half the CPU threads
@@ -39,18 +40,23 @@ covariates:                   # what covariate models may use; frozen per issue 
 source: entsoe               # ENTSO-E Transparency Platform (ENTSOE_TOKEN), parsed from XML
 # quarter-hours ENTSO-E does not deliver come from the TSOs' own open data (Elia for BE, RTE for FR), then
 # Energy-Charts as last resort (NL has no keyless TSO service); provenance per series in _sources.json
-fallback_source: [elia, rte, ned, energycharts]
+fallback_source: [elia, rte, ned, energinet, energycharts]
 # series whose TSO publishes finer data than it sends ENTSO-E: that source first, then the normal chain.
 # Elia sends ENTSO-E hourly wind and solar (forecasts and actuals); Elia Open Data has the quarter-hours.
 # NL: ENTSO-E has offshore + TSO-metered onshore wind, TSO-metered solar only and load net of embedded solar;
 # NED has the national totals (load gross, like Elia's and RTE's total load).
-source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned}
-# only the preferred source, no fallback: ENTSO-E's NL wind/solar is a different quantity, a gap is better than mixing
-exclusive_series: [NL_wind, NL_solar, NL_load]
+# DK wind: ENTSO-E's DK1 offshore misses the parks not registered there (0.3-0.5 GW since July 2026); Energinet's
+# real-time production matches its settlement (see data/tso.py). DK solar stays on ENTSO-E (includes self-consumption).
+source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned, DK1_wind: energinet, DK2_wind: energinet}
+# only the preferred source, no fallback: ENTSO-E's NL wind/solar and DK wind are a different quantity, a gap is
+# better than mixing
+exclusive_series: [NL_wind, NL_solar, NL_load, DK1_wind, DK2_wind]
 # live forecasts made from a different quantity than the one now scored: kept and shown, never scored
 void_live:
   - {series: [NL_wind, NL_solar], through: 2026-10-10, reason: "made from ENTSO-E's NL history before the switch to NED's national estimate"}
   - {series: [NL_load], through: 2026-10-11, reason: "made from ENTSO-E's net NL load before the switch to NED's gross load"}
+  # issues 15-16 Oct were scored on ENTSO-E's DK wind before the switch and stay so (actuals_locked_through)
+  - {series: [DK1_wind, DK2_wind], from: 2026-10-17, through: 2026-10-18, reason: "made from ENTSO-E's DK wind history before the switch to Energinet's real-time production"}
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

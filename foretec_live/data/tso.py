@@ -16,6 +16,14 @@ NED (NL), Nationaal Energie Dashboard (api.ned.nl, key NED_NL_KEY), backed by Te
   rooftop PV and DSO-connected turbines included) and as forecasts, updated about every hour and overwritten as
   delivery approaches, so only a forecast fetched live before the gate is a gate-time forecast.
 
+Energinet (DK1, DK2), Energi Data Service (api.energidataservice.dk, no key), ElectricityProdex5MinRealtime:
+  onshore + offshore wind, 5-minute upscaled SCADA values published within ~5 minutes and not corrected afterwards,
+  averaged to quarter-hours. Used for DK wind because ENTSO-E's DK1 offshore (A75 B18) is a different quantity: it
+  ran 1.2x the metered output from April 2025 to May 2026, and since July 2026 it covers only the parks registered
+  at ENTSO-E (Anholt, Horns Rev A-C, Vesterhav Nord/Syd), missing 0.3-0.5 GW of new offshore output. Prodex agrees
+  with Energinet's settlement within 1-4% (hourly, 2024 - Oct 2026). DK solar stays on ENTSO-E: Prodex solar leaves
+  out self-consumption (DK2 19% below settlement in 2026), A75 matches settlement including it.
+
 RTE (FR), Generation Forecast API v3 (key RTE_DATA_KEY = base64 client_id:client_secret): RTE's day-ahead
   ("D-1") wind (onshore + offshore) and solar forecast, published at 16:15 on D-1, after the gate. RTE has no
   earlier vintage for wind or solar, so it is a reference only.
@@ -206,6 +214,54 @@ class NedSource(Source):
         last = (pd.Timestamp(end) - pd.Timedelta("15min")).tz_localize("UTC").tz_convert(tz).date()
         s = ned.forecast(target, first, last, classification=2)
         return s[(s.index >= start) & (s.index < end)] if not s.empty else s
+
+
+class EnerginetSource(Source):
+    """DK1/DK2 wind (onshore + offshore) from Energinet's real-time production, quarter-hour means of the 5-minute
+    values (a quarter-hour needs at least 2 of its 3)."""
+    name = "energinet"
+    URL = "https://api.energidataservice.dk/dataset/ElectricityProdex5MinRealtime"
+    COLS = {"wind": ("OnshoreWindPower", "OffshoreWindPower")}
+
+    def _get(self, params: dict) -> list[dict]:
+        """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times."""
+        retries, fails, limited = (2 if self.cfg.get("_fallback") else 4), 0, 0
+        while True:
+            try:
+                r = requests.get(self.URL, params=params, timeout=120)
+                if r.status_code == 429 and limited < 6:
+                    limited += 1
+                    time.sleep(float(r.headers.get("Retry-After") or 10 * limited))
+                    continue
+                r.raise_for_status()
+                return r.json()["records"]
+            except (requests.RequestException, ValueError, KeyError) as e:
+                fails += 1
+                if fails >= retries:
+                    raise
+                log.warning("energidataservice failed (%s), retrying", e)
+                time.sleep(5 * fails)
+
+    def fetch(self, zone, target, start, end):
+        if zone not in ("DK1", "DK2") or target not in self.COLS:
+            return pd.Series(dtype=float)
+        cols = self.COLS[target]
+        rows, a = [], pd.Timestamp(start)
+        while a < end:   # a quarter of a year per request
+            b = min(pd.Timestamp(end), a + pd.Timedelta(days=92))
+            rows += self._get({"start": f"{a:%Y-%m-%dT%H:%M}", "end": f"{b:%Y-%m-%dT%H:%M}", "timezone": "UTC", "limit": 0,
+                               "filter": f'{{"PriceArea":["{zone}"]}}', "columns": "Minutes5UTC," + ",".join(cols)})
+            a = b
+        if not rows:
+            return pd.Series(dtype=float)
+        df = pd.DataFrame(rows)
+        five = pd.Series(df[list(cols)].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
+                         index=pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))).dropna().sort_index()
+        five = five[~five.index.duplicated(keep="last")]
+        q = five.resample("15min")
+        s = q.mean()[q.count() >= 2]
+        s.index.name = "time_utc"
+        return s[(s.index >= start) & (s.index < end)]
 
 
 class RteForecast:

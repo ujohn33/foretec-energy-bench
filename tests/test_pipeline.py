@@ -476,6 +476,39 @@ def test_voided_live_series_are_never_scored(cfg):
     assert c["s"]["NL_wind"] == "V" and c["why"]["NL_wind"] == "test" and c["void"] == 2
 
 
+def test_void_live_window(cfg):
+    """void_live with `from`: only issue days inside [from, through] are voided."""
+    from foretec_live.score import voided
+    cfg["void_live"] = [{"series": ["DK1_wind"], "from": "2026-10-17", "through": "2026-10-18", "reason": "w"}]
+    assert [bool(voided(d, "DK1", "wind", cfg)) for d in ("2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19")] == [False, True, True, False]
+    assert not voided("2026-10-17", "DK1", "solar", cfg)
+
+
+def test_energinet_wind_quarter_hours(cfg, monkeypatch):
+    """Energinet DK wind: onshore + offshore, 5-minute values averaged to quarter-hours (2 of 3 needed), one area only."""
+    from foretec_live.data import tso
+
+    t = pd.date_range("2026-10-01 00:00", periods=9, freq="5min")
+    rows = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", "OnshoreWindPower": 100.0 + i, "OffshoreWindPower": 50.0} for i, x in enumerate(t)]
+    del rows[4], rows[3]                                     # 00:15 quarter has only 00:25 left
+    rows[-1]["OffshoreWindPower"] = None                     # 00:40 lacks offshore: not counted
+    seen = []
+
+    class R:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"records": rows}
+
+    monkeypatch.setattr(tso.requests, "get", lambda url, params, timeout: seen.append(params) or R())
+    src = tso.EnerginetSource(cfg)
+    s = src.fetch("DK1", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-01 01:00"))
+    assert list(s.index) == [pd.Timestamp("2026-10-01 00:00"), pd.Timestamp("2026-10-01 00:30")]
+    assert s.iloc[0] == 151.0 and s.iloc[1] == 156.5        # mean of 150,151,152; of 156,157 (00:40 dropped)
+    assert seen[0]["filter"] == '{"PriceArea":["DK1"]}' and seen[0]["timezone"] == "UTC"
+    assert src.fetch("DK1", "solar", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty   # solar stays on ENTSO-E
+    assert src.fetch("NL", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty
+
+
 def test_long_history_lag_models(cfg):
     """lgbm_lags / lin_lags: trained through the end of the previous month (never the issue month), with intervals."""
     import pickle

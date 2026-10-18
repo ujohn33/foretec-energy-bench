@@ -133,6 +133,9 @@ def get_source(cfg: dict) -> Source:
     if name == "ned":
         from .tso import NedSource
         return NedSource(cfg)
+    if name == "energinet":
+        from .tso import EnerginetSource
+        return EnerginetSource(cfg)
     if name == "synthetic":
         from .synthetic import SyntheticSource
         return SyntheticSource(cfg)
