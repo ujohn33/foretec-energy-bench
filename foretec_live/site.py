@@ -295,7 +295,7 @@ def build_site(cfg) -> Path:
             for g in f.iterdir():
                 _atomic_copy(g, site / f.name / g.name)
     # cache-busting: browsers must pick up a new app.js/style.css as soon as it is deployed
-    digests = {name: hashlib.sha1((site / name).read_bytes()).hexdigest()[:10] for name in ("app.js", "style.css")}
+    digests = {name: hashlib.sha1((site / name).read_bytes()).hexdigest()[:10] for name in ("app.js", "style.css", "waitlist.js")}
     for page in WEB.glob("*.html"):
         html = (site / page.name).read_text()
         for name, digest in digests.items():

@@ -1,0 +1,30 @@
+[Unit]
+Description=Foretec Energy Bench: waiting list for the bidding competition (POST /api/waitlist, behind Caddy)
+After=network.target
+
+[Service]
+# standard library only, on the system Python; a throwaway user whose only writable path is its state directory
+ExecStart=/usr/bin/python3 -I /srv/foretec/foretec-live/foretec_live/waitlist.py
+DynamicUser=yes
+StateDirectory=foretec-waitlist
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

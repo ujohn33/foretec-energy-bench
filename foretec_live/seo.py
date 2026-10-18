@@ -33,6 +33,7 @@ PAGES = {
     "explorer.html": ("explorer.html", "Forecast Explorer"),
     "value.html": ("value.html", "Forecast Value"),
     "methodology.html": ("methodology.html", "Methodology"),
+    "compete.html": ("compete.html", "Bidding Competition"),
 }
 TARGET_LABEL = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
 AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "anthropic-ai",
