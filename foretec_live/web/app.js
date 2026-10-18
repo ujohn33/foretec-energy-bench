@@ -426,7 +426,7 @@
   }
   function updateValueSummary() {
     const phase = { live: "live", backtest: "backtest", all: "live and backtest" }[S.phase];
-    const mode = S.v.mode === "imb" ? "zone settlement" : "error cost only";
+    const mode = S.v.mode === "imb" ? "remainder at imbalance price" : "remainder as error cost";
     $("more-sum").textContent = `· ${phase} · ${mode}`;
     const zone = S.v.zone === "all" ? "All zones" : zoneLabel(S.v.zone);
     $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(S.v.model || "")}</b>`, `p${S.v.p}`, phase, mode].join(" · ");
@@ -1368,8 +1368,8 @@
   function renderValueControls(res) {
     options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
     seg($("v-mode"), [
-      { k: "err", label: "Error cost only", title: "Every deviation costs |deviation| x |imbalance price - day-ahead price|: an error never earns" },
-      { k: "imb", label: "Zone settlement", title: "Each zone's own imbalance settlement, as the asset would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
+      { k: "err", label: "Remainder as error cost", title: "The committed quantity is sold at the day-ahead price; the remainder (output minus committed) costs |remainder| x |imbalance price - day-ahead price|, so an error never earns" },
+      { k: "imb", label: "Remainder at imbalance price", title: "The committed quantity is sold at the day-ahead price; the remainder is settled at the zone's imbalance price as it would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
     ], S.v.mode, (k) => { S.v.mode = k; S.v.model = null; renderValue(); });
     seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
     const hasLive = Object.values(VAL.series).some((s) => s.phase.includes("live"));
@@ -1416,7 +1416,7 @@
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
-        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle every MWh off" : "Pay for every MWh off"}</b><span>${imb ? "short or long, at the zone's imbalance prices" : "short or long, × |imbalance − day-ahead price|"}</span></div></li>
+        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle only the remainder" : "Pay for the remainder"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the slider to see how the percentile changes the gaps</span></div></li>
       </ol>`;
   }
@@ -1505,8 +1505,8 @@
     $("v-table").onclick = (e) => { const tr = e.target.closest("tr[data-m]"); if (tr && res[tr.dataset.m].quant) { S.v.model = tr.dataset.m; renderValue(); } };
     $("v-notes").textContent = `The asset is ${VAL.asset_mw} MW in every zone: its output is the zone's actual output times ${VAL.asset_mw} MW over the installed capacity, and the forecasts are scaled the same way, so with All zones every zone counts equally. An evaluation is one zone on one delivery day with a published day-ahead price, imbalance price and final ${S.v.target} actual. ` +
       (S.v.mode === "imb"
-        ? "Zone settlement: deviations are settled under each zone's own rules, as the asset would have been paid: a surplus at the long price, a shortfall at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
-        : "Error cost only: every deviation costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
+        ? "Remainder at imbalance price: the committed quantity is sold at the day-ahead price and only the remainder is settled at the zone's imbalance price, as the asset would have been paid: a surplus at the long price, a shortfall bought back at the short price. NL publishes two prices in about half the quarter-hours (when both directions were activated; median gap EUR 66) and FR in nearly all (median gap EUR 17); BE, DE-LU, DK1 and DK2 have one price. A deviation can earn when the price is on its side of the day-ahead price, so a share can exceed 100% and the imbalance cost can be negative; over a few weeks this rests on a handful of price spikes, not on the forecast. "
+        : "Remainder as error cost: the committed quantity is sold at the day-ahead price and the remainder costs its size times the gap between the imbalance and day-ahead prices, whichever way it goes, so no forecast error ever earns and the share is at most 100%. Over a few weeks a handful of price spikes still weigh heavily, because a large error in a spike is expensive. ") +
       "Models without quantiles are ranked separately on their point forecast; a model that published quantiles on only some days shows both counts (with quantiles / all). Click a row to draw its curve.";
   }
   const q0 = (k) => new URLSearchParams(location.search).get(k);
@@ -1514,7 +1514,7 @@
     try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); }
     catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
     S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50, mode: "err" };
-    if (["imb", "dual"].includes(q0("mode"))) S.v.mode = "imb";   // dual: an earlier, stylised mode, now part of the zone settlement
+    if (["imb", "dual"].includes(q0("mode"))) S.v.mode = "imb";   // dual: an earlier, stylised mode, now the remainder at imbalance price
     const q = new URLSearchParams(location.search);
     if (q.get("zone") === "all" || D.config.zones.includes(q.get("zone"))) S.v.zone = q.get("zone");
     if (VTARGETS.includes(q.get("target"))) S.v.target = q.get("target");
