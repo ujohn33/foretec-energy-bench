@@ -33,7 +33,7 @@
     <nav class="top-nav" aria-label="Pages">
       <a href="index.html">Leaderboard</a>
       <a href="explorer.html">Forecast Explorer</a>
-      <a href="value.html" class="beta">Forecast Value<span class="beta-tag">beta</span></a>
+      <a href="value.html">Forecast Value</a>
       <a href="compete.html" class="beta on" aria-current="page">Competition<span class="beta-tag">soon</span></a>
     </nav>
   </div>
@@ -42,77 +42,24 @@
 <main class="compete">
 <section class="first">
   <div class="wrap">
-    <div class="sec-head">
-      <p class="kicker">Edition one · DK1 · waiting list open</p>
-      <h1>Forecast, bid, carry the imbalance.</h1>
-      <p class="lede">Energy Bench runs the models itself and scores how accurate they are. The bidding competition hands the
-        decision to you: you hold a notional wind asset on real European market data, commit a position before the gate,
-        revise it in intraday, and settle whatever is left at the imbalance price. Every entry is scored on the money it
-        would actually have made.</p>
-      <p class="lede">Every desk wants a proven track record, and there is nowhere to build one. Foretec editions are that
-        venue: neutral, recurring, run in public, and open to anyone rather than to one employer.</p>
-    </div>
-  </div>
-</section>
+    <p class="kicker">Edition one · DK1 · waiting list open</p>
+    <h1>Forecast, bid, carry the imbalance.</h1>
+    <p class="lede">Run a 100 MW wind farm on real DK1 market data. Ranked on the money you would have made.</p>
 
-<section>
-  <div class="wrap cgrid">
-    <div>
-      <h2>How an edition works</h2>
-      <ol class="steps">
-        <li><span class="st">01</span><div><h3>Qualify</h3>
-          <p>Bring your own data and models. The platform publishes the settled series every score is computed from, a
-          baseline model that produces a valid entry out of the box, and tutorials for the free sources. A qualifying round
-          on historical periods filters the field and opens the leaderboard.</p></div></li>
-        <li><span class="st">02</span><div><h3>Commit, daily</h3>
-          <p>Before the day-ahead gate at 12:00 on D−1, submit a position for each of the 96 quarter-hours of the delivery
-          day, and optionally your forecast quantiles. Revise the position once in intraday, one hour before delivery.
-          Submissions are timestamped and locked server-side; nobody sees the outcome before committing.</p></div></li>
-        <li><span class="st">03</span><div><h3>Settle on realised prices</h3>
-          <p>Positions settle against the published day-ahead price, the intraday index (less half the spread) and the
-          imbalance price, with a price-impact term on the imbalance leg so that deliberate imbalance does not pay. Your
-          score is the share of perfect-foresight revenue you captured, published at T+2 once imbalance prices are final.</p></div></li>
-        <li><span class="st">04</span><div><h3>Rounds and the overall table</h3>
-          <p>Twelve weeks live in six two-week rounds, each with points and a prize, plus an overall table for the main
-          prize, so one bad week does not end your edition. You compete under a pseudonym and choose when to reveal
-          yourself; you keep your code, and only your submissions are scored.</p></div></li>
-      </ol>
-    </div>
+    <ol class="ctl" aria-label="One delivery day in the competition">
+      <li><span class="ctl-dot"></span><b class="ctl-t">12:00 D−1</b><span class="ctl-h">Bid day-ahead</span><span class="ctl-s">96 quarter-hour positions, plus your forecast</span></li>
+      <li><span class="ctl-dot"></span><b class="ctl-t">H−1</b><span class="ctl-h">Revise intraday</span><span class="ctl-s">as the forecast sharpens</span></li>
+      <li><span class="ctl-dot"></span><b class="ctl-t">Delivery</b><span class="ctl-h">Carry the imbalance</span><span class="ctl-s">settled at real day-ahead, intraday and imbalance prices</span></li>
+      <li class="ctl-end"><span class="ctl-dot"></span><b class="ctl-t">T+2</b><span class="ctl-h">Score: % of perfect foresight</span><span class="ctl-s">revenue captured, on a public leaderboard</span></li>
+    </ol>
 
-    <aside class="panel efacts" aria-label="Edition one at a glance">
-      <h2>Edition one, DK1</h2>
-      <dl>
-        <dt>Asset</dt><dd>A notional 100 MW share of DK1 onshore wind, the same for everyone: Energinet's zonal output scaled to 100 MW of installed capacity</dd>
-        <dt>Storage</dt><dd>Optional 20 MW / 40 MWh co-located battery, scheduled in the same file</dd>
-        <dt>Gates</dt><dd>Day-ahead 12:00 on D−1; one intraday revision at H−1</dd>
-        <dt>Periods</dt><dd>15 minutes, 96 per delivery day</dd>
-        <dt>Value track</dt><dd>Share of perfect-foresight revenue</dd>
-        <dt>Forecast track</dt><dd>Pinball loss on your optional p10 / p50 / p90</dd>
-        <dt>The crowd</dt><dd>The median of all entries above baseline competes as its own entry on both tracks</dd>
-      </dl>
-      <p class="note">A draft for discussion: the parameters are settled with the edition's advisory board before the
-        qualifying round. <a href="https://foretec.be/#/mechanics" rel="noopener">Full mechanics on foretec.be →</a></p>
-    </aside>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <h2>What a submission looks like</h2>
-    <p class="intro">One file per gate, one row per settlement period. Only <code>position_mw</code> is required; the
-      optional columns are where an edition is won.</p>
-    <div class="panel sub-table">
-      <table class="mini">
-        <thead><tr><th>period</th><th>position_mw</th><th>battery_mw <small>optional</small></th><th>p10 <small>optional</small></th><th>p50 <small>optional</small></th><th>p90 <small>optional</small></th></tr></thead>
-        <tbody>
-          <tr><td>00:00</td><td>41.5</td><td>−2.0</td><td>28.3</td><td>43.1</td><td>61.0</td></tr>
-          <tr><td>00:15</td><td>43.0</td><td>−2.0</td><td>29.6</td><td>44.7</td><td>62.8</td></tr>
-          <tr><td>00:30</td><td>44.2</td><td>0.0</td><td>30.9</td><td>46.0</td><td>64.1</td></tr>
-          <tr><td>⋮</td><td>⋮</td><td>⋮</td><td>⋮</td><td>⋮</td><td>⋮</td></tr>
-          <tr><td>23:45</td><td>38.6</td><td>+1.0</td><td>25.2</td><td>40.3</td><td>57.9</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <ul class="chips" aria-label="Edition one">
+      <li><b>100 MW</b> DK1 onshore wind</li>
+      <li><b>+20 MW</b> battery, optional</li>
+      <li><b>6</b> two-week rounds</li>
+      <li><b>Pseudonymous</b>, you keep your code</li>
+    </ul>
+    <p class="more-link"><a href="https://foretec.be/#/mechanics" rel="noopener">Full mechanics on foretec.be →</a></p>
   </div>
 </section>
 
@@ -120,8 +67,7 @@
   <div class="wrap">
     <div class="panel join">
       <h2>Join the waiting list</h2>
-      <p class="intro">Hear when edition one opens: dates, the edition spec, sponsorship and results. At most one email a
-        month, and nothing else, ever.</p>
+      <p class="intro">Hear when edition one opens. At most one email a month.</p>
       <form id="waitlist-form" action="/api/waitlist" method="post" novalidate>
         <div class="jrow">
           <div class="field"><label for="w-email">Email</label>
@@ -136,13 +82,11 @@
         </div>
         <div class="hp" aria-hidden="true"><label for="w-website">Leave this empty</label><input id="w-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
         <label class="consent"><input id="w-consent" name="consent" type="checkbox" value="yes" required>
-          Email me about the Foretec bidding competition. I can unsubscribe at any time.</label>
+          Email me about the competition. I can unsubscribe at any time.</label>
         <button type="submit" class="btn">Join the waiting list</button>
         <p class="status" id="w-status" role="status" aria-live="polite"></p>
       </form>
-      <p class="note">Privacy: your email and the option you chose are stored on our own server in the EU, used only to
-        write to you about the competition, never shared or sold, and deleted when you ask
-        (<a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a>).</p>
+      <p class="note">Stored on our own EU server, used only for this, deleted on request (<a href="mailto:evgeny@foretec.be">evgeny@foretec.be</a>).</p>
     </div>
   </div>
 </section>
