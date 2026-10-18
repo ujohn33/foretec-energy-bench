@@ -1,4 +1,4 @@
-"""Preprint tables: pooled per-series Rel. MAE / Rel. RMSE (as on the site) and the Bradley-Terry Elo with a
+"""Preprint tables (usage: python preprint_results.py out.json [last_issue_date]): pooled per-series Rel. MAE / Rel. RMSE (as on the site) and the Bradley-Terry Elo with a
 day-bootstrap 95% interval, for the backtest and the live record. Run from /srv/foretec/foretec-live."""
 import json, sys
 import numpy as np, pandas as pd, yaml, glob
@@ -9,6 +9,7 @@ for f in glob.glob("models/*/model.yaml"):
     if y.get("hidden"): hidden.add(y.get("name", f.split("/")[1]))
 REF = {"tso_final"}
 live = pd.read_parquet("results/scores.parquet").assign(phase="live")
+live = live[live.issue_date.astype(str) <= (sys.argv[2] if len(sys.argv) > 2 else "9999")]
 bt = pd.read_parquet("results/backtest/scores.parquet").assign(phase="backtest")
 for d in (live, bt): d["issue_date"] = d["issue_date"].astype(str)
 bt = bt[~bt.issue_date.isin(set(live.issue_date))]
