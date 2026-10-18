@@ -376,16 +376,16 @@
     options($("f-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.zone);
     options($("f-target"), [{ k: "all", label: "All targets" }, ...Object.keys(D.config.targets).map((t) => ({ k: t, label: TARGET_LABEL[t] || t }))], S.target);
     const hasLive = ROWS.some((r) => r.phase === "live");
-    seg($("f-phase"), [
-      { k: "live", label: "Live", disabled: !hasLive, title: hasLive ? "" : "No live forecasts scored yet" },
-      { k: "backtest", label: "Backtest" },
-      { k: "all", label: "All" },
-    ], S.phase, (k) => { S.phase = k; renderAll(); });
+    // "Rated over": the live runs of the last 7 or 30 days or all of them, or the backtest (all its days)
     seg($("f-win"), [
-      { k: "d7", label: "Last 7 days", title: "Rated on the last 7 days up to the latest scored issue day" },
-      { k: "d30", label: "Last 30 days", title: "Rated on the last 30 days up to the latest scored issue day" },
-      { k: "all", label: "All time" },
-    ], S.win, (k) => { S.win = k; renderAll(); });
+      { k: "d7", label: "Last 7 days", disabled: !hasLive, title: "Live runs of the last 7 days up to the latest scored issue day" },
+      { k: "d30", label: "Last 30 days", disabled: !hasLive, title: "Live runs of the last 30 days up to the latest scored issue day" },
+      { k: "all", label: "All time", disabled: !hasLive, title: "Every live run" },
+      { k: "bt", label: "Backtest", title: "The backtest: every model re-run on past issue days with the data public at their cut-off" },
+    ], S.phase === "backtest" ? "bt" : S.win, (k) => {
+      if (k === "bt") { S.phase = "backtest"; S.win = "all"; } else { S.phase = "live"; S.win = k; }
+      renderAll();
+    });
     seg($("f-agg"), [
       { k: "mean", label: "Mean" }, { k: "median", label: "Median" }, { k: "gmean", label: "Geo. mean" },
     ], S.agg, (k) => { S.agg = k; renderAll(); });
@@ -413,14 +413,22 @@
   // the "More" button lists the secondary filters' state; the compact bar (while scrolling) summarises all of them
   function updateFilterSummary() {
     if (!$("f-sum-text")) return;
+    if (PAGE === "explorer") return updateExplorerSummary();
     const win = { d7: "last 7 days", d30: "last 30 days", all: "all time" }[S.win];
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const top = $("f-top-val").textContent;
     const agg = singleSeries() ? "" : { mean: "", median: "median", gmean: "geo. mean" }[S.agg];
-    const phase = { live: "Live", backtest: "Backtest", all: "Live and backtest" }[S.phase];
-    $("more-sum").textContent = "· " + [phase, cov, top, agg].filter(Boolean).join(" · ");
+    $("more-sum").textContent = "· " + [cov || "all models", top, agg].filter(Boolean).join(" · ");
     const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
-    $("f-sum-text").innerHTML = [zone, target, win[0].toUpperCase() + win.slice(1), phase, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+    const rated = S.phase === "backtest" ? "Backtest" : win[0].toUpperCase() + win.slice(1);
+    $("f-sum-text").innerHTML = [zone, target, rated, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+  }
+  function updateExplorerSummary() {
+    const cov = { all: "all models", with: "with covariates", without: "without covariates" }[S.covFilter];
+    const band = S.x.band ? `band ${S.x.band}` : "no band";
+    $("more-sum").textContent = "· " + [cov, $("x-top-val").textContent, band].join(" · ");
+    const zone = zoneLabel(S.x.zone), target = TARGET_LABEL[S.x.target] || S.x.target;
+    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(target)}</b>`, `<b>${esc(S.x.day)} → ${esc(addDays(S.x.day, 1))}</b>`, esc(cov), esc(band)].join(" · ");
   }
   function setupFilterBar() {
     const fb = document.querySelector(".filterbar"), more = $("f-more"), panel = $("more-panel");
@@ -1163,7 +1171,7 @@
         return `<td><span class="trk ${st.k} mini">${st.icon}</span> ${esc(st.label)}${actual ? `<br><small>${actual}</small>` : ""}${c.why && c.why[key] ? `<br><small class="why">${esc(c.why[key])}</small>` : ""}</td>`;
       }).join("")}</tr>`).join("")}</tbody></table></div>
       ${(d.revised || []).length ? `<p>Actuals revised after first scoring, re-scored: ${esc(d.revised.join(", "))}.</p>` : ""}
-      <p><a href="explorer.html?day=${d.d}">Open ${d.d} in the Forecast Explorer →</a></p>`;
+      ${d.phase === "live" ? `<p><a href="explorer.html?day=${d.d}">Open ${d.d} in the Forecast Explorer →</a></p>` : ""}`;
   }
 
   // ---------- forecast explorer ----------
@@ -1172,9 +1180,10 @@
     return S.days[d];
   }
   // explorer ranking: Elo over every scored day (live and backtest) for the explorer's zone and target
+  const xPhase = () => (ROWS.some((r) => r.phase === "live") ? "live" : "all");
   function explorerRanking() {
     const rows = ROWS.filter((r) => !REF.has(r.model) && r.zone === S.x.zone && r.target === S.x.target && r[S.metric] != null
-      && (S.phase === "all" || r.phase === S.phase));
+      && (xPhase() === "all" || r.phase === xPhase()));
     const e = eloScores(dayTable(rows));
     return Object.keys(e).sort((a, b) => e[b].elo - e[a].elo);
   }
@@ -1182,7 +1191,7 @@
   function renderExplorerControls() {
     if (!$("x-day")) return;
     let ds = Object.keys(D.days || {}).sort().reverse();
-    if (S.phase !== "all") ds = ds.filter((d) => D.days[d] === S.phase);
+    if (xPhase() !== "all") ds = ds.filter((d) => D.days[d] === xPhase());
     if (!ds.includes(S.x.day)) S.x.day = ds[0];
     options($("x-day"), ds.map((d) => ({ k: d, label: `${d} → ${addDays(d, 1)} · ${D.days[d]}` })), S.x.day);
     options($("x-zone"), D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) })), S.x.zone);
@@ -1256,6 +1265,7 @@
       ${(day.revisions || []).filter((r) => r.series === key).map((r) => `<span class="tag pending" title="re-fetched ${esc(String(r.checked_utc).slice(0, 16))} UTC">Actuals revised ${(100 * r.rel_change).toFixed(2)}%, re-scored</span>`).join("")}
       ${tsoNote(models, day)}`;
     // explorer legend: click a faint model to draw it in full (again to fade it); click a leading or TSO model to hide it
+    updateFilterSummary();
     const ld = $("l-day");
     ld.innerHTML = (ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>${actualLabel}</span>` : "") +
       models.map((m) => `<button type="button" data-m="${esc(m)}" class="${full(m) ? "" : "faint"}" aria-pressed="${!S.hidden.has(m)}"
@@ -1527,7 +1537,9 @@
     const hasLive = ROWS.some((r) => r.phase === "live");
     S.phase = hasLive ? "live" : "backtest";
     loadFilters();
-    if (!["live", "backtest", "all"].includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
+    // "live and backtest together" is no longer offered: the leaderboard rates live runs or the backtest
+    const phases = PAGE === "leaderboard" ? ["live", "backtest"] : ["live", "backtest", "all"];   // Forecast Value keeps "All"
+    if (!phases.includes(S.phase) || (S.phase === "live" && !hasLive)) S.phase = hasLive ? "live" : "backtest";
     if (!METRICS.some((m) => m.k === S.metric)) S.metric = "rel_mae";
     if (!(S.win in WINDOWS)) S.win = "all";
     if (!(S.agg in AGGS)) S.agg = "mean";
@@ -1558,14 +1570,12 @@
       if (S.target !== "all" && S.target in D.config.targets) S.x.target = S.target;
       S.xTop = S.topN;
       const q = new URLSearchParams(location.search);   // deep links: explorer.html?day=2026-10-03&zone=BE&target=wind
-      if (q.get("day") && D.days && D.days[q.get("day")]) { S.x.day = q.get("day"); if (S.phase !== "all" && D.days[S.x.day] !== S.phase) S.phase = "all"; }
+      if (q.get("day") && D.days && (xPhase() === "all" || D.days[q.get("day")] === xPhase())) S.x.day = q.get("day");   // live days only
       if (D.config.zones.includes(q.get("zone"))) S.x.zone = q.get("zone");
       if (q.get("target") in D.config.targets) S.x.target = q.get("target");
       const changed = () => { S.zone = S.x.zone; S.target = S.x.target; S.topN = S.xTop; saveFilters();
         history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
       const segs = () => {
-        seg($("x-phase"), [{ k: "live", label: "Live", disabled: !hasLive }, { k: "backtest", label: "Backtest" }, { k: "all", label: "All" }], S.phase,
-          (k) => { S.phase = k; segs(); renderExplorerControls(); changed(); renderExplorerChart(); });
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
           (k) => { S.covFilter = k; segs(); changed(); renderExplorerChart(); });
       };
@@ -1576,6 +1586,7 @@
       on("x-band", "onchange", (e) => { S.x.band = e.target.value; renderExplorerChart(); });
       on("x-top", "oninput", (e) => { S.xTop = +e.target.value; changed(); renderExplorerChart(); });
       on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
+      setupFilterBar();
       renderExplorerControls();
       changed();
       renderExplorerChart();

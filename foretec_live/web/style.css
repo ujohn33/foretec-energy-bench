@@ -125,7 +125,7 @@ header.top{border-bottom:1px solid var(--rule); background:var(--ground); positi
 /* ---------- filters ---------- */
 .filterbar{position:sticky; top:78px; z-index:15; background:var(--ground); border-bottom:1px solid var(--rule)}
 @media(max-width:820px){ .filterbar{position:static} html{scroll-padding-top:90px} }
-.filters{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 22px; padding-top:12px; padding-bottom:12px}
+.filters{display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 28px; padding-top:16px; padding-bottom:16px}
 .field{display:grid; gap:6px}
 label,.lbl{font-size:.8rem; font-weight:600; color:var(--ink2)}
 select{
@@ -153,7 +153,7 @@ select:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var
 /* ---------- sections (foretec.be) ---------- */
 section{padding:52px 0; border-top:1px solid var(--rule)}
 #standings{border-top:0; padding-top:40px}
-.sec-head{margin-bottom:18px}
+.sec-head{margin-bottom:22px}
 .sec-head .lede{margin-top:12px; max-width:66ch; font-size:1rem}
 .sec-head.row{display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap}
 .sub-h{margin-top:52px; margin-bottom:18px}
@@ -363,13 +363,28 @@ section.first{border-top:0; padding-top:48px}
 @media(max-width:600px){
   /* phones: logo on the first row, the page links on a second row */
   .top-in{height:auto; flex-wrap:wrap; row-gap:8px; padding-top:12px; padding-bottom:10px}
-  .mark{font-size:1.45rem}
+  .top-in{row-gap:10px; padding-top:14px; padding-bottom:8px}
+  .mark{font-size:1.7rem}
   .brand{gap:11px}
-  .brand-rule{height:1.35rem}
-  .product{font-size:1.25rem}
+  .brand-rule{height:1.5rem}
+  .product{font-size:1.4rem}
   .onair{font-size:.6rem; padding:3px 6px; gap:5px}
-  .top-nav{width:100%; gap:20px}
-  .top-nav a{font-size:.86rem}
+  /* the page links stay on one line, scrolling sideways if the phone is too narrow */
+  .top-nav{width:100%; gap:18px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px}
+  .top-nav::-webkit-scrollbar{display:none}
+  .top-nav a{font-size:.8rem; white-space:nowrap; flex:none}
+  .beta-tag{font-size:.58rem; padding:1px 4px; margin-left:4px}
+  /* filters: two columns, smaller controls, the rest full width */
+  .filters{display:grid; grid-template-columns:1fr 1fr; gap:12px 12px; padding-top:14px; padding-bottom:14px}
+  .filters .field:nth-child(n+3){grid-column:1/-1}
+  .filters select{width:100%; min-width:0; font-size:.86rem; padding:6px 28px 6px 9px}
+  label,.lbl{font-size:.74rem}
+  .seg button{font-size:.8rem; padding:5px 9px}
+  .more-btn{width:100%; justify-content:flex-start; height:32px; font-size:.84rem}
+  .more-btn i{margin-left:auto}
+  .more-panel{gap:12px; padding-bottom:14px}
+  .range input[type=range]{width:120px}
+  section{padding:40px 0}
 }
 
 /* reference entries: listed below the ranking, never ranked */
@@ -415,7 +430,7 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 .more-btn i,.fsum i{font-style:normal; font-size:.75rem; color:var(--ink2); transition:transform .15s}
 .more-btn[aria-expanded="true"] i{transform:rotate(180deg)}
 .more-btn:focus-visible,.fsum:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
-.more-panel{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 22px; padding-bottom:14px}
+.more-panel{display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 28px; padding-bottom:18px}
 .more-panel[hidden]{display:none}
 .fsum-row{display:none}
 .fsum{display:flex; align-items:center; gap:10px; width:100%; padding:9px 0; background:none; border:0; color:var(--ink); font:inherit; font-size:.9rem; text-align:left; cursor:pointer}
@@ -436,3 +451,6 @@ tr.m1 td.pos span{background:#E3B341} tr.m2 td.pos span{background:#C3CCD6} tr.m
 .bar em .ci::before,.bar em .ci::after{content:""; position:absolute; top:-4px; height:7px; border-left:1px solid var(--ink2)}
 .bar em .ci::before{left:0} .bar em .ci::after{right:0}
 td.empty{padding:22px 16px; color:var(--ink2)}
+.more-btn{max-width:100%; overflow:hidden}
+.more-btn .more-sum{min-width:0; overflow:hidden; text-overflow:ellipsis}
+.fsum span{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}

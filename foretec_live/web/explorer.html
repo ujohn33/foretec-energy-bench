@@ -42,23 +42,22 @@
   <div class="wrap filters" role="group" aria-label="Filters">
     <div class="field"><label for="x-zone">Zone</label><select id="x-zone"></select></div>
     <div class="field"><label for="x-target">Target</label><select id="x-target"></select></div>
-    <div class="field"><span class="lbl">Period</span><div class="seg" id="x-phase" role="radiogroup" aria-label="Period"></div></div>
+    <div class="field"><label for="x-day">Issue day</label><select id="x-day"></select></div>
+    <div class="field"><button type="button" class="more-btn" id="f-more" aria-expanded="false" aria-controls="more-panel">More <span class="more-sum" id="more-sum"></span><i aria-hidden="true">▾</i></button></div>
+  </div>
+  <div class="wrap more-panel" id="more-panel" role="group" aria-label="More filters" hidden>
     <div class="field"><span class="lbl">Covariates</span><div class="seg" id="x-cov" role="radiogroup" aria-label="Covariates"></div></div>
     <div class="field"><label for="x-top">Models</label><div class="range"><input type="range" id="x-top" min="1" max="20" value="10" step="1"><span id="x-top-val" class="mono">Top 10</span></div></div>
-    <div class="field"><label for="x-day">Issue day</label><select id="x-day"></select></div>
     <div class="field"><label for="x-band">Band</label><select id="x-band"></select></div>
-    <div class="status mono">
-      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST</span>
-      <span>Updated <span id="updated">–</span> · data ENTSO-E</span>
-      <span class="key"><i class="k-bt"></i>Backtest <i class="k-live"></i>Live</span>
-    </div>
   </div>
+  <div class="wrap fsum-row"><button type="button" class="fsum" id="f-sum" aria-label="Show the filters"><span id="f-sum-text"></span><i aria-hidden="true">▾</i></button></div>
 </div>
 
 <section id="forecasts" class="first">
   <div class="wrap">
     <div class="sec-head">
       <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="f2" d="M12 12.5L21 5.5v14z" stroke="none"/><path d="M3 15.5l3-3.5 3 2.2 3-1.7"/><path d="M12 12.5h9" stroke-dasharray="2 2.4"/><circle class="a" cx="12" cy="12.5" r="2"/></svg>Forecast explorer</h2>
+      <p class="meta mono">Live runs · cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · updated <span id="updated">–</span> · data ENTSO-E · <a href="methodology.html">Methodology</a></p>
     </div>
     <div class="panel chart-panel" id="x-card">
       <div class="x-meta mono" id="x-meta"></div>
