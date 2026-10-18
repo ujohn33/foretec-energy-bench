@@ -12,6 +12,7 @@
 \usepackage{booktabs}
 \usepackage{threeparttable}
 \usepackage{tabularx}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing}
@@ -47,7 +48,9 @@ later. Foretec Energy Bench removes the question by running every entry live. Ea
 minutes before the single day-ahead coupling (SDAC) gate closes, every model forecasts the next delivery day's
 day-ahead price, wind generation, solar generation and total load on the 15-minute market grid for six bidding zones
 (BE, NL, FR, DE-LU, DK1, DK2), from data that was public at that moment, including frozen numerical weather prediction
-(NWP) runs. A forecast that is not locked before the gate is never scored. Actuals come from the transmission system
+(NWP) runs. Unlike existing live benchmarks, it runs every model itself on that one frozen, published information
+set, so foundation models are compared with and without the same weather covariates under a real market deadline. A
+forecast that is not locked before the gate is never scored. Actuals come from the transmission system
 operators' (TSOs') publications with recorded provenance, explicit completeness rules and a revision check. Models
 are compared on errors pooled per series relative to a same-quarter-hour-last-week baseline, and ranked by a
 Bradley--Terry rating of all pairwise comparisons on the Elo scale, with a confidence interval from resampling issue
@@ -97,47 +100,65 @@ Retrospective energy studies also often leave the information set implicit: seve
 ENTSO-E's day-ahead wind and solar forecasts as inputs although those are published only after 18:00 on $D-1$, six
 hours after the auction closes~\cite{energyarena}.
 
-\paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome exists.
+\paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome exists, and each
+leaves open a question that Energy Bench is built to answer.
+
 TS-Arena~\cite{tsarena} implements a forecast pre-registration protocol for time-series foundation models: a round
 hands out each series' history up to its last published value and closes registration before the next value is
 recorded. Its 14 challenges draw on SMARD (German day-ahead price, load and generation), Gridstatus (US ISO hub
 prices, load and generation) and Fingrid (Finland), at 15-minute resolution with a one-day horizon and hourly with a
-three-day horizon, from a 1{,}000-step context and without covariates. Models are scored by MASE and ranked by an
-online Elo rating whose interval comes from replaying the rounds in random order. Because each round starts at the
-last published value, the window follows each source's publication delay rather than the market: a German price
-forecast registered on day $X$ starts after the delivery day that cleared on $X$, so it covers a later day than the
-next auction needs, and the generation and load windows do not align with a delivery day at all. Energy-Arena~\cite{energyarena}
-is an open, API-based platform for operational energy forecasting whose challenges are defined by their market deadline:
-day-ahead price, wind, solar and load for Austria and Germany-Luxembourg, submitted before 12:00 CET on $D-1$ for the
-whole next day, as point (RMSE), quantile (weighted interval score) or ensemble (CRPS) forecasts, with leaderboards over
-rolling windows. Participants run their own models and may use any information available before the deadline,
-including proprietary weather; since that cannot be verified, the platform records self-declared metadata instead.
-In industry, the Predico platform~\cite{predico} scores live renewable forecasts submitted to Elia and 50Hertz
-against a real gate, for enrolled forecasters and without publishing their inputs.
+three-day horizon, from a 1{,}000-step context. Models are scored by MASE and ranked by an online Elo rating whose
+interval comes from replaying the rounds in random order. Two features limit what its rankings say about energy
+forecasting. \emph{First, there are no covariates}: the foundation models forecast wind, solar and load from the
+series' own history, without the weather forecast that any operational forecaster of those quantities would use, so
+the benchmark measures a task no market participant faces, and a model's ability to exploit covariates, which in our
+results halves the error of the same models (Section~\ref{sec:results}), is not measured at all. \emph{Second, the
+information set is not tied to a market gate}: each round starts at the last published value, so the window follows
+each source's publication delay rather than the market. A German price forecast registered on day $X$ starts after the
+delivery day that cleared on $X$ and covers a later day than the next auction needs, and the generation and load
+windows do not align with a delivery day at all. What a forecaster could have known at a decision time is therefore
+not defined, and no forecast corresponds to a bid that could have been placed.
 
-\paragraph{Positioning.} Energy Bench shares Energy-Arena's operational framing (the day-ahead gate defines the task)
-and TS-Arena's view that only a forecast made before the outcome exists is free of leakage. It differs from both in
-one respect that drives the rest of the design: the benchmark runs every model itself, on one information set that it
-fetches at the cut-off, freezes and publishes. The information set is therefore enforced rather than declared, every
-entry sees the same weather, and any forecast can be reproduced from its archived inputs. The price is that entries
-must be submitted as code rather than forecasts. Table~\ref{tab:compare} summarises the differences; Energy Bench adds
-the grid operators' own forecasts as references and a revenue-based view of forecast value.
+Energy-Arena~\cite{energyarena} is an open, API-based platform whose challenges are defined by their market deadline:
+forecasts are submitted before 12:00 CET on $D-1$ for the whole next day, as point (RMSE), quantile (weighted interval
+score) or ensemble (CRPS) forecasts, with leaderboards over rolling windows. It is gate-aligned, but it compares
+\emph{submissions}, not models under common conditions. Participants run their own models on any inputs they have,
+including proprietary weather, and describe them only if they choose to; they may also keep their forecasts hidden.
+Since the information set cannot be verified, a difference on the leaderboard may reflect better data rather than a
+better method, and entries cannot be reproduced. The platform names no reference models, so whether foundation models
+are represented at all depends on who submits; and its wind, solar and load challenges cover only Austria and
+Germany-Luxembourg (day-ahead prices extend to thirteen further zones). In industry, the Predico
+platform~\cite{predico} scores live renewable forecasts submitted to Elia and 50Hertz against a real gate, for
+enrolled forecasters and without publishing their inputs.
+
+\paragraph{Positioning.} Energy Bench takes Energy-Arena's operational framing (the day-ahead gate defines the task)
+and TS-Arena's pre-registration logic (only a forecast made before the outcome exists is free of leakage), and closes
+the gaps between them by running every model itself. Each day it fetches one information set at the gate-aligned
+cut-off, freezes and publishes it, and gives it to every entry: the information set is enforced rather than declared,
+and any forecast can be reproduced from its archived inputs. Foundation models enter both without and with the same
+frozen covariates, so the value of the weather is measured model by model rather than assumed away; all four targets
+are forecast in six zones; and the grid operators' own forecasts, before and after the gate, serve as references. The
+price is that entries are submitted as code rather than as forecasts, and proprietary data cannot be used.
+Table~\ref{tab:compare} summarises the differences.
 
 \begin{table}[t]
 \centering\small
-\caption{Live energy forecasting benchmarks compared (as described in their papers and documentation).}
+\caption{Live energy forecasting benchmarks compared, as described in their papers and on their websites (October 2026).}
 \label{tab:compare}
-\begin{tabularx}{\linewidth}{@{}p{2.6cm}XXX@{}}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.7cm}YYY@{}}
 \toprule
 & TS-Arena~\cite{tsarena} & Energy-Arena~\cite{energyarena} & Energy Bench (this paper) \\
 \midrule
-Task timing & from each series' last published value & before the day-ahead gate, whole next day & 11:30 cut-off, locked before the 12:00 gate, whole next day \\
-Series & 14 challenges (SMARD, Gridstatus, Fingrid) & price, wind, solar, load; AT, DE-LU & price, wind, solar, load; BE, NL, FR, DE-LU, DK1, DK2 \\
+Task timing & from each series' last published value; no market gate & submission before the 12:00 day-ahead gate, whole next day & 11:30 cut-off, locked before the 12:00 gate, whole next day \\
+Zones and targets & 14 challenges (SMARD, Gridstatus, Fingrid) & wind, solar, load: AT, DE-LU; price: 15 zones & price, wind, solar, load in each of BE, NL, FR, DE-LU, DK1, DK2 \\
 Who runs models & participants (containers) & participants (API submissions) & the benchmark, from submitted code \\
-Information set & series history only & anything available before the gate, self-declared & frozen public set: history, three NWP models, load forecast, fuel \\
+Information set & series history only & anything before the gate; self-declared, unverified & frozen and published: history, three NWP models, load forecast, fuel \\
+Covariates for foundation models & none & if a participant adds them & every foundation model with and without the same covariates \\
+Foundation models & the focus of the field & none named; depends on submissions & eleven families \\
+Transparency & platform code public & method description and forecasts optional & code, inputs and forecasts public \\
 Scores & MASE & RMSE, WIS, CRPS & MAE, RMSE, bias, pinball; relative to seasonal naive, pooled per series \\
 Ranking & online Elo, replay bootstrap & per metric over rolling windows & Bradley--Terry Elo, day bootstrap \\
-References & statistical baselines & optional benchmark models & baselines and the TSOs' forecasts before and after the gate \\
+References & statistical baselines & optional benchmark models & baselines; the TSOs' forecasts before and after the gate \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -382,6 +403,7 @@ deciles, context, baseline, backtest window, sources, admission lags) is version
 the benchmark. Backtest and live results are always shown apart.
 
 \section{Results to date}
+\label{sec:results}
 
 \subsection{Backtest, 14 September -- 1 October 2026}
 
