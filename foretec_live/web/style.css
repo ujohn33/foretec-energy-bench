@@ -541,8 +541,10 @@ td.empty{padding:22px 16px; color:var(--ink2)}
 .qa p + p,.qa ul + p,.qa .formula + p,.qa p + .formula{margin-top:8px}
 .qa ul{margin:4px 0 0; padding-left:18px; display:grid; gap:4px}
 .qa b{color:var(--ink); font-weight:600}
-.formula{margin:8px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--blue);
-  font-family:var(--serif); font-style:italic; font-size:1rem; color:var(--ink); overflow-x:auto; white-space:nowrap}
+.formula{margin:10px 0; padding:4px 16px; background:var(--surface); border:1px solid var(--rule); border-radius:2px;
+  color:var(--ink); overflow-x:auto; overflow-y:hidden; font-size:1.02rem}
+.formula .katex-display{margin:.7em 0}
+.qa p.where{font-size:.84rem; color:var(--ink2); margin:-2px 0 8px}
 .verdict{display:inline; color:var(--ink); font-weight:600}
 .cards3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:2px 0 10px}
 .cards3 > div{background:var(--surface); border:1px solid var(--rule); border-radius:2px; padding:12px 14px; display:grid; gap:4px}

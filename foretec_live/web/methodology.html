@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="vendor/leaflet-1.9.4.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&text=LIVE&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@500&text=0123456789&display=swap">
+<link rel="stylesheet" href="vendor/katex-0.16.11.min.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-page="methodology">
@@ -114,24 +115,25 @@
         <div class="qa"><h3>What is the baseline?</h3>
           <p><span data-k="baseline">naive_weekly</span>: the same quarter-hour one week earlier. Its quantiles are a normal band around that value, one width all day, set by the typical week-on-week change, so it is an easy baseline for interval scores.</p></div>
         <div class="qa"><h3>What is Rel. MAE?</h3>
-          <div class="formula">Rel. MAE = Σ |ŷ − y| ⁄ Σ |ŷ<sub>base</sub> − y|</div>
+          <div class="formula" data-tex="\text{Rel. MAE} = \dfrac{\displaystyle\sum_t \lvert \hat y_t - y_t \rvert}{\displaystyle\sum_t \lvert \hat y^{\,\text{base}}_t - y_t \rvert}"></div>
           <p>Per series (zone and target), all of a model's errors in the period are pooled first, then divided by the baseline's on the same days. <span class="verdict">Lower is better; below 1 beats the baseline.</span></p></div>
         <div class="qa"><h3>What is Rel. RMSE?</h3>
-          <div class="formula">Rel. RMSE = √( Σ (ŷ − y)² ⁄ Σ (ŷ<sub>base</sub> − y)² )</div>
+          <div class="formula" data-tex="\text{Rel. RMSE} = \sqrt{\dfrac{\displaystyle\sum_t (\hat y_t - y_t)^2}{\displaystyle\sum_t (\hat y^{\,\text{base}}_t - y_t)^2}}"></div>
           <p>The same with squared errors, so large misses (price spikes, wind ramps) weigh more. <span class="verdict">Lower is better.</span></p></div>
         <div class="qa"><h3>What is WIS?</h3>
-          <div class="formula">WIS = ( ½ |y − q<sub>50</sub>| + Σ<sub>k</sub> α<sub>k</sub>⁄2 · IS<sub>α<sub>k</sub></sub> ) ⁄ (K + ½)</div>
+          <div class="formula" data-tex="\begin{gathered}\text{WIS} = \frac{1}{K + \frac{1}{2}} \left( \frac{1}{2}\,\lvert y - q_{0.5} \rvert + \sum_{k=1}^{K} \frac{\alpha_k}{2}\, \text{IS}_{\alpha_k} \right) \\[6pt] \text{IS}_{\alpha} = (u - l) + \frac{2}{\alpha}(l - y)^{+} + \frac{2}{\alpha}(y - u)^{+}\end{gathered}"></div>
+          <p class="where">q<sub>τ</sub>: the forecast's τ-quantile; [l, u]: a central interval; (x)<sup>+</sup> = max(x, 0).</p>
           <p>The weighted interval score of the 10–90%, 20–80%, 30–70% and 40–60% intervals and the median (K = 4); with these quantiles it equals twice the average pinball loss. It rewards a band that is both narrow and calibrated. Rel. WIS divides it by the baseline's, per series, like Rel. MAE. <span class="verdict">Lower is better.</span></p></div>
         <div class="qa"><h3>What is the Winkler score?</h3>
-          <div class="formula">IS<sub>0.2</sub> = (u − l) + 10 · max(l − y, 0) + 10 · max(y − u, 0)</div>
+          <div class="formula" data-tex="\text{Winkler}_{80} = (q_{0.9} - q_{0.1}) + 10\,(q_{0.1} - y)^{+} + 10\,(y - q_{0.9})^{+}"></div>
           <p>The interval score of the 10–90% interval [l, u]: its width plus ten times any miss outside it. <span class="verdict">Lower is better.</span></p></div>
         <div class="qa"><h3>What is coverage?</h3>
-          <div class="formula">Coverage 80% = share of quarter-hours with q<sub>10</sub> ≤ y ≤ q<sub>90</sub></div>
+          <div class="formula" data-tex="\text{Coverage}_{80} = \frac{1}{n} \sum_{t=1}^{n} \mathbf{1}\{\, q_{0.1,t} \le y_t \le q_{0.9,t} \,\}"></div>
           <p>A calibrated forecast covers 80%; less means overconfident, more means too wide. A diagnostic, not a ranking. <span class="verdict">Closest to 80% is best.</span></p></div>
         <div class="qa"><h3>How are several series combined?</h3>
           <p>When the filters select more than one zone or target, the per-series ratios are combined by their mean, median or geometric mean (the Across series switch). The mean is moved by a series where a model is very good or very bad, the median says whether it wins on most series, the geometric mean treats halving and doubling alike.</p></div>
         <div class="qa" id="elo"><h3>What is the Elo score?</h3>
-          <p>A race is one issue day and one series; in each race every pair of models plays one game, won by the lower Rel. MAE (a tie splits the game). All games of the period are fitted at once with a Bradley–Terry model, as on the Chatbot Arena leaderboard, and shown on the Elo scale: 1000 is the field's average, and 400 points more means 10:1 odds of winning a game. A win over a strong model counts more than a win over a weak one, and the order of the races does not matter. <span class="verdict">Higher is better.</span></p></div>
+          <p>A race is one issue day and one series; in each race every pair of models plays one game, won by the lower Rel. MAE (a tie splits the game). All games of the period are fitted at once with a Bradley–Terry model, as on the Chatbot Arena leaderboard, and shown on the Elo scale: 1000 is the field's average, and 400 points more means 10:1 odds of winning a game. A win over a strong model counts more than a win over a weak one, and the order of the races does not matter. <span class="verdict">Higher is better.</span></p><div class="formula" data-tex="P(\text{A beats B}) = \frac{1}{1 + 10^{(E_B - E_A)/400}}"></div></div>
         <div class="qa"><h3>What does the 95% interval mean?</h3>
           <p>How much the Elo score would move with a different set of days: the fit is repeated 200 times on issue days drawn with replacement (whole days, since all races of a day share the weather). Overlapping intervals mean the order of two models is not settled yet. On the leaderboard it is the whisker on each Elo bar.</p></div>
         <div class="qa"><h3>What is the average rank?</h3>
@@ -159,7 +161,8 @@
         <h2><span class="st">5</span>Forecast value</h2>
         <div class="qa"><h3>What does the Forecast Value page measure?</h3>
           <p>What a wind or solar forecast earns the producer who sells on it. A virtual 100 MW asset in each zone produces like the zone's whole fleet, scaled down by installed capacity, so every zone counts equally. Before the gate it sells a fixed percentile of a model's forecast at the day-ahead price.</p>
-          <div class="formula">Score = revenue ⁄ perfect-foresight revenue (actual output sold at the day-ahead price)</div></div>
+          <div class="formula" data-tex="\text{Score} = \dfrac{\displaystyle\sum_t \left( c_t\, p^{\text{DA}}_t - \text{cost}_t(y_t - c_t) \right)}{\displaystyle\sum_t y_t\, p^{\text{DA}}_t}"></div>
+          <p class="where">c<sub>t</sub>: quantity sold day-ahead; y<sub>t</sub>: actual output; p<sup>DA</sup><sub>t</sub>: day-ahead price; cost<sub>t</sub>: what the error costs under the chosen settlement.</p></div>
         <div class="qa"><h3>How is the error settled?</h3>
           <ul>
             <li><b>Error as missed income at DA</b> (default): each MWh off costs |imbalance price − day-ahead price|, whichever way it goes, so an error never earns and the score is at most 100%.</li>
@@ -216,6 +219,7 @@
 <div class="tip" id="tip" role="tooltip"></div>
 <script src="vendor/chart-4.4.1.umd.min.js"></script>
 <script src="vendor/leaflet-1.9.4.js"></script>
+<script src="vendor/katex-0.16.11.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

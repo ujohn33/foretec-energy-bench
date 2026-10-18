@@ -1682,6 +1682,10 @@
       matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderValue);
     }
     if (PAGE === "methodology") {
+      // formulas: TeX in data-tex, typeset with the self-hosted KaTeX
+      if (window.katex) document.querySelectorAll(".formula[data-tex]").forEach((el) => {
+        try { katex.render(el.dataset.tex, el, { displayMode: true, throwOnError: false }); } catch (e) { el.textContent = el.dataset.tex; }
+      });
       renderTimeline();
       renderCentroids();
       renderModels();
