@@ -399,10 +399,14 @@
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
       { k: "without", label: "Without", title: "Models that only see the target's own history, plus the benchmarks (baselines and the grid operators' forecasts)" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
-    if ($("f-cols")) seg($("f-cols"), [
-      { k: "key", label: "Key columns" },
-      { k: "all", label: "All columns", title: "Also the 95% interval, MAE, RMSE, WIS, Winkler 80%, coverage 80%, best and worst day" },
-    ], S.details ? "all" : "key", (k) => { S.details = k === "all"; renderAll(); });
+    // a quiet text toggle: the key columns by default, the rest on request
+    if ($("f-cols")) {
+      const fc = $("f-cols");
+      fc.textContent = S.details ? "Fewer columns" : "All columns";
+      fc.setAttribute("aria-pressed", String(S.details));
+      fc.title = S.details ? "Back to the key columns" : "Also the 95% interval, MAE, RMSE, WIS, Winkler 80%, coverage 80%, best and worst day";
+      fc.onclick = () => { S.details = !S.details; renderAll(); };
+    }
     updateFilterSummary();
     seg($("f-view"), [
       { k: "rank", label: "Avg rank", tip: "rank" },

@@ -483,3 +483,8 @@ td.empty{padding:22px 16px; color:var(--ink2)}
 .sw-band{background:var(--blue-soft)} .sw-sold{height:0; border-top:2.4px solid var(--ink); margin-top:10px}
 .sw-act{height:0; border-top:2.4px solid var(--blue); margin-top:10px}
 .sw-short{background:var(--onair); opacity:.45} .sw-surplus{background:var(--green); opacity:.5}
+
+.linkbtn{background:none; border:0; padding:2px 0; font:inherit; font-size:.82rem; color:var(--ink2); cursor:pointer;
+  text-decoration:underline; text-decoration-color:var(--rule); text-underline-offset:.2em; align-self:flex-end}
+.linkbtn:hover{color:var(--ink); text-decoration-color:var(--ink2)}
+.linkbtn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
