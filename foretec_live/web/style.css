@@ -521,3 +521,40 @@ td.empty{padding:22px 16px; color:var(--ink2)}
 .filterbar.compact .pslider{padding-top:2px; padding-bottom:10px}
 #v-table td small{color:var(--ink2); font-size:.76rem; margin-left:4px}
 #v-table td small.po{text-transform:uppercase; letter-spacing:.04em; font-size:.66rem}
+
+/* methodology: FAQ layout with an "On this page" index */
+.mgrid{display:grid; grid-template-columns:200px minmax(0,1fr); gap:48px; align-items:start}
+.toc{position:sticky; top:100px; display:grid; gap:2px; font-size:.86rem}
+.toc-h{margin:0 0 8px; font-size:.74rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink2)}
+.toc a{display:flex; gap:10px; align-items:center; padding:6px 8px; border-radius:2px; color:var(--ink2); text-decoration:none}
+.toc a:hover{background:var(--raise); color:var(--ink)}
+.toc a span{display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; border:1px solid var(--rule); font-family:var(--mono); font-size:.7rem; flex:none}
+.faq{max-width:760px}
+.faq-sec{padding:6px 0 30px; scroll-margin-top:100px}
+.faq-sec + .faq-sec{border-top:1px solid var(--rule); padding-top:28px}
+.faq-sec h2{display:flex; align-items:center; gap:12px; margin-bottom:14px}
+.faq-sec h2 .st{display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--ground);
+  font-family:var(--mono); font-style:normal; font-size:.8rem; font-weight:400; flex:none}
+.qa{padding:12px 0; scroll-margin-top:100px}
+.qa h3{font-family:var(--sans); font-style:normal; font-size:1rem; font-weight:600; letter-spacing:0; color:var(--ink); margin:0 0 6px}
+.qa p,.qa li{color:var(--ink2); font-size:.94rem; line-height:1.6; margin:0}
+.qa p + p,.qa ul + p,.qa .formula + p,.qa p + .formula{margin-top:8px}
+.qa ul{margin:4px 0 0; padding-left:18px; display:grid; gap:4px}
+.qa b{color:var(--ink); font-weight:600}
+.formula{margin:8px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--blue);
+  font-family:var(--serif); font-style:italic; font-size:1rem; color:var(--ink); overflow-x:auto; white-space:nowrap}
+.verdict{display:inline; color:var(--ink); font-weight:600}
+.cards3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:2px 0 10px}
+.cards3 > div{background:var(--surface); border:1px solid var(--rule); border-radius:2px; padding:12px 14px; display:grid; gap:4px}
+.cards3 b{font-size:.9rem; color:var(--ink)} .cards3 span{font-size:.82rem; color:var(--ink2); line-height:1.45}
+table.mini{border-collapse:collapse; margin:4px 0 8px; font-size:.9rem; width:100%}
+table.mini th{text-align:left; vertical-align:top; padding:6px 14px 6px 0; color:var(--ink); font-weight:600; white-space:nowrap; background:none; border-bottom:1px solid var(--rule); font-size:.86rem; text-transform:none; letter-spacing:0}
+table.mini tr:last-child th{border-bottom:0}
+table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--rule); white-space:normal} table.mini tr:last-child td{border-bottom:0}
+.faq details{border-top:1px solid var(--rule); padding:10px 0}
+.faq details:last-child{border-bottom:1px solid var(--rule)}
+.faq summary{cursor:pointer; font-weight:600; color:var(--ink); font-size:.96rem; list-style:none; display:flex; justify-content:space-between; gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+"; font-family:var(--mono); color:var(--ink2)} .faq details[open] summary::after{content:"−"}
+.faq details p{margin-top:8px; color:var(--ink2); font-size:.92rem; line-height:1.6}
+@media(max-width:860px){ .mgrid{grid-template-columns:1fr; gap:0} .toc{display:none} .cards3{grid-template-columns:1fr} }
