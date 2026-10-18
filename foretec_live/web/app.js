@@ -430,7 +430,7 @@
   }
   function updateValueSummary() {
     const rated = S.phase === "backtest" ? "Backtest" : { d7: "Last 7 days", d30: "Last 30 days", all: "All time" }[S.win];
-    const mode = S.v.mode === "imb" ? "error at imbalance price" : "error as missed income";
+    const mode = S.v.mode === "imb" ? "error at imbalance price" : "error as missed income at DA";
     $("more-sum").textContent = `· ${mode}`;
     const zone = S.v.zone === "all" ? "All zones" : zoneLabel(S.v.zone);
     $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(rated)}</b>`, esc(S.v.model || ""), `p${S.v.p}`, mode].join(" · ");
@@ -1333,7 +1333,7 @@
   // default, it scores the forecast), "imb" = the zone's own settlement: its long and short imbalance prices, two
   // prices where the TSO publishes two (NL, FR), one elsewhere; what the asset would have been paid, gains included
   const VSFX = () => (S.v.mode === "imb" ? "" : "e");
-  const costLabel = () => (S.v.mode === "imb" ? "Imbalance cost" : "Missed income");
+  const costLabel = () => (S.v.mode === "imb" ? "Imbalance cost" : "Missed income at DA");
   const pct = (v, d = 1) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(d) + "%");
   function valueSeries() {
     return Object.entries(VAL.series).filter(([k]) => {
@@ -1397,7 +1397,7 @@
   function renderValueControls(res) {
     options($("v-zone"), [{ k: "all", label: "All zones" }, ...D.config.zones.map((z) => ({ k: z, label: zoneLabel(z) }))], S.v.zone);
     seg($("v-mode"), [
-      { k: "err", label: "Error as missed income", title: "The committed quantity is sold at the day-ahead price; the error (output minus committed) costs |error| x |imbalance price - day-ahead price| in missed income, so an error never earns" },
+      { k: "err", label: "Error as missed income at DA", title: "The committed quantity is sold at the day-ahead price; the error (output minus committed) costs |error| x |imbalance price - day-ahead price| in missed income, so an error never earns" },
       { k: "imb", label: "Error at imbalance price", title: "The committed quantity is sold at the day-ahead price; the error is settled at the zone's imbalance price as it would have been paid: separate long and short prices where the TSO publishes two (NL, FR), one price in BE, DE-LU, DK1 and DK2" },
     ], S.v.mode, (k) => { S.v.mode = k; S.v.model = null; renderValue(); });
     seg($("v-target"), VTARGETS.map((t) => ({ k: t, label: TARGET_LABEL[t] })), S.v.target, (k) => { S.v.target = k; S.v.model = null; renderValue(); });
@@ -1453,7 +1453,7 @@
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
-        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle the error at the imbalance price" : "Miss income on the error"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
+        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle the error at the imbalance price" : "Miss income at DA on the error"}</b><span>${imb ? "what you produce above or below what you sold, at the zone's long or short imbalance price" : "what you produce above or below what you sold, × |imbalance − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
   }
