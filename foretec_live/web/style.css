@@ -595,7 +595,11 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
   .ctl li{padding:0 0 0 34px}
 }
 /* waiting-list form */
-.join{padding:24px 26px; max-width:760px}
+.hero-join .wrap{max-width:820px}
+.hero-join h1,.hero-join .lede,.hero-join .kicker{text-align:center; margin-left:auto; margin-right:auto}
+.join{padding:30px 32px; max-width:680px; margin:36px auto 0; border-top:3px solid var(--green)}
+.join h2{font-size:1.6rem}
+.compete h2.how{font-size:1.3rem; margin-bottom:0}
 .jrow{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px}
 .join input[type=email]{font:inherit; padding:9px 11px; border:1px solid var(--rule); border-radius:2px; background:var(--surface); color:var(--ink); width:100%; box-sizing:border-box}
 .join input[type=email]:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var(--blue)}
@@ -607,3 +611,12 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
 .join .status{min-height:1.4em; margin:12px 0 0; font-size:.92rem}
 .join .status.ok{color:var(--green)} .join .status.err{color:var(--red, #D7263D)}
 @media (max-width: 760px){ .jrow{grid-template-columns:1fr} }
+.join .btn{width:100%; padding:13px 18px; font-size:1rem}
+/* header: four page links no longer fit beside the logo below ~880px, so they move to their own row there too */
+.top-nav a{white-space:nowrap}
+@media(max-width:880px){
+  .top-in{height:auto; flex-wrap:wrap; row-gap:10px; padding-top:14px; padding-bottom:8px}
+  .top-nav{width:100%; gap:22px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px}
+  .top-nav::-webkit-scrollbar{display:none}
+  .top-nav a{flex:none}
+}
