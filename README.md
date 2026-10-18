@@ -175,4 +175,4 @@ results/               forecasts, scores.parquet, leaderboard.csv (not in git)
 site/                  generated website (not in git)
 ```
 
-Apache-2.0.
+Code: Apache-2.0. Data and scores published on the site (forecasts, actuals as scored, scores, standings): [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

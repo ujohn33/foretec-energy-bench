@@ -560,3 +560,9 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
 .faq summary::after{content:"+"; font-family:var(--mono); color:var(--ink2)} .faq details[open] summary::after{content:"−"}
 .faq details p{margin-top:8px; color:var(--ink2); font-size:.92rem; line-height:1.6}
 @media(max-width:860px){ .mgrid{grid-template-columns:1fr; gap:0} .toc{display:none} .cards3{grid-template-columns:1fr} }
+
+/* plain-HTML summary of the standings, written at build time for crawlers and AI agents (seo.py) */
+.snapshot{margin:8px auto 40px; color:var(--ink2); font-size:14px}
+.snapshot summary{cursor:pointer; color:var(--ink2)}
+.snapshot table{border-collapse:collapse; margin:10px 0; font-size:13px}
+.snapshot th,.snapshot td{padding:3px 12px 3px 0; text-align:left; border-bottom:1px solid var(--rule)}
