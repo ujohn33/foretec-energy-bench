@@ -1,6 +1,6 @@
 # Foretec Energy Bench
 
-**Live site: [energybench.foretec.co](https://energybench.foretec.co)** · [Leaderboard](https://energybench.foretec.co/) · [Forecast Explorer](https://energybench.foretec.co/explorer.html) · [Forecast Value](https://energybench.foretec.co/value.html) · [Methodology](https://energybench.foretec.co/methodology.html) · Data: [standings (CSV)](https://energybench.foretec.co/leaderboard.csv), [all scores (JSON)](https://energybench.foretec.co/data/summary.json), [overview for AI agents (llms.txt)](https://energybench.foretec.co/llms.txt)
+**Live site: [energybench.foretec.co](https://energybench.foretec.co)** · [Leaderboard](https://energybench.foretec.co/) · [Forecast Explorer](https://energybench.foretec.co/explorer.html) · [Forecast Value](https://energybench.foretec.co/value.html) · [Methodology](https://energybench.foretec.co/methodology.html) · Data: [standings (CSV)](https://energybench.foretec.co/leaderboard.csv), [all scores (JSON)](https://energybench.foretec.co/data/summary.json), [overview for AI agents (llms.txt)](https://energybench.foretec.co/llms.txt), [full dataset on Hugging Face](https://huggingface.co/datasets/ujohn33/foretec-energy-bench)
 
 The live benchmark for energy forecasts: an open, daily benchmark of forecasting models on European power markets, built on [sktime](https://www.sktime.net) 1.2. (The Python package and command keep their working names, `foretec_live` and `foretec-live`.)
 
