@@ -504,3 +504,9 @@ td.empty{padding:22px 16px; color:var(--ink2)}
   body:not([data-page="methodology"]) :is(.sec-head .intro, .sec-head .meta, .sec-head .lede, .st-notes, .x-meta, #l-tracker, .vx-steps span, .vscale, .more-sum) {display:none}
   .foot > span{display:none}
 }
+/* phones: switches in the filter bar span the width, equal parts, long labels wrap instead of overflowing */
+@media(max-width:600px){
+  .filterbar .seg{display:flex; width:100%}
+  .more-panel > .field{flex:1 1 100%}
+  .filterbar .seg button{flex:1 1 0; min-width:0; white-space:normal; line-height:1.25; text-align:center; padding:6px 6px}
+}
