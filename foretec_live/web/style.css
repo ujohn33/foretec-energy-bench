@@ -457,3 +457,29 @@ td.empty{padding:22px 16px; color:var(--ink2)}
 .more-btn{max-width:100%; overflow:hidden}
 .more-btn .more-sum{min-width:0; overflow:hidden; text-overflow:ellipsis}
 .fsum span{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+/* forecast value: explainer diagram instead of a paragraph */
+.vexplain{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:10px 28px; align-items:center; padding:18px 22px; margin-bottom:22px}
+@media(max-width:760px){ .vexplain{grid-template-columns:1fr; padding:14px} }
+.vx-svg{width:100%; height:auto; display:block}
+.vx-grid{stroke:var(--grid); stroke-width:1}
+.vx-ax{font-family:var(--mono); font-size:10px; fill:var(--ink2)}
+.vx-band{fill:var(--blue-soft)}
+.vx-sold{fill:none; stroke:var(--ink); stroke-width:2.2; transition:d .25s}
+.vx-act{fill:none; stroke:var(--blue); stroke-width:2.2; stroke-linejoin:round}
+.vx-gap{stroke:none} .vx-short{fill:var(--onair); fill-opacity:.28} .vx-surplus{fill:var(--green); fill-opacity:.3}
+.vexplain.anim .vx-act{stroke-dasharray:1; stroke-dashoffset:1; animation:vx-draw 1.8s ease-out .2s forwards}
+.vexplain.anim .vx-gap{opacity:0; animation:vx-fade .6s ease-out 1.7s forwards}
+@keyframes vx-draw{to{stroke-dashoffset:0}} @keyframes vx-fade{to{opacity:1}}
+.vx-steps{list-style:none; margin:0; padding:0; display:grid; gap:12px; counter-reset:vx}
+.vx-steps li{display:flex; align-items:flex-start; gap:8px; counter-increment:vx}
+.vx-steps li::before{content:counter(vx); flex:none; width:20px; height:20px; border-radius:50%; background:var(--raise); border:1px solid var(--rule);
+  display:grid; place-items:center; font-family:var(--mono); font-size:.72rem; color:var(--ink2); margin-right:2px}
+.vx-steps li.vx-score::before{content:"="; background:var(--ink); color:var(--ground); border-color:var(--ink)}
+.vx-steps div{display:grid; gap:1px; min-width:0}
+.vx-steps b{font-size:.92rem; font-weight:600; color:var(--ink)}
+.vx-steps span{font-size:.82rem; color:var(--ink2); line-height:1.4}
+.sw{flex:none; display:inline-block; width:14px; height:10px; margin-top:5px; border-radius:2px}
+.sw-band{background:var(--blue-soft)} .sw-sold{height:0; border-top:2.4px solid var(--ink); margin-top:10px}
+.sw-act{height:0; border-top:2.4px solid var(--blue); margin-top:10px}
+.sw-short{background:var(--onair); opacity:.45} .sw-surplus{background:var(--green); opacity:.5}

@@ -414,6 +414,7 @@
   function updateFilterSummary() {
     if (!$("f-sum-text")) return;
     if (PAGE === "explorer") return updateExplorerSummary();
+    if (PAGE === "value") return updateValueSummary();
     const win = { d7: "last 7 days", d30: "last 30 days", all: "all time" }[S.win];
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const top = $("f-top-val").textContent;
@@ -422,6 +423,13 @@
     const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
     const rated = S.phase === "backtest" ? "Backtest" : win[0].toUpperCase() + win.slice(1);
     $("f-sum-text").innerHTML = [zone, target, rated, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+  }
+  function updateValueSummary() {
+    const phase = { live: "live", backtest: "backtest", all: "live and backtest" }[S.phase];
+    const mode = S.v.mode === "imb" ? "zone settlement" : "error cost only";
+    $("more-sum").textContent = `· ${phase} · ${mode}`;
+    const zone = S.v.zone === "all" ? "All zones" : zoneLabel(S.v.zone);
+    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(S.v.model || "")}</b>`, `p${S.v.p}`, phase, mode].join(" · ");
   }
   function updateExplorerSummary() {
     const cov = { all: "all models", with: "with covariates", without: "without covariates" }[S.covFilter];
@@ -1370,6 +1378,48 @@
     const ms = MODELS.filter((m) => res[m] && res[m].quant);
     options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${m} (ref)` : m })), S.v.model);
   }
+  // explainer diagram: one stylised day of a 100 MW asset. The forecast band (p10-p90), the percentile sold day-ahead
+  // (it follows the slider), the actual output, and the gaps that are settled at the imbalance price.
+  const VZ = { 10: -1.282, 15: -1.036, 20: -0.842, 25: -0.674, 30: -0.524, 35: -0.385, 40: -0.253, 45: -0.126, 50: 0, 55: 0.126, 60: 0.253,
+    65: 0.385, 70: 0.524, 75: 0.674, 80: 0.842, 85: 1.036, 90: 1.282 };
+  const VHOURS = Array.from({ length: 25 }, (_, t) => t);
+  const vMed = VHOURS.map((t) => 46 + 18 * Math.sin((2 * Math.PI * (t - 5)) / 24) + 7 * Math.sin((2 * Math.PI * t) / 9));
+  const vAct = VHOURS.map((t, i) => Math.max(2, vMed[i] + 13 * Math.sin((2 * Math.PI * t) / 7 + 1) + 6 * Math.sin((2 * Math.PI * t) / 3.3)));
+  const vSd = vMed.map((m) => 7 + 0.18 * m);
+  let vAnimated = false;
+  function renderExplainer() {
+    const el = $("v-explain");
+    if (!el) return;
+    const W = 440, H = 196, x0 = 34, x1 = 420, y0 = 20, y1 = 174;
+    const X = (t) => x0 + ((x1 - x0) * t) / 24, Y = (v) => y1 - ((y1 - y0) * Math.min(100, Math.max(0, v))) / 100;
+    const line = (vals) => vals.map((v, t) => `${t ? "L" : "M"}${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+    const lo = vMed.map((m, i) => m + VZ[10] * vSd[i]), hi = vMed.map((m, i) => m + VZ[90] * vSd[i]);
+    const sold = vMed.map((m, i) => m + VZ[S.v.p] * vSd[i]);
+    const band = line(hi) + VHOURS.slice().reverse().map((t) => `L${X(t).toFixed(1)},${Y(lo[t]).toFixed(1)}`).join("") + "Z";
+    const gap = line(vAct) + VHOURS.slice().reverse().map((t) => `L${X(t).toFixed(1)},${Y(sold[t]).toFixed(1)}`).join("") + "Z";
+    const above = line(sold) + `L${x1},${y0 - 4}L${x0},${y0 - 4}Z`, below = line(sold) + `L${x1},${y1}L${x0},${y1}Z`;
+    const imb = S.v.mode === "imb";
+    const mw = (VAL && VAL.asset_mw) || 100;
+    el.classList.toggle("anim", !vAnimated);
+    vAnimated = true;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="vx-svg" aria-hidden="true">
+        <defs><clipPath id="vx-up"><path d="${above}"/></clipPath><clipPath id="vx-dn"><path d="${below}"/></clipPath></defs>
+        ${[0, 50, 100].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" class="vx-grid"/><text x="${x0 - 6}" y="${Y(v) + 4}" class="vx-ax" text-anchor="end">${v}</text>`).join("")}
+        ${[0, 6, 12, 18, 24].map((t) => `<text x="${X(t)}" y="${H - 6}" class="vx-ax" text-anchor="middle">${String(t).padStart(2, "0")}:00</text>`).join("")}
+        <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">MW</text>
+        <path d="${band}" class="vx-band"/>
+        <path d="${gap}" class="vx-gap vx-short" clip-path="url(#vx-dn)"/>
+        <path d="${gap}" class="vx-gap vx-surplus" clip-path="url(#vx-up)"/>
+        <path d="${line(sold)}" class="vx-sold"/>
+        <path d="${line(vAct)}" class="vx-act" pathLength="1"/>
+      </svg>
+      <ol class="vx-steps">
+        <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
+        <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
+        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle every MWh off" : "Pay for every MWh off"}</b><span>${imb ? "short or long, at the zone's imbalance prices" : "short or long, × |imbalance − day-ahead price|"}</span></div></li>
+        <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the slider to see how the percentile changes the gaps</span></div></li>
+      </ol>`;
+  }
   function renderValue() {
     if (!VAL) return;
     const res = valueTotals();
@@ -1381,6 +1431,8 @@
     renderValueControls(res);
     $("v-p").value = String(S.v.p);
     $("v-p-h").textContent = "p" + S.v.p;
+    renderExplainer();
+    updateFilterSummary();
     const m = S.v.model, r = m && res[m];
     if (!r) {
       $("v-table").innerHTML = '<tbody><tr><td class="empty">No priced and scored days for this selection yet.</td></tr></tbody>';
@@ -1459,7 +1511,7 @@
   }
   const q0 = (k) => new URLSearchParams(location.search).get(k);
   async function initValue() {
-    try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); $("v-mw").textContent = VAL.asset_mw || 100; }
+    try { VAL = await (await fetch("data/value.json", { cache: "no-cache" })).json(); }
     catch (e) { $("v-table").innerHTML = '<tbody><tr><td class="empty">Value data is not available yet.</td></tr></tbody>'; return; }
     S.v = { zone: S.zone !== "all" && D.config.zones.includes(S.zone) ? S.zone : "all", target: VTARGETS.includes(S.target) ? S.target : "wind", model: null, p: 50, mode: "err" };
     if (["imb", "dual"].includes(q0("mode"))) S.v.mode = "imb";   // dual: an earlier, stylised mode, now part of the zone settlement
@@ -1471,6 +1523,7 @@
     $("v-zone").onchange = (e) => { S.v.zone = e.target.value; renderValue(); };
     $("v-model").onchange = (e) => { S.v.model = e.target.value; renderValue(); };
     $("v-p").oninput = (e) => { S.v.p = +e.target.value; renderValue(); };
+    setupFilterBar();
     renderValue();
   }
 

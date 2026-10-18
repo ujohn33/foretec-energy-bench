@@ -43,22 +43,23 @@
   <div class="wrap filters" role="group" aria-label="Filters">
     <div class="field"><label for="v-zone">Zone</label><select id="v-zone"></select></div>
     <div class="field"><span class="lbl">Target</span><div class="seg" id="v-target" role="radiogroup" aria-label="Target"></div></div>
+    <div class="field"><label for="v-model">Model</label><select id="v-model"></select></div>
+    <div class="field"><button type="button" class="more-btn" id="f-more" aria-expanded="false" aria-controls="more-panel">More <span class="more-sum" id="more-sum"></span><i aria-hidden="true">▾</i></button></div>
+  </div>
+  <div class="wrap more-panel" id="more-panel" role="group" aria-label="More filters" hidden>
     <div class="field"><span class="lbl">Period</span><div class="seg" id="v-phase" role="radiogroup" aria-label="Period"></div></div>
     <div class="field"><span class="lbl">Errors settled</span><div class="seg" id="v-mode" role="radiogroup" aria-label="How deviations are settled"></div></div>
-    <div class="field"><label for="v-model">Model</label><select id="v-model"></select></div>
-    <div class="status mono">
-      <span>Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · <a href="methodology.html#value">Methodology</a></span>
-      <span>Updated <span id="updated">–</span> · prices ENTSO-E</span>
-    </div>
   </div>
+  <div class="wrap fsum-row"><button type="button" class="fsum" id="f-sum" aria-label="Show the filters"><span id="f-sum-text"></span><i aria-hidden="true">▾</i></button></div>
 </div>
 
 <section id="value" class="first">
   <div class="wrap">
     <div class="sec-head">
       <h2><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20.5h18"/><path d="M4 16c3-7 6-9 8-9s5 2 8 9"/><circle class="a" cx="12" cy="7" r="2.1"/></svg>How much do you sell day-ahead?</h2>
-      <p class="lede" id="v-lede">You own a <span id="v-mw">100</span> MW wind or solar asset that produces like its zone's whole fleet, scaled down. Before the 12:00 gate you sell a percentile of a model's forecast on the day-ahead market; whatever you produce above or below it costs you its size times the gap between the imbalance and the day-ahead price. The score is the share of the perfect-foresight revenue you keep.</p>
+      <p class="meta mono">Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · updated <span id="updated">–</span> · prices ENTSO-E · <a href="methodology.html#value">Methodology</a></p>
     </div>
+    <div class="panel vexplain" id="v-explain" role="img" aria-label="How the score works: sell a percentile of the forecast day-ahead, produce what the weather gives, pay for the gap; the score is the share of the perfect-foresight revenue kept"></div>
     <div class="panel vcard">
       <div class="chart-box"><canvas id="c-value" aria-label="Captured share of perfect-foresight revenue by committed percentile"></canvas></div>
       <div class="legend" id="l-value"></div>
