@@ -1,0 +1,14 @@
+{
+  "title": "Foretec Energy Bench: a live, gate-aligned benchmark of day-ahead forecasts for European power markets",
+  "upload_type": "software",
+  "description": "<p>An open, live benchmark for day-ahead electricity forecasting. Every day before the 12:00 day-ahead auction gate, every model forecasts each quarter-hour of the next delivery day for price, wind, solar and load in BE, NL, FR, DE-LU, DK1 and DK2 from one frozen set of public inputs (history, numerical weather predictions, the ENTSO-E load forecast, fuel prices), and is scored against the grid operators' actuals.</p><p>Live leaderboard: <a href=\"https://energybench.foretec.co\">energybench.foretec.co</a>. Code under Apache-2.0; the published forecasts and scores under CC BY 4.0.</p>",
+  "creators": [
+    {"name": "Genov, Evgenii", "affiliation": "Foretec; Vrije Universiteit Brussel"}
+  ],
+  "license": "Apache-2.0",
+  "keywords": ["energy forecasting", "electricity price forecasting", "wind power forecasting", "solar power forecasting",
+               "load forecasting", "time series foundation models", "benchmark", "day-ahead market"],
+  "related_identifiers": [
+    {"identifier": "https://energybench.foretec.co", "relation": "isDocumentedBy", "resource_type": "other"}
+  ]
+}
