@@ -72,6 +72,12 @@
   let USES_COV = {};
   let REF = new Set();   // reference entries (published after the gate): shown, never ranked
   let CAVEAT = {};       // model -> caveat from model.yaml: the name gets a star that explains it
+  // one line per ensemble for its tag's tooltip (the full description is in the models table)
+  const ENS_SHORT = {
+    ens_fm: "Median of five history-only foundation models.",
+    ens_fm_cov: "Median of five foundation models with covariates.",
+    ens_hybrid: "Median of the five covariate foundation models and lgbm_prod.",
+  };
   const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "")
     + (ENS.has(m) ? `<span class="ens-tag" data-tip="ens:${esc(m)}" tabindex="0">ens</span>` : "");
   // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
@@ -612,7 +618,7 @@
     cover: () => ["Coverage 80%", "Share of quarter-hours with the actual inside the 10-90% interval. A calibrated forecast covers 80%; less is overconfident, more is too wide. Sorted by the distance from 80%."],
     relr: () => ["Rel. RMSE", `Like Rel. MAE with squared errors: per series sqrt(sum of squared errors / the baseline's), on the same days. Large misses weigh more. ${aggText()} Lower is better.`],
     nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts. Relative errors of models with different series are averaged over different sets, so compare them with care."],
-    ens: () => ["Ensembles", "Entries that combine other models' forecasts: per quarter-hour, the median of a fixed set of members. ens_fm: five history-only foundation models; ens_fm_cov: their covariate variants; ens_hybrid: those plus lgbm_prod. Excluded (the default), they also leave the races, so no other model's score depends on them."],
+    ens: () => ["Ensembles", "Medians of other models' forecasts. Excluded by default: then they also leave the races."],
     agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when several zones or targets are selected."],
     rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
     mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
@@ -629,7 +635,7 @@
   let tipAnchor = null, tipTimer = null, lastPointer = "mouse";
   function showTip(el) {
     const key = el && el.dataset.tip, cav = key && key.startsWith("caveat:") && key.slice(7);
-    const em = key && key.startsWith("ens:") && key.slice(4), ed = em && D && (D.models.find((x) => x.name === em) || {}).description;
+    const em = key && key.startsWith("ens:") && key.slice(4), ed = em && ENS_SHORT[em];
     const tip = $("tip"), g = el && (GLOSS[key] || (cav && CAVEAT[cav] ? () => [`${cav} *`, CAVEAT[cav]] : null) || (ed ? () => [`${em} · ensemble`, ed] : null));
     if (!tip || !g || !D) return;
     const [title, body] = g();
