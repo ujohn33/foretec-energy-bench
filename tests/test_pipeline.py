@@ -663,3 +663,29 @@ def test_live_runs_never_train(cfg):
     assert runs and all(r["status"] != "ok" for r in runs)
     assert "no trained model" in runs[0].get("detail", "")
     assert not (Path(cfg["_root"]) / "data" / "models" / "lin_lags").exists()
+
+
+def test_ensemble_median_of_members(tmp_path):
+    """Ensembles: median per quarter-hour of point and each quantile, sorted; one member short is tolerated, two not."""
+    from foretec_live.registry import ModelSpec
+    from foretec_live.run import run_ensemble
+    idx = pd.date_range("2026-10-20", periods=4, freq="15min")
+    qs = [0.1, 0.5, 0.9]
+
+    def member(name, level, series=(("BE", "wind"), ("NL", "solar"))):
+        rows = [pd.DataFrame({"issue_date": "2026-10-19", "model": name, "zone": z, "target": t, "delivery_utc": idx,
+                              "point": level, "q0.1": level - 1, "q0.5": level, "q0.9": level + 1}) for z, t in series]
+        pd.concat(rows).to_parquet(tmp_path / f"{name}.parquet", index=False)
+
+    member("a", 1.0); member("b", 2.0); member("c", 10.0); member("d", 3.0, series=(("BE", "wind"),))
+    spec = ModelSpec(name="ens", folder=tmp_path, raw={"runner": "ensemble", "members": ["a", "b", "c", "d"]})
+    rows, out = run_ensemble(spec, tmp_path, idx, qs)
+    st = {(r["zone"], r["target"]): r for r in rows}
+    be = out[(out.zone == "BE") & (out.target == "wind")]
+    assert np.allclose(be["point"], 2.5) and np.allclose(be["q0.9"], 3.5)        # median of 1, 2, 3, 10
+    nl = out[(out.zone == "NL") & (out.target == "solar")]
+    assert np.allclose(nl["point"], 2.0) and st[("NL", "solar")]["detail"] == "missing d"   # 3 of 4: still combined
+    member("c", 10.0, series=(("BE", "wind"),))                                    # NL solar now has 2 of 4
+    rows, out = run_ensemble(spec, tmp_path, idx, qs)
+    assert {(r["zone"], r["target"]): r["status"] for r in rows}[("NL", "solar")] == "error"
+    assert set(zip(out.zone, out.target)) == {("BE", "wind")}

@@ -1,0 +1,7 @@
+name: ens_fm
+author: Foretec
+description: "Ensemble: per quarter-hour, the median of five history-only foundation models, the newest of each family that also has a native-covariate variant (chronos2, timesfm3, t0_gamma, tirex2, timestral); the point forecast and each quantile are combined separately. Members fixed by that rule, not by score."
+family: ensemble
+inputs: [history]
+runner: ensemble
+members: [chronos2, timesfm3, t0_gamma, tirex2, timestral]

@@ -151,6 +151,8 @@ select:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var
 .seg button:hover{color:var(--ink); background:var(--raise)}
 .seg button[aria-checked="true"]{background:var(--ink); color:var(--ground)}
 .seg.off{opacity:.5}
+.chk{display:inline-flex; align-items:center; gap:6px; min-height:30px; cursor:pointer; color:var(--ink2); white-space:nowrap}
+.chk input{margin:0; accent-color:var(--ink)}
 .seg.off button{cursor:not-allowed}
 .seg.off button:disabled{opacity:1}
 .seg button[aria-checked="true"]:disabled{background:var(--raise); color:var(--ink)}

@@ -345,7 +345,10 @@ def build_site(cfg) -> Path:
                        "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
                        "reference": bool(r.get("reference")), "live_only": bool(r.get("live_only")),
                        "caveat": r.get("caveat", ""),
-                       "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess" else (r.get("estimator") or r.get("module", ""))})
+                       "ensemble": r.get("runner") == "ensemble", "members": r.get("members", []),
+                       "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess"
+                       else f"ensemble · median of {len(r['members'])}" if r.get("runner") == "ensemble"
+                       else (r.get("estimator") or r.get("module", ""))})
     summary = {
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
         "config": {

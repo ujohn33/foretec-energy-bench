@@ -230,10 +230,13 @@ def cmd_pretrain(cfg, args):
 
 def cmd_backfill(cfg, args):
     src = get_source(cfg)
+    # ensembles alone need no snapshot: they combine the members' forecasts already on disk
+    from .registry import load_models
+    ens_only = bool(args.models) and all(s.raw.get("runner") == "ensemble" for s in load_models(paths(cfg)["models"], args.models))
     d = args.start
     while d <= args.end:
         targets = args.targets or (sorted({s.split("_")[1] for s in args.series}) if args.series else None)
-        snaps = take_snapshot(d, cfg, source=src, save=False, targets=targets)
+        snaps = None if ens_only else take_snapshot(d, cfg, source=src, save=False, targets=targets)
         run_forecasts(d, cfg, results_subdir="results/backtest", only_models=args.models, snapshots=snaps, source=src,
                       targets=args.targets, series=args.series)
         logging.info("backfilled %s", d)

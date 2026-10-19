@@ -13,6 +13,7 @@ from pathlib import Path
 import traceback
 import warnings
 
+import numpy as np
 import pandas as pd
 from sktime.forecasting.base import ForecastingHorizon
 
@@ -165,17 +166,6 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
     series: the same for single series, as "ZONE_target" (e.g. a series whose source changed)."""
     p = paths(cfg, results_subdir)
     started = str(pd.Timestamp.now(tz="UTC"))
-    snaps = snapshots if snapshots is not None else take_snapshot(issue_date, cfg, source=source, targets=targets)
-    if targets:
-        snaps = {k: v for k, v in snaps.items() if k[1] in targets}
-    if series:
-        snaps = {k: v for k, v in snaps.items() if f"{k[0]}_{k[1]}" in series}
-    merge = bool(targets or series)
-    in_subset = (lambda z, t: (not targets or t in targets) and (not series or f"{z}_{t}" in series))
-    fh_index = delivery_index(issue_date, cfg)
-    outdir = p["forecasts"] / str(issue_date)
-    outdir.mkdir(parents=True, exist_ok=True)
-    log_rows = []
     live = results_subdir == "results"
     specs = []
     for spec in load_models(p["models"], only_models):
@@ -187,6 +177,25 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         if live and spec.raw.get("live") is False:   # backtested, not yet run live (e.g. too slow for the gate)
             continue
         specs.append(spec)
+    # ensembles combine the members' stored forecasts of the day, so they run after every other model
+    ensembles = [sp for sp in specs if sp.raw.get("runner") == "ensemble"]
+    specs = [sp for sp in specs if sp.raw.get("runner") != "ensemble"]
+    if snapshots is not None:
+        snaps = snapshots
+    elif specs:
+        snaps = take_snapshot(issue_date, cfg, source=source, targets=targets)
+    else:   # ensembles only (e.g. one added later): nothing to fetch, the members' forecasts are on disk
+        snaps = {}
+    if targets:
+        snaps = {k: v for k, v in snaps.items() if k[1] in targets}
+    if series:
+        snaps = {k: v for k, v in snaps.items() if f"{k[0]}_{k[1]}" in series}
+    merge = bool(targets or series)
+    in_subset = (lambda z, t: (not targets or t in targets) and (not series or f"{z}_{t}" in series))
+    fh_index = delivery_index(issue_date, cfg)
+    outdir = p["forecasts"] / str(issue_date)
+    outdir.mkdir(parents=True, exist_ok=True)
+    log_rows = []
     # covariates: built once per issue day, before the models run, if any model asks for more than its own history
     covariates = None
     needs_cov = lambda sp: sp.raw.get("runner") == "subprocess" and set(sp.raw.get("inputs", ["history"])) - {"history", "calendar"}
@@ -267,12 +276,24 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
     else:
         for spec in specs:
             log_rows += run_one(spec)
+    for spec in ensembles:
+        rows, out = run_ensemble(spec, outdir, fh_index, cfg["quantiles"], in_subset if merge else None)
+        log_rows += rows
+        if out is not None:
+            target_f = outdir / f"{spec.name}.parquet"
+            if merge and target_f.exists():
+                old = pd.read_parquet(target_f)
+                mine = [in_subset(z, t) for z, t in zip(old["zone"], old["target"])]
+                out = pd.concat([old[[not m for m in mine]], out], ignore_index=True)
+            out.insert(0, "model", spec.name)
+            out.insert(0, "issue_date", str(issue_date))
+            out.to_parquet(target_f, index=False)
     meta = {
         "issue_date": str(issue_date),
         "run_started_utc": started,
         "issue_time_utc": str(issue_timestamp(issue_date, cfg)),
         "run_finished_utc": str(pd.Timestamp.now(tz="UTC")),
-        "series": [f"{z}_{t}" for z, t in snaps],
+        "series": [f"{z}_{t}" for z, t in snaps] or sorted({f"{r['zone']}_{r['target']}" for r in log_rows if "zone" in r}),
         "runs": log_rows,
     }
     f = outdir / ("_reference.json" if reference_run else "_run.json")
@@ -290,6 +311,49 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         meta["runs"] = [r for r in old.get("runs", []) if r["model"] not in rerun] + meta["runs"]
     f.write_text(json.dumps(meta, indent=1))
     return meta
+
+
+def run_ensemble(spec, outdir: Path, fh_index: pd.DatetimeIndex, quantiles, in_subset=None):
+    """An ensemble: per series and delivery quarter-hour, the median of its members' forecasts of the same issue day
+    (point and each quantile separately, quantiles then sorted). Members are fixed in model.yaml (`members`); a series
+    is combined when at least `min_members` of them (default all but one) delivered it in full, else it is not
+    forecast. Returns (log rows, forecast frame or None)."""
+    members = list(spec.raw["members"])
+    need = int(spec.raw.get("min_members", len(members) - 1))
+    qcols = [f"q{a:.1f}" for a in quantiles]
+    frames = {}
+    for m in members:
+        f = outdir / f"{m}.parquet"
+        if f.exists():
+            frames[m] = pd.read_parquet(f)
+    keys = sorted({(z, t) for fr in frames.values() for z, t in zip(fr["zone"], fr["target"])
+                   if spec.applies(z, t) and (in_subset is None or in_subset(z, t))})
+    rows, out = [], []
+    for zone, target in keys:
+        t0 = time.time()
+        got = {}
+        for m, fr in frames.items():
+            sub = fr[(fr["zone"] == zone) & (fr["target"] == target)].set_index("delivery_utc").reindex(fh_index)
+            if len(sub) and sub["point"].notna().all():
+                got[m] = sub
+        missing = [m for m in members if m not in got]
+        if len(got) < need:
+            rows.append({"model": spec.name, "zone": zone, "target": target, "status": "error", "seconds": 0.0,
+                         "detail": f"{len(got)} of {len(members)} members delivered (need {need}); missing {', '.join(missing)}"})
+            continue
+        df = pd.DataFrame({"delivery_utc": fh_index,
+                           "point": pd.concat([g["point"] for g in got.values()], axis=1).median(axis=1).to_numpy()})
+        qs = {c: pd.concat([g[c] for g in got.values() if c in g and g[c].notna().all()], axis=1) for c in qcols}
+        if all(len(v.columns) for v in qs.values()):
+            qv = np.sort(np.column_stack([qs[c].median(axis=1).to_numpy() for c in qcols]), axis=1)
+            for j, c in enumerate(qcols):
+                df[c] = qv[:, j]
+        df.insert(0, "target", target)
+        df.insert(0, "zone", zone)
+        out.append(df)
+        rows.append({"model": spec.name, "zone": zone, "target": target, "status": "ok", "seconds": round(time.time() - t0, 2),
+                     "detail": f"missing {', '.join(missing)}" if missing else ""})
+    return rows, (pd.concat(out, ignore_index=True) if out else None)
 
 
 def pretrain(issue_date, cfg, only_models=None) -> list[str]:

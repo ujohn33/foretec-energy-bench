@@ -11,7 +11,7 @@
   const zoneLabel = (z) => (D.config && D.config.zone_labels && D.config.zone_labels[z]) || z;   // DE -> DE-LU
   const TARGET_LABEL = { price: "Day-ahead price", wind: "Wind", solar: "Solar", load: "Load" };
   const S = {
-    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", xTop: 10, xPin: new Set(), pin: new Set(), details: false, sort: { k: "pos", dir: 1 },
+    zone: "all", target: "all", metric: "rel_mae", phase: null, win: "all", agg: "mean", view: "rank", topN: 10, covFilter: "all", ens: false, xTop: 10, xPin: new Set(), pin: new Set(), details: false, sort: { k: "pos", dir: 1 },
     hidden: new Set(), charts: {}, days: {}, x: { day: null, zone: "BE", target: "price", band: null },
   };
   let D = null;        // summary.json
@@ -75,14 +75,19 @@
   const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "");
   // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
   const isBench = (m) => FAM[m] === "baseline" || FAM[m] === "tso";
-  const inField = (m) => REF.has(m) || S.covFilter === "all" || isBench(m) || (S.covFilter === "with") === !!USES_COV[m];
+  // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
+  // they also leave the races, so every other model's score is what it would be without them
+  let ENS = new Set();
+  const inEns = (m) => S.ens || !ENS.has(m);
+  const inField = (m) => inEns(m) && (REF.has(m) || S.covFilter === "all" || isBench(m) || (S.covFilter === "with") === !!USES_COV[m]);
   function filteredRows(metric = S.metric, refs = false) {
     return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
   // the races are run over the whole field: the covariate filter only chooses which models are shown, so a
-  // model's score is the same under All, With and Without (zone and target choose which races count)
+  // model's score is the same under All, With and Without (zone and target choose which races count); only the
+  // ensembles checkbox changes the field
   function raceRows(metric = S.metric) {
-    return ROWS.filter((r) => !REF.has(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+    return ROWS.filter((r) => !REF.has(r.model) && inEns(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
@@ -399,6 +404,7 @@
       { k: "with", label: "With", title: "Models that also use NWP weather, the ENTSO-E load forecast or fuel cost, plus the benchmarks (baselines and the grid operators' forecasts)" },
       { k: "without", label: "Without", title: "Models that only see the target's own history, plus the benchmarks (baselines and the grid operators' forecasts)" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
+    ensBox("f-ens", () => { renderAll(); renderExplorerChart(); });
     // a quiet text toggle: the key columns by default, the rest on request
     if ($("f-cols")) {
       const fc = $("f-cols");
@@ -414,6 +420,13 @@
     ], S.view, (k) => { S.view = k; renderAll(); });
   }
 
+  function ensBox(id, after) {
+    const el = $(id);
+    if (!el) return;
+    el.checked = S.ens;
+    el.onchange = () => { S.ens = el.checked; after(); };
+  }
+
   // the "More" button lists the secondary filters' state; the compact bar (while scrolling) summarises all of them
   function updateFilterSummary() {
     if (!$("f-sum-text")) return;
@@ -423,10 +436,11 @@
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const top = $("f-top-val").textContent;
     const agg = singleSeries() ? "" : { mean: "", median: "median", gmean: "geo. mean" }[S.agg];
-    $("more-sum").textContent = "· " + [cov || "all models", top, agg].filter(Boolean).join(" · ");
+    const ens = S.ens ? "with ensembles" : "";
+    $("more-sum").textContent = "· " + [cov || "all models", ens, top, agg].filter(Boolean).join(" · ");
     const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
     const rated = S.phase === "backtest" ? "Backtest" : win[0].toUpperCase() + win.slice(1);
-    $("f-sum-text").innerHTML = [zone, target, rated, cov, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+    $("f-sum-text").innerHTML = [zone, target, rated, cov, ens, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
   }
   function updateValueSummary() {
     const rated = S.phase === "backtest" ? "Backtest" : { d7: "Last 7 days", d30: "Last 30 days", all: "All time" }[S.win];
@@ -438,7 +452,7 @@
   function updateExplorerSummary() {
     const cov = { all: "all models", with: "with covariates", without: "without covariates" }[S.covFilter];
     const band = S.x.band ? `band ${S.x.band}` : "no band";
-    $("more-sum").textContent = "· " + [cov, $("x-top-val").textContent, band].join(" · ");
+    $("more-sum").textContent = "· " + [cov, S.ens ? "with ensembles" : "", $("x-top-val").textContent, band].filter(Boolean).join(" · ");
     const zone = zoneLabel(S.x.zone), target = TARGET_LABEL[S.x.target] || S.x.target;
     $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(target)}</b>`, `<b>${esc(S.x.day)} → ${esc(addDays(S.x.day, 1))}</b>`, esc(cov), esc(band)].join(" · ");
   }
@@ -1150,7 +1164,7 @@
     // live runs only (the backtest has no gate to meet), the latest issue day first
     const hasLive = T.days.some((d) => d.phase === "live");
     const days = T.days.filter((d) => d.phase === (hasLive ? "live" : "backtest")).slice(-21).reverse();
-    const models = MODELS.filter((m) => days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
+    const models = MODELS.filter((m) => inEns(m) && days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
     const head = `<thead><tr><th>Model</th>${days.map((d) => {
       const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
       const rv = (d.revised || []).length ? `<small title="actuals revised and re-scored: ${esc(d.revised.join(", "))}">↻ ${d.revised.length} revised</small>` : "";
@@ -1410,7 +1424,7 @@
       saveFilters();
       renderValue();
     });
-    const ms = MODELS.filter((m) => res[m] && res[m].quant);
+    const ms = MODELS.filter((m) => inEns(m) && res[m] && res[m].quant);
     options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${m} (ref)` : m })), S.v.model);
   }
   // explainer diagram: one stylised day of a 100 MW asset. The forecast band (p10-p90), the percentile sold day-ahead
@@ -1590,7 +1604,7 @@
 
   // the metric is no longer a filter: races rank by Rel. MAE (within a race the same order as MAE), and the
   // standings show all four metrics as sortable columns
-  const FILTER_KEYS = ["zone", "target", "phase", "win", "agg", "covFilter", "topN", "sort", "details"];
+  const FILTER_KEYS = ["zone", "target", "phase", "win", "agg", "covFilter", "ens", "topN", "sort", "details"];
   function loadFilters() {
     try { const f = JSON.parse(localStorage.getItem("ft-filters") || "{}"); for (const k of FILTER_KEYS) if (f[k] != null) S[k] = f[k]; return f; }
     catch (e) { return {}; }
@@ -1613,8 +1627,9 @@
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
+    ENS = new Set(D.models.filter((m) => m.ensemble).map((m) => m.name));
     CAVEAT = Object.fromEntries(D.models.filter((m) => m.caveat).map((m) => [m.name, m.caveat]));
-    const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : i < 0 ? 50 : i; };
+    const famRank = (m) => { const f = FAM[m] || m; const i = FAMILY_ORDER.indexOf(f); return f === "tso" ? 98 : f === "baseline" ? 99 : f === "ensemble" ? 97 : i < 0 ? 50 : i; };
     MODELS.sort((a, b) => famRank(a) - famRank(b) || a.localeCompare(b));
     for (const r of ROWS) if (!MODELS.includes(r.model)) MODELS.push(r.model);
     const hasLive = ROWS.some((r) => r.phase === "live");
@@ -1661,6 +1676,7 @@
       const segs = () => {
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
           (k) => { S.covFilter = k; segs(); changed(); renderExplorerChart(); });
+        ensBox("x-ens", () => { changed(); renderExplorerControls(); renderExplorerChart(); });
       };
       segs();
       on("x-day", "onchange", (e) => { S.x.day = e.target.value; changed(); renderExplorerChart(); });

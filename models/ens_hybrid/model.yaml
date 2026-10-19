@@ -1,0 +1,7 @@
+name: ens_hybrid
+author: Foretec
+description: "Ensemble: per quarter-hour, the median of the five covariate foundation models of ens_fm_cov plus lgbm_prod, a gradient-boosted model of a different class trained on the same weather; the point forecast and each quantile are combined separately."
+family: ensemble
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: ensemble
+members: [chronos2_cov, timesfm3_cov, t0_gamma_cov, tirex2_cov, timestral_cov, lgbm_prod]

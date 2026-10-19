@@ -1,0 +1,7 @@
+name: ens_fm_cov
+author: Foretec
+description: "Ensemble: per quarter-hour, the median of five foundation models with native known-future covariates, the newest of each family (chronos2_cov, timesfm3_cov, t0_gamma_cov, tirex2_cov, timestral_cov); the point forecast and each quantile are combined separately. Members fixed by that rule, not by score."
+family: ensemble
+inputs: [history, nwp, load_forecast, fuel]
+runner: ensemble
+members: [chronos2_cov, timesfm3_cov, t0_gamma_cov, tirex2_cov, timestral_cov]
