@@ -6,7 +6,8 @@ Column names are '<zone>.<bucket>.<what>.<variable>', e.g. 'BE.wind_offshore.ens
 The ENTSO-E day-ahead load forecast ('<zone>.load_fc.entsoe.load_mw') is a price input only, never a load input (since
 issue 16 Oct 2026): a load model would be learning the TSO's forecast, the benchmark it is meant to beat, and for NL it
 is a different quantity from the scored load (TenneT's is net of embedded solar, NED's load is gross; their correlation
-was -0.45 in Jul-Sep 2026).
+was -0.45 in Jul-Sep 2026). A live run of an earlier issue day (a re-run) keeps the rule of its day and gives load
+models the load forecast; backtests always follow the current rule.
 """
 from __future__ import annotations
 
@@ -14,6 +15,12 @@ import numpy as np
 import pandas as pd
 
 ZONES = ("BE", "NL", "FR")   # fallback; the zones are read from the covariate columns
+LOAD_FC_FOR_LOAD_THROUGH = "2026-10-15"   # last live issue day whose load models got the ENTSO-E load forecast
+_REQ: dict = {}                            # issue day and live flag of the request, set by load_covariates
+
+
+def _load_fc_for_load() -> bool:
+    return bool(_REQ.get("live")) and "" < _REQ.get("issue_date", "") <= LOAD_FC_FOR_LOAD_THROUGH
 
 
 def zones_of(cols) -> list[str]:
@@ -22,6 +29,7 @@ def zones_of(cols) -> list[str]:
 
 
 def load_covariates(req: dict) -> pd.DataFrame:
+    _REQ.update(issue_date=str(req.get("issue_date") or ""), live=bool(req.get("live")))
     cov = pd.read_parquet(req["covariates"])
     cov.index = pd.to_datetime(cov.index)
     return cov
@@ -33,8 +41,8 @@ def full_features(cols, zone: str, target: str) -> list[str]:
         pre = [f"{zone}.wind_onshore.", f"{zone}.wind_offshore."]
     elif target == "solar":
         pre = [f"{zone}.solar."]
-    elif target == "load":   # weather at the load centres
-        pre = [f"{zone}.load."]
+    elif target == "load":   # weather at the load centres (and the TSO's load forecast in re-runs of live days to 15 Oct)
+        pre = [f"{zone}.load."] + ([f"{zone}.load_fc."] if _load_fc_for_load() else [])
     else:  # price: own load, residual-load drivers in all coupled zones, fuel
         pre = [f"{zone}.load.", f"{zone}.load_fc.", "fuel."]
         zs = zones_of(cols) or list(ZONES)
@@ -52,8 +60,9 @@ def compact_features(cols, zone: str, target: str) -> list[str]:
         want = [f"{zone}.solar.ens_mean.global_tilted_irradiance", f"{zone}.solar.ens_std.global_tilted_irradiance",
                 f"{zone}.solar.ens_mean.cloud_cover", f"{zone}.solar.ens_mean.temperature_2m"]
     elif target == "load":
-        want = [f"{zone}.load.ens_mean.temperature_2m", f"{zone}.load.ens_mean.shortwave_radiation",
-                f"{zone}.load.ens_mean.cloud_cover"]
+        want = ([f"{zone}.load_fc.entsoe.load_mw"] if _load_fc_for_load() else []) + [
+            f"{zone}.load.ens_mean.temperature_2m", f"{zone}.load.ens_mean.shortwave_radiation",
+            f"{zone}.load.ens_mean.cloud_cover"]
     else:
         want = [f"{zone}.load_fc.entsoe.load_mw", f"{zone}.load.ens_mean.temperature_2m", "fuel.ccgt.srmc.eur_mwh"]
         zs = zones_of(cols) or list(ZONES)
