@@ -421,10 +421,8 @@
   }
 
   function ensBox(id, after) {
-    const el = $(id);
-    if (!el) return;
-    el.checked = S.ens;
-    el.onchange = () => { S.ens = el.checked; after(); };
+    if (!$(id)) return;
+    seg($(id), [{ k: "off", label: "Exclude" }, { k: "on", label: "Include" }], S.ens ? "on" : "off", (k) => { S.ens = k === "on"; after(); });
   }
 
   // the "More" button lists the secondary filters' state; the compact bar (while scrolling) summarises all of them
@@ -434,13 +432,13 @@
     if (PAGE === "value") return updateValueSummary();
     const win = { d7: "last 7 days", d30: "last 30 days", all: "all time" }[S.win];
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
-    const top = $("f-top-val").textContent;
     const agg = singleSeries() ? "" : { mean: "", median: "median", gmean: "geo. mean" }[S.agg];
     const ens = S.ens ? "with ensembles" : "";
-    $("more-sum").textContent = "· " + [cov || "all models", ens, top, agg].filter(Boolean).join(" · ");
+    const set = [cov, ens, agg].filter(Boolean);
+    $("more-sum").textContent = set.length ? "· " + set.join(" · ") : "";
     const zone = S.zone === "all" ? "All zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
     const rated = S.phase === "backtest" ? "Backtest" : win[0].toUpperCase() + win.slice(1);
-    $("f-sum-text").innerHTML = [zone, target, rated, cov, ens, top, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
+    $("f-sum-text").innerHTML = [zone, target, rated, cov, ens, agg].filter(Boolean).map((x, i) => i < 3 ? `<b>${esc(x)}</b>` : esc(x)).join(" · ");
   }
   function updateValueSummary() {
     const rated = S.phase === "backtest" ? "Backtest" : { d7: "Last 7 days", d30: "Last 30 days", all: "All time" }[S.win];
@@ -450,11 +448,12 @@
     $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(TARGET_LABEL[S.v.target] || S.v.target)}</b>`, `<b>${esc(rated)}</b>`, esc(S.v.model || ""), `p${S.v.p}`, mode].join(" · ");
   }
   function updateExplorerSummary() {
-    const cov = { all: "all models", with: "with covariates", without: "without covariates" }[S.covFilter];
+    const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const band = S.x.band ? `band ${S.x.band}` : "no band";
-    $("more-sum").textContent = "· " + [cov, S.ens ? "with ensembles" : "", $("x-top-val").textContent, band].filter(Boolean).join(" · ");
+    const set = [cov, S.ens ? "with ensembles" : ""].filter(Boolean);
+    $("more-sum").textContent = set.length ? "· " + set.join(" · ") : "";
     const zone = zoneLabel(S.x.zone), target = TARGET_LABEL[S.x.target] || S.x.target;
-    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(target)}</b>`, `<b>${esc(S.x.day)} → ${esc(addDays(S.x.day, 1))}</b>`, esc(cov), esc(band)].join(" · ");
+    $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(target)}</b>`, `<b>${esc(S.x.day)} → ${esc(addDays(S.x.day, 1))}</b>`, esc(cov), esc(band)].filter(Boolean).join(" · ");
   }
   function setupFilterBar() {
     const fb = document.querySelector(".filterbar"), more = $("f-more"), panel = $("more-panel");
@@ -1251,11 +1250,9 @@
     const ranked = explorerRanking();
     const cands = MODELS.filter((m) => !REF.has(m) && inField(m) && ser.models[m])
       .sort((a, b) => (ranked.indexOf(a) + 1 || 1e3) - (ranked.indexOf(b) + 1 || 1e3));
-    const top = new Set(cands.slice(0, S.xTop));
-    const models = MODELS.filter((m) => ser.models[m] && (top.has(m) || REF.has(m) || FAM[m] === "tso"));   // TSO: the yardstick
-    const xt = $("x-top");
-    if (xt) { xt.max = String(Math.max(1, cands.length)); xt.value = String(Math.min(S.xTop, cands.length));
-      $("x-top-val").textContent = S.xTop >= cands.length ? `All ${cands.length}` : `Top ${S.xTop} of ${cands.length}`; }
+    const X_DRAWN = 10;   // drawn by default; every other model is in the legend, drawn once clicked
+    const top = new Set(cands.slice(0, X_DRAWN));
+    const models = MODELS.filter((m) => ser.models[m] && (cands.includes(m) || REF.has(m) || FAM[m] === "tso"));   // TSO: the yardstick
     // the band: by default the best-ranked model that publishes quantiles
     const bandModels = cands.filter((m) => top.has(m) && ser.models[m].lo);
     if (S.x.band !== "" && !bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
@@ -1274,14 +1271,15 @@
     if (ser.actual) datasets.push({ label: actualLabel, data: ser.actual, borderColor: actualColor(), backgroundColor: actualColor(), borderWidth: 3, pointRadius: 0, tension: 0, endLabel: actualLabel, endColor: actualColor(), order: -1 });
     // the top EMPHASIS models by Elo (and the TSO yardstick) are drawn in full and labelled, the rest faint and
     // unlabelled; every model stays in the tooltip and the legend
-    // models clicked in the legend (S.xPin) are drawn in full too; the faint lines fade further when there are many
+    // models clicked in the legend (S.xPin) are drawn in full too; besides those, only the ten best are drawn (faint)
     const lead = new Set(cands.slice(0, EMPHASIS));
     const isTso = (m) => REF.has(m) || FAM[m] === "tso";
     const full = (m) => lead.has(m) || isTso(m) || S.xPin.has(m);
-    const faintA = models.length > 8 ? 0.16 : 0.28;
+    const faintA = 0.18;
+    const drawn = (m) => full(m) || top.has(m);
     for (const m of models) {
       const c = color(m), tso = isTso(m), f = full(m);
-      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m), borderColor: f ? c : alpha(c, faintA), backgroundColor: c,
+      datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m) || !drawn(m), borderColor: f ? c : alpha(c, faintA), backgroundColor: c,
         borderWidth: f ? 2.2 : 1, borderDash: tso ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: f ? 4 : 0, tension: 0, order: f ? 0 : 1,
         endLabel: !f ? null : REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
     }
@@ -1293,7 +1291,7 @@
     // the tooltip lists the actual and the lines drawn in full; the faint ones are counted
     const nFaint = models.filter((m) => !full(m) && !S.hidden.has(m)).length;
     o.plugins.tooltip.filter = (it) => !it.dataset.label.startsWith("_") && (!ser.models[it.dataset.label] || full(it.dataset.label));
-    o.plugins.tooltip.callbacks.footer = () => (nFaint ? `+ ${nFaint} faint model${nFaint > 1 ? "s" : ""}: click one in the legend to highlight it` : "");
+    o.plugins.tooltip.callbacks.footer = () => (nFaint ? `+ ${nFaint} more: click one in the legend to highlight it` : "");
     Object.assign(o.plugins.tooltip, { footerColor: css("--ink2"), footerFont: { size: 11.5, weight: 400 } });
     o.scales.x.ticks.maxTicksLimit = 13;
     draw("c-day", { type: "line", data: { labels, datasets }, options: o });
@@ -1309,7 +1307,7 @@
     updateFilterSummary();
     const ld = $("l-day");
     ld.innerHTML = (ser.actual ? `<span class="actual" style="display:flex;align-items:center;gap:7px"><i></i>${actualLabel}</span>` : "") +
-      models.map((m) => `<button type="button" data-m="${esc(m)}" class="${full(m) ? "" : "faint"}" aria-pressed="${!S.hidden.has(m)}"
+      models.map((m) => `<button type="button" data-m="${esc(m)}" class="${full(m) ? "" : drawn(m) ? "faint" : "faint off"}" aria-pressed="${!S.hidden.has(m)}"
         title="${lead.has(m) || isTso(m) ? "click to hide or show" : S.xPin.has(m) ? "click to fade" : "click to highlight"}"><i style="border-top-color:${color(m)}"></i>${nm(m)}</button>`).join("");
     ld.onclick = (e) => {
       const b = e.target.closest("button[data-m]"); if (!b) return;
@@ -1581,12 +1579,7 @@
     const ranked = st.map((x) => x.model);
     const rest = MODELS.filter((m) => !ranked.includes(m) && inField(m));
     // the grid operators' forecasts are the yardstick: always shown, whatever the top-N slider says
-    SHOWN = new Set([...[...ranked, ...rest].slice(0, S.topN), ...MODELS.filter((m) => FAM[m] === "tso" && inField(m))]);
-    const total = new Set([...ranked, ...rest]).size;
-    const el = $("f-top");
-    el.max = String(total);
-    el.value = String(Math.min(S.topN, total));
-    $("f-top-val").textContent = S.topN >= total ? `All ${total}` : `Top ${S.topN} of ${total}`;
+    SHOWN = new Set([...ranked, ...rest, ...MODELS.filter((m) => FAM[m] === "tso" && inField(m))]);
   }
 
   function renderAll() {
@@ -1658,7 +1651,6 @@
     if (PAGE === "leaderboard") {
       on("f-zone", "onchange", (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-target", "onchange", (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
-      on("f-top", "oninput", (e) => { S.topN = +e.target.value; renderAll(); });
       setupFilterBar();
       renderAll();
       renderTracker();
@@ -1666,24 +1658,22 @@
     if (PAGE === "explorer") {
       if (S.zone !== "all" && D.config.zones.includes(S.zone)) S.x.zone = S.zone;
       if (S.target !== "all" && S.target in D.config.targets) S.x.target = S.target;
-      S.xTop = S.topN;
       const q = new URLSearchParams(location.search);   // deep links: explorer.html?day=2026-10-03&zone=BE&target=wind
       if (q.get("day") && D.days && (xPhase() === "all" || D.days[q.get("day")] === xPhase())) S.x.day = q.get("day");   // live days only
       if (D.config.zones.includes(q.get("zone"))) S.x.zone = q.get("zone");
       if (q.get("target") in D.config.targets) S.x.target = q.get("target");
-      const changed = () => { S.zone = S.x.zone; S.target = S.x.target; S.topN = S.xTop; saveFilters();
+      const changed = () => { S.zone = S.x.zone; S.target = S.x.target; saveFilters();
         history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
       const segs = () => {
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
           (k) => { S.covFilter = k; segs(); changed(); renderExplorerChart(); });
-        ensBox("x-ens", () => { changed(); renderExplorerControls(); renderExplorerChart(); });
+        ensBox("x-ens", () => { segs(); changed(); renderExplorerControls(); renderExplorerChart(); });
       };
       segs();
       on("x-day", "onchange", (e) => { S.x.day = e.target.value; changed(); renderExplorerChart(); });
       on("x-zone", "onchange", (e) => { S.x.zone = e.target.value; changed(); renderExplorerChart(); });
       on("x-target", "onchange", (e) => { S.x.target = e.target.value; changed(); renderExplorerChart(); });
       on("x-band", "onchange", (e) => { S.x.band = e.target.value; renderExplorerChart(); });
-      on("x-top", "oninput", (e) => { S.xTop = +e.target.value; changed(); renderExplorerChart(); });
       on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
       setupFilterBar();
       renderExplorerControls();

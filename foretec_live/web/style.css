@@ -622,3 +622,4 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
   .top-nav::-webkit-scrollbar{display:none}
   .top-nav a{flex:none}
 }
+.legend button.faint.off{opacity:.32}
