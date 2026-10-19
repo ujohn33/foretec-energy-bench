@@ -85,7 +85,8 @@
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
   // they also leave the races, so every other model's score is what it would be without them
   let ENS = new Set();
-  const inEns = (m) => S.ens || !ENS.has(m);
+  // only the leaderboard's races exclude them by default; the explorer and the value page always show them
+  const inEns = (m) => S.ens || !ENS.has(m) || PAGE !== "leaderboard";
   const inField = (m) => inEns(m) && (REF.has(m) || S.covFilter === "all" || isBench(m) || (S.covFilter === "with") === !!USES_COV[m]);
   function filteredRows(metric = S.metric, refs = false) {
     return ROWS.filter((r) => REF.has(r.model) === refs && inField(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
@@ -457,7 +458,7 @@
   function updateExplorerSummary() {
     const cov = { all: "", with: "with covariates", without: "without covariates" }[S.covFilter];
     const band = S.x.band ? `band ${S.x.band}` : "no band";
-    const set = [cov, S.ens ? "with ensembles" : ""].filter(Boolean);
+    const set = [cov].filter(Boolean);
     $("more-sum").textContent = set.length ? "· " + set.join(" · ") : "";
     const zone = zoneLabel(S.x.zone), target = TARGET_LABEL[S.x.target] || S.x.target;
     $("f-sum-text").innerHTML = [`<b>${esc(zone)}</b>`, `<b>${esc(target)}</b>`, `<b>${esc(S.x.day)} → ${esc(addDays(S.x.day, 1))}</b>`, esc(cov), esc(band)].filter(Boolean).join(" · ");
@@ -1676,7 +1677,6 @@
       const segs = () => {
         seg($("x-cov"), [{ k: "all", label: "All" }, { k: "with", label: "With" }, { k: "without", label: "Without" }], S.covFilter,
           (k) => { S.covFilter = k; segs(); changed(); renderExplorerChart(); });
-        ensBox("x-ens", () => { segs(); changed(); renderExplorerControls(); renderExplorerChart(); });
       };
       segs();
       on("x-day", "onchange", (e) => { S.x.day = e.target.value; changed(); renderExplorerChart(); });
