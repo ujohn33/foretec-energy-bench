@@ -250,6 +250,18 @@ def test_entsoe_parser_and_fallback(cfg):
     assert len(parts) == 2 and len(gen) == 1
     assert _finest(gen).tolist() == [5, 5, 5, 8]
 
+    # hourly load sent as separate periods around gaps (Energinet DK, Oct 2026): a one-point hour fills its 4 quarters
+    hourly = ('<GL_MarketDocument xmlns="urn:x">'
+              '<TimeSeries><curveType>A01</curveType><outBiddingZone_Domain.mRID>10YDK-1--------W</outBiddingZone_Domain.mRID>'
+              '<Period><timeInterval><start>2026-10-16T22:00Z</start><end>2026-10-16T23:00Z</end></timeInterval>'
+              '<resolution>PT60M</resolution><Point><position>1</position><quantity>2000</quantity></Point></Period>'
+              '<Period><timeInterval><start>2026-10-17T01:00Z</start><end>2026-10-17T03:00Z</end></timeInterval>'
+              '<resolution>PT60M</resolution><Point><position>1</position><quantity>1800</quantity></Point>'
+              '<Point><position>2</position><quantity>1700</quantity></Point></Period></TimeSeries></GL_MarketDocument>')
+    load = _finest(parse_timeseries(hourly))
+    assert len(load) == 12 and (load.loc["2026-10-16 22:00":"2026-10-16 22:45"] == 2000).all()
+    assert load.index[4] == pd.Timestamp("2026-10-17 01:00") and load.iloc[-1] == 1700   # 23:00-01:00 stays a gap
+
     idx = pd.date_range("2026-09-20 22:00", periods=4, freq="15min")
 
     class Fake(Source):

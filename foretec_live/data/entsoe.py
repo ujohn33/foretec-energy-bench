@@ -72,10 +72,22 @@ def _finest(parts: list[tuple[dict, pd.Series]]) -> pd.Series:
         return pd.Series(dtype=float)
     parts = sorted(parts, key=lambda p: p[0]["resolution"], reverse=True)   # coarse first, fine overwrites
     out = pd.Series(dtype=float)
-    for _, s in parts:
-        s15 = to_15min(s)
+    for meta, s in parts:
+        s15 = _on_grid(s, meta["resolution"])
         out = s15.combine_first(out) if not out.empty else s15
     return out.sort_index()
+
+
+def _on_grid(s: pd.Series, res: pd.Timedelta) -> pd.Series:
+    """One period on the 15-minute grid. A coarser value holds for its whole interval, using the period's declared
+    resolution: inferring the step from the points fails for a period of one point (Energinet sends DK load as
+    separate one-hour periods around its gaps, Oct 2026), which would keep 1 of its 4 quarter-hours."""
+    if res <= pd.Timedelta("15min") or s.empty:
+        return to_15min(s)
+    idx = pd.date_range(s.index[0], s.index[-1] + res, freq="15min", inclusive="left")
+    out = s.reindex(idx, method="ffill").dropna()
+    out.index.name = "time_utc"
+    return out
 
 
 def fill_night_zeros(s: pd.Series, start, end) -> pd.Series:
