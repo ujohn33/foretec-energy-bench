@@ -356,6 +356,33 @@ def run_ensemble(spec, outdir: Path, fh_index: pd.DatetimeIndex, quantiles, in_s
     return rows, (pd.concat(out, ignore_index=True) if out else None)
 
 
+def add_ensembles(issue_date, cfg, results_subdir="results", only_models=None) -> list[dict]:
+    """Combine the ensembles of an issue day from the members' forecasts already stored, without re-running anything
+    else. The day's run log keeps its run times (the gate check reads them) and records when the ensembles were added
+    (ensembles_added_utc): their inputs all predate the gate, the combining happened afterwards."""
+    p = paths(cfg, results_subdir)
+    outdir = p["forecasts"] / str(issue_date)
+    f = outdir / "_run.json"
+    if not f.exists():
+        return []
+    specs = [s for s in load_models(p["models"], only_models) if s.raw.get("runner") == "ensemble"]
+    fh_index = delivery_index(issue_date, cfg)
+    rows = []
+    for spec in specs:
+        r, out = run_ensemble(spec, outdir, fh_index, cfg["quantiles"])
+        rows += r
+        if out is not None:
+            out.insert(0, "model", spec.name)
+            out.insert(0, "issue_date", str(issue_date))
+            out.to_parquet(outdir / f"{spec.name}.parquet", index=False)
+    meta = json.loads(f.read_text())
+    names = {s.name for s in specs}
+    meta["runs"] = [r for r in meta.get("runs", []) if r["model"] not in names] + rows
+    meta["ensembles_added_utc"] = str(pd.Timestamp.now(tz="UTC"))
+    f.write_text(json.dumps(meta, indent=1))
+    return rows
+
+
 def pretrain(issue_date, cfg, only_models=None) -> list[str]:
     """Morning training, outside the gate window, for models with `pretrain: true` in model.yaml (too slow to train
     inside the live run): each trains on the window of delivery days up to yesterday, from yesterday's frozen

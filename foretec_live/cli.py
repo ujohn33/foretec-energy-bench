@@ -23,7 +23,7 @@ from .data import get_source
 from .report import write_report
 from .site import build_site
 from .registry import load_models
-from .run import pretrain, run_forecasts, take_snapshot
+from .run import add_ensembles, pretrain, run_forecasts, take_snapshot
 from .score import check_revisions, locked_before_gate, provisional_actuals, score_pending
 from .timeutil import availability_cutoff, delivery_index, gate_timestamp, issue_timestamp, local_today
 
@@ -220,6 +220,19 @@ def cmd_covhist(cfg, args):
     return 0
 
 
+def cmd_ensembles(cfg, args):
+    """Add the ensembles to past issue days from the members' stored forecasts (run times kept), then score."""
+    sub = "results/backtest" if args.backtest else "results"
+    d = args.start
+    while d <= args.end:
+        rows = add_ensembles(d, cfg, sub, args.models)
+        print(d, {s: sum(r["status"] == s for r in rows) for s in ("ok", "error")} if rows else "no run log")
+        d += dt.timedelta(days=1)
+    score_pending(cfg, results_subdir=sub)
+    _site(cfg)
+    return 0
+
+
 def cmd_pretrain(cfg, args):
     """Morning training of the models too slow to train inside the live run (pretrain: true), for today's issue."""
     d = args.date or local_today(cfg)
@@ -264,6 +277,8 @@ def main(argv=None):
     sub.add_parser("catchup")
     p = sub.add_parser("reference"); p.add_argument("--date", type=_date)
     sub.add_parser("intervals")
+    p = sub.add_parser("ensembles"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
+    p.add_argument("--models", nargs="*"); p.add_argument("--backtest", action="store_true")
     p = sub.add_parser("pretrain"); p.add_argument("--date", type=_date); p.add_argument("--models", nargs="*")
     p = sub.add_parser("covhist"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
@@ -280,7 +295,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain, "intervals": cmd_intervals}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain, "intervals": cmd_intervals, "ensembles": cmd_ensembles}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":
