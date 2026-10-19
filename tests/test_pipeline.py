@@ -187,6 +187,37 @@ def test_load_forecast_is_a_price_input_only():
             assert f"{zone}.load_fc.entsoe.load_mw" in pick(cols, zone, "price"), (pick.__name__, zone)
 
 
+def test_half_ingested_nwp_run_is_rejected(cfg, monkeypatch):
+    """A reply with a time axis but null values over the delivery day is retried, then refused (so the builder falls
+    back to the previous cycle and nothing is cached), as ICON-EU 06 UTC came at the cut-off on 17 Oct 2026."""
+    from foretec_live import covariates as cv
+
+    run = pd.Timestamp("2026-10-17 06:00")
+    times = [str(t) for t in pd.date_range(run, periods=60 * 4, freq="15min")]
+    variables = sorted({v for vs in cv.BUCKET_VARS.values() for v in vs})
+
+    def reply(null_var):
+        m = {"time": times, **{v: [None if v == null_var and i >= 48 else 1.0 for i in range(len(times))] for v in variables}}
+        return [{"minutely_15": m}, {"minutely_15": m}]
+
+    class R:
+        status_code = 200
+        def __init__(self, js): self._js = js
+        def json(self): return self._js
+
+    cfg["covariates"] = {"nwp": {"host": "https://example.invalid", "forecast_hours": 60}}
+    c = pd.DataFrame({"latitude": [50.0, 51.0], "longitude": [4.0, 5.0]})
+    monkeypatch.setattr(cv.time, "sleep", lambda s: None)
+    calls = []
+    monkeypatch.setattr(cv.requests, "get", lambda *a, **k: calls.append(1) or R(reply("cloud_cover")))
+    with pytest.raises(RuntimeError, match="incomplete values"):
+        cv._request_run("icon_eu", run, cfg, c)
+    assert len(calls) == 5
+    monkeypatch.setattr(cv.requests, "get", lambda *a, **k: R(reply(None)))
+    out = cv._request_run("icon_eu", run, cfg, c)
+    assert out["cloud_cover"].notna().all() and set(out["centroid"]) == {0, 1}
+
+
 def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
     from foretec_live.covariates import fuel_quotes

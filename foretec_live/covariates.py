@@ -121,6 +121,25 @@ def fetch_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFra
     return cached_per_zone(c, lambda cz: _nwp_cache(cfg, cz, model, run), lambda cm: _request_run(model, run, cfg, cm))
 
 
+def _missing_values(got: list, variables: list, run: pd.Timestamp, min_share: float = 0.99) -> str:
+    """Why a reply is not usable although every location has a time axis: a variable mostly null over lead times
+    12-48 h, which hold delivery day D for every run the cut-off admits. Open-Meteo publishes a run before it has
+    ingested all of it: ICON-EU 06 UTC at the 11:30 cut-off came with timestamps but null cloud, temperature,
+    irradiance, 10 m wind and gusts on 3, 4, 5, 10, 13 and 17 Oct 2026, and was complete an hour later."""
+    t = pd.to_datetime(got[0]["minutely_15"]["time"])
+    win = np.flatnonzero((t >= run + pd.Timedelta(hours=12)) & (t < run + pd.Timedelta(hours=48)))
+    if not len(win):
+        return ""
+    short = {}
+    for v in variables:
+        vals = [loc["minutely_15"].get(v) or [] for loc in got]
+        ok = sum(sum(1 for i in win if i < len(x) and x[i] is not None) for x in vals)
+        share = ok / (len(win) * len(got))
+        if share < min_share:
+            short[v] = round(share, 2)
+    return f"incomplete values over lead 12-48 h (non-null share {short})" if short else ""
+
+
 def _request_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.DataFrame:
     ncfg = cfg["covariates"]["nwp"]
     variables = sorted({v for vs in BUCKET_VARS.values() for v in vs})
@@ -144,9 +163,12 @@ def _request_run(model: str, run: pd.Timestamp, cfg, c: pd.DataFrame) -> pd.Data
                 got = r.json()
                 got = got if isinstance(got, list) else [got]
                 if len(got) == len(c) and all((loc.get("minutely_15") or {}).get("time") for loc in got):
-                    js = got
-                    break
-                why = f"incomplete reply ({len(got)} of {len(c)} locations with data)"
+                    why = _missing_values(got, variables, run)
+                    if not why:
+                        js = got
+                        break
+                else:
+                    why = f"incomplete reply ({len(got)} of {len(c)} locations with data)"
             else:
                 why = f"HTTP {r.status_code} {r.text[:200]}"
                 if r.status_code == 400 and "not available" in r.text:   # the archive lacks this run: retrying won't help
