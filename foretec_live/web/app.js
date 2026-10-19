@@ -472,9 +472,6 @@
       more.setAttribute("aria-expanded", String(open));
       more.querySelector(".more-label").textContent = open ? "Less" : "More";
     };
-    // while scrolling down the page the bar shrinks to one summary line; a click on it opens the filters again until the
-    // reader scrolls on. Hysteresis and a scroll correction keep the page from jumping when the bar changes height.
-    let openAt = null;
     // phones: every setting starts folded into the summary line; a tap opens all of them, a tap on the summary folds them
     const phone = matchMedia("(max-width:600px)");
     const fold = () => {
@@ -483,22 +480,33 @@
     };
     phone.addEventListener("change", fold);
     fold();
-    const update = () => {
-      if (phone.matches) return;
-      if (getComputedStyle(fb).position !== "sticky") { fb.classList.remove("compact"); return; }
-      const y = scrollY, on = fb.classList.contains("compact");
-      if (openAt != null && Math.abs(y - openAt) > 240) openAt = null;
-      const want = openAt == null && (on ? y > 140 : y > 340);
-      if (want === on) return;
-      const h = fb.offsetHeight;
-      fb.classList.toggle("compact", want);
-      if (y > 0) window.scrollBy(0, fb.offsetHeight - h);
+    $("f-sum").onclick = () => { fb.classList.toggle("m-open"); fold(); };
+    // past the bar, it scrolls away with the page and a slim copy of its summary (on the value page with the percentile
+    // slider) stays under the header. Nothing on the page changes height, so the scroll never jumps.
+    const float = document.createElement("div");
+    float.className = "fsum-float";
+    float.hidden = true;
+    float.innerHTML = `<div class="wrap"><button type="button" class="fsum" aria-label="Back to the filters"><span></span><i aria-hidden="true">▴</i></button>` +
+      (PAGE === "value" ? `<div class="pmini"><span class="mono">p10</span><input type="range" id="v-p2" min="10" max="90" step="5" aria-label="Sell percentile"><span class="mono">p90</span><b class="mono" id="v-p2-val"></b></div>` : "") +
+      `</div>`;
+    document.body.appendChild(float);
+    const src = $("f-sum-text"), dst = float.querySelector(".fsum span");
+    const mirror = () => { dst.innerHTML = src.innerHTML; };
+    new MutationObserver(mirror).observe(src, { childList: true, subtree: true, characterData: true });
+    mirror();
+    float.querySelector(".fsum").onclick = () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (phone.matches) { fb.classList.add("m-open"); fold(); }
     };
-    addEventListener("scroll", update, { passive: true });
-    $("f-sum").onclick = () => {
-      if (phone.matches) { fb.classList.toggle("m-open"); fold(); return; }
-      openAt = scrollY; update(); openAt = scrollY;
+    const hdr = document.querySelector("header.top");
+    const place = () => {
+      const h = hdr ? hdr.getBoundingClientRect().bottom : 0;
+      float.style.top = Math.max(0, h) + "px";
+      float.hidden = fb.getBoundingClientRect().bottom > h;
     };
+    addEventListener("scroll", place, { passive: true });
+    addEventListener("resize", place, { passive: true });
+    place();
   }
 
   // ---------- chart plumbing ----------
@@ -1488,6 +1496,7 @@
     renderValueControls(res);
     $("v-p").value = String(S.v.p);
     $("v-p-h").textContent = $("v-p-val").textContent = "p" + S.v.p;
+    if ($("v-p2")) { $("v-p2").value = String(S.v.p); $("v-p2-val").textContent = "p" + S.v.p; }
     renderExplainer();
     updateFilterSummary();
     const m = S.v.model, r = m && res[m];
@@ -1576,6 +1585,7 @@
     $("v-model").onchange = (e) => { S.v.model = e.target.value; renderValue(); };
     $("v-p").oninput = (e) => { S.v.p = +e.target.value; renderValue(); };
     setupFilterBar();
+    if ($("v-p2")) $("v-p2").oninput = (e) => { S.v.p = +e.target.value; renderValue(); };
     renderValue();
   }
 
@@ -1713,5 +1723,10 @@
 
   // draw at once; when the web fonts arrive, draw the canvases again with the right text metrics
   let afterFonts = null;
-  init().then(() => { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => afterFonts && afterFonts()); });
+  // the page is revealed once the first render is done and the fonts are in (at most 0.8 s later), so it never shows half-built
+  init().catch((e) => console.error(e)).then(() => {
+    const fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+    fonts.then(() => afterFonts && afterFonts());
+    Promise.race([fonts, new Promise((r) => setTimeout(r, 800))]).then(() => requestAnimationFrame(() => document.body.classList.add("ready")));
+  });
 })();

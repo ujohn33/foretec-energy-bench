@@ -53,7 +53,7 @@
 }
 
 *{box-sizing:border-box}
-html{scroll-behavior:smooth; scroll-padding-top:150px; font-size:106.25%}
+html{scroll-behavior:smooth; scroll-padding-top:130px; font-size:106.25%}
 body{
   margin:0; background:var(--ground); color:var(--ink);
   font-family:var(--sans); font-size:1rem; line-height:1.6; -webkit-font-smoothing:antialiased;
@@ -130,7 +130,7 @@ header.top{border-bottom:1px solid var(--rule); background:var(--ground); positi
 .key .k-live{background:linear-gradient(90deg,var(--s1),var(--s2),var(--s3)); margin-left:12px}
 
 /* ---------- filters ---------- */
-.filterbar{position:sticky; top:78px; z-index:15; background:var(--ground); border-bottom:1px solid var(--rule)}
+.filterbar{position:relative; z-index:15; background:var(--ground); border-bottom:1px solid var(--rule)}
 @media(max-width:820px){ .filterbar{position:static} html{scroll-padding-top:90px} }
 .filters{display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 28px; padding-top:16px; padding-bottom:16px}
 .field{display:grid; gap:6px}
@@ -280,7 +280,7 @@ th button.sort:focus-visible{outline:2px solid var(--blue); outline-offset:3px}
 th button.sort i{font-style:normal; font-size:.62rem; opacity:.3}
 th[aria-sort="ascending"] button.sort,th[aria-sort="descending"] button.sort{color:var(--ink)}
 th[aria-sort="ascending"] button.sort i,th[aria-sort="descending"] button.sort i{opacity:1}
-@media (prefers-reduced-motion:reduce){ *{animation:none !important; transition:none !important} html{scroll-behavior:auto} }
+@media (prefers-reduced-motion:reduce){ *{animation:none !important; transition:none !important} html{scroll-behavior:auto} body main{opacity:1 !important} }
 
 /* compact status in the filter bar (replaces the hero) */
 .status{margin-left:auto; display:grid; gap:4px; justify-items:end; font-size:.8rem; padding-bottom:4px}
@@ -625,3 +625,19 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
 .legend button.faint.off{opacity:.32}
 .ens-tag{display:inline-block; margin-left:6px; padding:0 5px; border:1px solid var(--rule); border-radius:2px; font-family:var(--mono); font-size:.66rem;
   line-height:1.5; color:var(--ink2); vertical-align:1px; cursor:help; font-weight:400; font-style:normal}
+
+/* the filter summary that stays under the header once the filter bar has scrolled away (no layout shift) */
+.fsum-float{position:fixed; left:0; right:0; z-index:19; background:var(--ground); border-bottom:1px solid var(--rule);
+  box-shadow:0 6px 14px -12px rgba(0,0,0,.35); animation:fsum-in .16s ease-out}
+.fsum-float[hidden]{display:none}
+.fsum-float .wrap{display:flex; align-items:center; gap:22px}
+.fsum-float .fsum{flex:1; min-width:0}
+.pmini{display:flex; align-items:center; gap:8px; flex:0 1 360px; font-size:.86rem}
+.pmini input[type=range]{flex:1; min-width:0; margin:0; accent-color:var(--blue)}
+.pmini .mono{font-size:.74rem} .pmini b{color:var(--blue-ink); min-width:2.4em; text-align:right}
+@keyframes fsum-in{from{transform:translateY(-6px); opacity:0}}
+@media(max-width:600px){ .fsum-float .wrap{flex-wrap:wrap; gap:0 12px} .pmini{flex:1 1 100%; padding-bottom:8px} }
+/* data pages appear once rendered, instead of building up on screen; the delayed animation reveals them if scripts fail */
+body:is([data-page="leaderboard"],[data-page="explorer"],[data-page="value"],[data-page="methodology"]) main{opacity:0; animation:main-reveal .2s ease-out 3s forwards}
+body.ready main{opacity:1 !important; animation:none; transition:opacity .22s ease-out}
+@keyframes main-reveal{to{opacity:1}}
