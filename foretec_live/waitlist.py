@@ -29,6 +29,8 @@ ROLES = {"participant", "sponsor", "researcher", "curious"}
 EMAIL = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$")
 MAX_BODY, PER_IP_HOUR, PER_DAY = 2048, 10, 500
 PAGE = "/compete.html"
+# foretec.be posts its sign-up form here too (cross-site): only these origins may read the reply
+ORIGINS = {"https://foretec.be", "https://www.foretec.be"}
 
 _lock = threading.Lock()
 _hits: dict[str, list[float]] = {}
@@ -90,6 +92,21 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):   # no addresses or emails in the journal
         pass
 
+    def _cors(self):
+        origin = self.headers.get("Origin", "")
+        if origin in ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+
+    def do_OPTIONS(self):   # CORS preflight from foretec.be
+        self.send_response(204 if self.headers.get("Origin", "") in ORIGINS else 403)
+        self._cors()
+        self.send_header("Access-Control-Allow-Methods", "POST")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def _reply(self, status: int, msg: str, as_json: bool):
         if as_json:
             body = json.dumps({"ok": status == 200} if status == 200 else {"error": msg}).encode()
@@ -97,6 +114,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            self._cors()
             self.end_headers()
             self.wfile.write(body)
         else:                             # plain form post (no JavaScript): back to the page with the outcome
