@@ -550,6 +550,12 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
     assert seen[0]["filter"] == '{"PriceArea":["DK1"]}' and seen[0]["timezone"] == "UTC"
     assert src.fetch("DK1", "solar", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty   # solar stays on ENTSO-E
     assert src.fetch("NL", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty
+    # load: production + DK2's own interconnectors (the DK1-only links are null for DK2 and not asked for)
+    prod = {c: 100.0 for c in tso.EnerginetSource.PRODUCTION}
+    rows[:] = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", **prod, "ExchangeGreatBelt": 50.0, "ExchangeGermany": -30.0,
+                "ExchangeSweden": 10.0, "ExchangeNorway": None} for x in t[:3]]
+    s = src.fetch("DK2", "load", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-01 00:15"))
+    assert s.tolist() == [530.0] and "ExchangeNorway" not in seen[-1]["columns"]
 
 
 def test_long_history_lag_models(cfg):

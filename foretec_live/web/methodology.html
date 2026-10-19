@@ -95,7 +95,7 @@
           <table class="mini">
             <tr><th>Price</th><td>ENTSO-E day-ahead prices (A44), 15-minute SDAC</td></tr>
             <tr><th>Wind, solar</th><td>ENTSO-E actual generation per type (A75); gaps filled from Elia Open Data (BE), RTE éCO2mix (FR), then Energy-Charts. NL: NED.nl national estimates. DK wind: Energinet real-time production.</td></tr>
-            <tr><th>Load</th><td>ENTSO-E total load (A65 actual); NL: NED.nl gross consumption; DK published hourly, so DK load is scored on hourly averages.</td></tr>
+            <tr><th>Load</th><td>ENTSO-E total load (A65 actual); NL: NED.nl gross consumption; DK: Energinet real-time production plus net imports.</td></tr>
           </table>
           <p>Every snapshot records how many quarter-hours came from each source; the Forecast Explorer shows it.</p></div>
         <div class="qa"><h3>When is a forecast scored?</h3>
@@ -176,8 +176,8 @@
         <h2><span class="st">6</span>Known caveats</h2>
         <details><summary>NL: national estimates from NED.nl</summary>
           <p>NL wind, solar and load are NED.nl's national series (Nationaal Energie Dashboard, backed by TenneT), not ENTSO-E's: TenneT reports to ENTSO-E only the plants it meters, about 1% of the solar fleet, and a load net of rooftop solar (about 6 GW at a sunny midday against 17 GW gross). NED upscales monitored systems to the whole fleet, so it is an estimate rather than a meter reading. Offshore wind is NED's metered output from 13 Oct 2026; earlier days keep their scores on NED's park model, which ran 7–27% higher. Live NL forecasts made from the ENTSO-E series (wind and solar up to 10 Oct, load up to 11 Oct 2026) are voided: shown in the run tracker, never scored.</p></details>
-        <details><summary>DK: Energinet wind, hourly load</summary>
-          <p>DK1 and DK2 wind are Energinet's real-time production from 18 Oct 2026: since July 2026 ENTSO-E's DK1 offshore series has left out 0.3–0.5 GW of new parks. Earlier days keep their ENTSO-E scores; live DK wind forecasts of 17 and 18 Oct 2026 are voided. Danish solar stays on ENTSO-E, which matches Energinet's settlement including self-consumption. Danish load is published hourly and scored on hourly averages.</p></details>
+        <details><summary>DK: Energinet wind and load</summary>
+          <p>DK1 and DK2 wind are Energinet's real-time production from 18 Oct 2026: since July 2026 ENTSO-E's DK1 offshore series has left out 0.3–0.5 GW of new parks. Earlier days keep their ENTSO-E scores; live DK wind forecasts of 17 and 18 Oct 2026 are voided. Danish solar stays on ENTSO-E, which matches Energinet's settlement including self-consumption. Danish load is Energinet's real-time production plus net imports, at 15 minutes, from 19 Oct 2026. Since 10 Oct 2026 Energinet has sent ENTSO-E only 12–20 of the 24 hourly load values a day, so no Danish load day could be scored. Against Energinet's settled gross consumption, the real-time load is 0.99× for DK1 and 0.96× for DK2; ENTSO-E's hourly series was 0.90× and 0.98×. The backtest was re-run on it, and live DK load forecasts issued up to 19 Oct 2026 are voided (none had been scored). The grid-operator benchmark for DK load is still ENTSO-E's day-ahead forecast, which follows the narrower ENTSO-E series.</p></details>
         <details><summary>FR and DK solar at night</summary>
           <p>The French and Danish solar actuals carry a baseline through the night (about 200 MW in FR, 25–78 MW in DK1 and DK2), where BE, NL and DE-LU are zero. It is a defect of the feeds, left untouched; it slightly penalises forecasts that correctly go to zero.</p></details>
         <details><summary>Load forecast as an input</summary>
