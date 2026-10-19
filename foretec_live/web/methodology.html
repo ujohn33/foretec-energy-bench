@@ -155,9 +155,17 @@
             <li><b>tso_final</b>, a reference, never ranked: the final day-ahead wind and solar forecasts published after the gate (Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and DK, NED in the evening for NL).</li>
           </ul></div>
         <div class="qa" id="ensembles"><h3>What are the ensembles?</h3>
-          <p>Three entries combine other models' forecasts of the same issue day: per quarter-hour, the median of the members' point forecasts and, separately, of each quantile (the quantiles are then sorted). <b>ens_fm</b> takes five history-only foundation models (chronos2, timesfm3, t0_gamma, tirex2, timestral), <b>ens_fm_cov</b> their native-covariate variants, and <b>ens_hybrid</b> those five plus lgbm_prod. The members are the newest model of each family with a native-covariate variant, fixed by that rule and not picked by score. The median keeps one member's bust from moving the result. A series is combined when all members but at most one delivered it; otherwise the ensemble does not run for it. Ensembles use only forecasts made before the gate, so they run in the same live run, after every other model. They were added on 19 October 2026 and computed back over the earlier live days from the members' stored pre-gate forecasts (the day's run log records when); their live record starts on the first day enough members ran live (16 October), and their backtest covers every backtest day.</p></div>
+          <p>Three entries, marked <span class="ens-tag">ens</span>, that combine other models' forecasts of the same issue day: per quarter-hour, the median of the members' point forecasts and, separately, of each quantile (then sorted).</p>
+          <ul>
+            <li><b>ens_fm</b>: five history-only foundation models (chronos2, timesfm3, t0_gamma, tirex2, timestral).</li>
+            <li><b>ens_fm_cov</b>: their native-covariate variants (chronos2_cov, timesfm3_cov, t0_gamma_cov, tirex2_cov, timestral_cov).</li>
+            <li><b>ens_hybrid</b>: those five plus lgbm_prod, a gradient-boosted model of a different kind trained on the same weather.</li>
+          </ul>
+          <p>The members are the newest model of each family that has a native-covariate variant, fixed by that rule and not picked by score; the median keeps one member's bust from moving the result. A series is combined when all members but at most one delivered it. Ensembles use only forecasts made before the gate and run in the same live run, after every other model.</p>
+          <p><b>Excluded by default.</b> With the Ensembles switch on Exclude, they also leave the races, so every other model's score is what it would be without them; Include adds them to the field.</p>
+          <p class="where">Added on 19 Oct 2026 and computed back from the members' stored pre-gate forecasts: live record from 16 Oct, backtest on every backtest day.</p></div>
         <div class="qa"><h3>What do the filters change?</h3>
-          <p>Zone and target choose which races count. Covariates and the model count only choose which models are shown; positions stay those of the whole field. <i>Include ensembles</i> is the one filter that changes the field: unticked (the default), the ensembles leave the races as well, so every other model's points are what they would be without them.</p></div>
+          <p>Zone and target choose which races count. The Covariates switch only chooses which models are shown; positions stay those of the whole field. The Ensembles switch is the one filter that changes the field: on Exclude (the default) the ensembles leave the races as well.</p></div>
       </div>
 
       <div class="faq-sec" id="value">

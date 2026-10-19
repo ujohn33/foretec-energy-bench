@@ -623,3 +623,5 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
   .top-nav a{flex:none}
 }
 .legend button.faint.off{opacity:.32}
+.ens-tag{display:inline-block; margin-left:6px; padding:0 5px; border:1px solid var(--rule); border-radius:2px; font-family:var(--mono); font-size:.66rem;
+  line-height:1.5; color:var(--ink2); vertical-align:1px; cursor:help; font-weight:400; font-style:normal}
