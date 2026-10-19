@@ -562,19 +562,9 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
     assert seen[0]["filter"] == '{"PriceArea":["DK1"]}' and seen[0]["timezone"] == "UTC"
     assert src.fetch("DK1", "solar", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty   # solar stays on ENTSO-E
     assert src.fetch("NL", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty
-    # load: production + DK2's own interconnectors (the DK1-only links are null for DK2 and not asked for)
-    prod = {c: 100.0 for c in tso.EnerginetSource.PRODUCTION}
-    rows[:] = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", **prod, "ExchangeGreatBelt": 50.0, "ExchangeGermany": -30.0,
-                "ExchangeSweden": 10.0, "ExchangeNorway": None} for x in t[:3]]
-    s = src.fetch("DK2", "load", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-01 00:15"))
-    assert s.tolist() == [530.0] and "ExchangeNorway" not in seen[-1]["columns"]
-    # DK1-GB (Viking Link) is null before it existed: zero then, a null afterwards still drops the reading
-    links = {c: 10.0 for c in tso.EnerginetSource.EXCHANGES["DK1"]}
-    for day in ("2023-06-01", "2024-06-01"):
-        rows[:] = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", **prod, **links, "ExchangeGreatBritain": None}
-                   for x in pd.date_range(day, periods=3, freq="5min")]
-        s = src.fetch("DK1", "load", pd.Timestamp(day), pd.Timestamp(day) + pd.Timedelta("15min"))
-        assert s.tolist() == ([550.0] if day < "2024" else [])
+    # DK load stays on ENTSO-E: as a fallback this source must not fill A65's gaps with a different quantity
+    n = len(seen)
+    assert src.fetch("DK1", "load", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty and len(seen) == n
 
 
 def test_long_history_lag_models(cfg):

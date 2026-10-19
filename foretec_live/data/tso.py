@@ -23,9 +23,9 @@ Energinet (DK1, DK2), Energi Data Service (api.energidataservice.dk, no key), El
   at ENTSO-E (Anholt, Horns Rev A-C, Vesterhav Nord/Syd), missing 0.3-0.5 GW of new offshore output. Prodex agrees
   with Energinet's settlement within 1-4% (hourly, 2024 - Oct 2026). DK solar stays on ENTSO-E: Prodex solar leaves
   out self-consumption (DK2 19% below settlement in 2026), A75 matches settlement including it.
-  DK load is Prodex's own definition, production plus net imports, at 15 minutes. Since 10 Oct 2026, Energinet has
-  sent ENTSO-E only 12-20 of the 24 hourly A65 values a day. Against settled gross consumption (Aug - 8 Oct 2026,
-  hourly), Prodex load is 0.99x for DK1 (A65 0.90x) and 0.96x for DK2 (A65 0.98x).
+  DK load stays on ENTSO-E A65, the quantity Energinet's own day-ahead load forecast (the grid-operator benchmark)
+  predicts: in 2026 that forecast is 1.00x A65 with an hourly MAE of 40-89 MW in DK1, against 226-287 MW to Prodex's
+  production plus net imports. So this source answers wind only: as a fallback it must not fill A65's load gaps.
 
 RTE (FR), Generation Forecast API v3 (key RTE_DATA_KEY = base64 client_id:client_secret): RTE's day-ahead
   ("D-1") wind (onshore + offshore) and solar forecast, published at 16:15 on D-1, after the gate. RTE has no
@@ -220,18 +220,11 @@ class NedSource(Source):
 
 
 class EnerginetSource(Source):
-    """DK1/DK2 wind (onshore + offshore) and load from Energinet's real-time production and exchange, quarter-hour
-    means of the 5-minute values (a quarter-hour needs at least 2 of its 3, each with every column reported)."""
+    """DK1/DK2 wind (onshore + offshore) from Energinet's real-time production, quarter-hour means of the 5-minute
+    values (a quarter-hour needs at least 2 of its 3)."""
     name = "energinet"
     URL = "https://api.energidataservice.dk/dataset/ElectricityProdex5MinRealtime"
     WIND = ("OnshoreWindPower", "OffshoreWindPower")
-    PRODUCTION = ("ProductionLt100MW", "ProductionGe100MW", "OffshoreWindPower", "OnshoreWindPower", "SolarPower")
-    # each zone's interconnectors, positive = import (the other columns are null for that zone)
-    EXCHANGES = {"DK1": ("ExchangeGreatBelt", "ExchangeGermany", "ExchangeNetherlands", "ExchangeGreatBritain",
-                         "ExchangeNorway", "ExchangeSweden"),
-                 "DK2": ("ExchangeGreatBelt", "ExchangeGermany", "ExchangeSweden")}
-    # links commissioned within the history: null in Prodex until their first value (Viking Link, DK1-GB, Dec 2023)
-    LINK_FROM = {"ExchangeGreatBritain": "2023-12-17 23:00"}
 
     def _get(self, params: dict) -> list[dict]:
         """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times."""
@@ -253,10 +246,9 @@ class EnerginetSource(Source):
                 time.sleep(5 * fails)
 
     def fetch(self, zone, target, start, end):
-        if zone not in self.EXCHANGES or target not in ("wind", "load"):
+        if zone not in ("DK1", "DK2") or target != "wind":
             return pd.Series(dtype=float)
-        # load as Energinet defines it in Prodex: production plus net imports (BornholmSE4 is already in DK2's Sweden)
-        cols = self.WIND if target == "wind" else self.PRODUCTION + self.EXCHANGES[zone]
+        cols = self.WIND
         rows, a = [], pd.Timestamp(start)
         while a < end:   # a quarter of a year per request
             b = min(pd.Timestamp(end), a + pd.Timedelta(days=92))
@@ -266,12 +258,8 @@ class EnerginetSource(Source):
         if not rows:
             return pd.Series(dtype=float)
         df = pd.DataFrame(rows)
-        t = pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))
-        vals = df[list(cols)].apply(pd.to_numeric, errors="coerce")
-        for col, since in self.LINK_FROM.items():   # a link before it existed carries nothing
-            if col in vals:
-                vals.loc[t < pd.Timestamp(since), col] = vals.loc[t < pd.Timestamp(since), col].fillna(0.0)
-        five = pd.Series(vals.sum(axis=1, min_count=len(cols)).to_numpy(), index=t).dropna().sort_index()
+        five = pd.Series(df[list(cols)].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
+                         index=pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))).dropna().sort_index()
         five = five[~five.index.duplicated(keep="last")]
         q = five.resample("15min")
         s = q.mean()[q.count() >= 2]

@@ -47,19 +47,18 @@ fallback_source: [elia, rte, ned, energinet, energycharts]
 # NED has the national totals (load gross, like Elia's and RTE's total load).
 # DK wind: ENTSO-E's DK1 offshore misses the parks not registered there (0.3-0.5 GW since July 2026); Energinet's
 # real-time production matches its settlement (see data/tso.py). DK solar stays on ENTSO-E (includes self-consumption).
-# DK load: Energinet's production plus net imports at 15 minutes; ENTSO-E's hourly A65 has had gaps since 10 Oct 2026.
-source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned, DK1_wind: energinet, DK2_wind: energinet,
-                   DK1_load: energinet, DK2_load: energinet}
-# only the preferred source, no fallback: ENTSO-E's NL wind/solar and DK wind/load are a different quantity, a gap is
+# DK load stays on ENTSO-E A65: Energinet's own day-ahead load forecast (tso_cutoff) predicts that quantity, not Prodex's
+# production plus net imports (hourly MAE 40-89 vs 226-287 MW in DK1, 2026), even though A65 has gaps since 10 Oct 2026.
+source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned, DK1_wind: energinet, DK2_wind: energinet}
+# only the preferred source, no fallback: ENTSO-E's NL wind/solar and DK wind are a different quantity, a gap is
 # better than mixing
-exclusive_series: [NL_wind, NL_solar, NL_load, DK1_wind, DK2_wind, DK1_load, DK2_load]
+exclusive_series: [NL_wind, NL_solar, NL_load, DK1_wind, DK2_wind]
 # live forecasts made from a different quantity than the one now scored: kept and shown, never scored
 void_live:
   - {series: [NL_wind, NL_solar], through: 2026-10-10, reason: "made from ENTSO-E's NL history before the switch to NED's national estimate"}
   - {series: [NL_load], through: 2026-10-11, reason: "made from ENTSO-E's net NL load before the switch to NED's gross load"}
   # issues 15-16 Oct were scored on ENTSO-E's DK wind before the switch and stay so (actuals_locked_through)
   - {series: [DK1_wind, DK2_wind], from: 2026-10-17, through: 2026-10-18, reason: "made from ENTSO-E's DK wind history before the switch to Energinet's real-time production"}
-  - {series: [DK1_load, DK2_load], through: 2026-10-19, reason: "made from ENTSO-E's hourly DK load before the switch to Energinet's real-time load"}
 # (energycharts | entsoe | synthetic for tests)
 
 zones:
@@ -71,9 +70,8 @@ zones:
   DK1: {energycharts_bzn: DK1, energycharts_country: dk, entsoe: "10YDK-1--------W"}
   DK2: {energycharts_bzn: DK2, energycharts_country: dk, entsoe: "10YDK-2--------M"}
 # series whose actuals are only published at a coarser resolution: forecasts and actuals are averaged to it before
-# scoring, so 15-minute detail the actuals do not have is neither rewarded nor penalised (DK load was hourly on
-# ENTSO-E until it moved to Energinet's 15-minute real-time series, 19 Oct 2026)
-score_resolution: {}
+# scoring, so 15-minute detail the actuals do not have is neither rewarded nor penalised (ENTSO-E DK load is hourly)
+score_resolution: {DK1_load: 1h, DK2_load: 1h}
 
 targets:
   price:
