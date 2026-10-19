@@ -556,6 +556,13 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
                 "ExchangeSweden": 10.0, "ExchangeNorway": None} for x in t[:3]]
     s = src.fetch("DK2", "load", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-01 00:15"))
     assert s.tolist() == [530.0] and "ExchangeNorway" not in seen[-1]["columns"]
+    # DK1-GB (Viking Link) is null before it existed: zero then, a null afterwards still drops the reading
+    links = {c: 10.0 for c in tso.EnerginetSource.EXCHANGES["DK1"]}
+    for day in ("2023-06-01", "2024-06-01"):
+        rows[:] = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", **prod, **links, "ExchangeGreatBritain": None}
+                   for x in pd.date_range(day, periods=3, freq="5min")]
+        s = src.fetch("DK1", "load", pd.Timestamp(day), pd.Timestamp(day) + pd.Timedelta("15min"))
+        assert s.tolist() == ([550.0] if day < "2024" else [])
 
 
 def test_long_history_lag_models(cfg):

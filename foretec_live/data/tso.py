@@ -230,6 +230,8 @@ class EnerginetSource(Source):
     EXCHANGES = {"DK1": ("ExchangeGreatBelt", "ExchangeGermany", "ExchangeNetherlands", "ExchangeGreatBritain",
                          "ExchangeNorway", "ExchangeSweden"),
                  "DK2": ("ExchangeGreatBelt", "ExchangeGermany", "ExchangeSweden")}
+    # links commissioned within the history: null in Prodex until their first value (Viking Link, DK1-GB, Dec 2023)
+    LINK_FROM = {"ExchangeGreatBritain": "2023-12-17 23:00"}
 
     def _get(self, params: dict) -> list[dict]:
         """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times."""
@@ -264,8 +266,12 @@ class EnerginetSource(Source):
         if not rows:
             return pd.Series(dtype=float)
         df = pd.DataFrame(rows)
-        five = pd.Series(df[list(cols)].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
-                         index=pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))).dropna().sort_index()
+        t = pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))
+        vals = df[list(cols)].apply(pd.to_numeric, errors="coerce")
+        for col, since in self.LINK_FROM.items():   # a link before it existed carries nothing
+            if col in vals:
+                vals.loc[t < pd.Timestamp(since), col] = vals.loc[t < pd.Timestamp(since), col].fillna(0.0)
+        five = pd.Series(vals.sum(axis=1, min_count=len(cols)).to_numpy(), index=t).dropna().sort_index()
         five = five[~five.index.duplicated(keep="last")]
         q = five.resample("15min")
         s = q.mean()[q.count() >= 2]
