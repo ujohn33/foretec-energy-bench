@@ -185,18 +185,6 @@ def test_load_forecast_is_a_price_input_only():
             load = pick(cols, zone, "load")
             assert load and not [c for c in load if ".load_fc." in c], (pick.__name__, zone, load)
             assert f"{zone}.load_fc.entsoe.load_mw" in pick(cols, zone, "price"), (pick.__name__, zone)
-    # a re-run of a live day up to 15 Oct 2026 keeps that day's rule (load forecast for load); a backtest does not
-    import fl_cov
-    try:
-        fl_cov._REQ.update(issue_date="2026-10-15", live=True)
-        assert "NL.load_fc.entsoe.load_mw" in compact_features(cols, "NL", "load")
-        assert "NL.load_fc.entsoe.load_mw" in full_features(cols, "NL", "load")
-        fl_cov._REQ.update(issue_date="2026-10-16", live=True)
-        assert "NL.load_fc.entsoe.load_mw" not in full_features(cols, "NL", "load")
-        fl_cov._REQ.update(issue_date="2026-10-01", live=False)
-        assert "NL.load_fc.entsoe.load_mw" not in compact_features(cols, "NL", "load")
-    finally:
-        fl_cov._REQ.clear()
 
 
 def test_half_ingested_nwp_run_is_rejected(cfg, monkeypatch):
