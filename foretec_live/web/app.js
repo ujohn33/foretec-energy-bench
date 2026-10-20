@@ -1465,6 +1465,18 @@
     const above = line(sold) + `L${x1},${y0 - 4}L${x0},${y0 - 4}Z`, below = line(sold) + `L${x1},${y1}L${x0},${y1}Z`;
     const imb = S.v.mode === "imb";
     const mw = (VAL && VAL.asset_mw) || 100;
+    // the gaps follow the settlement: as missed income both directions cost the price gap; at the imbalance price a
+    // surplus is paid the long price and a shortfall is bought back at the short price. A label sits in the widest gap.
+    const upCls = imb ? "vx-surplus" : "vx-short";
+    const widest = (sign) => VHOURS.slice(3, 22).reduce((b, t) => (sign * (vAct[t] - sold[t]) > sign * (vAct[b] - sold[b]) ? t : b), 3);
+    const label = (sign, text) => {
+      const t = widest(sign);
+      if (sign * (vAct[t] - sold[t]) < 4) return "";
+      const y = sign > 0 ? Math.min(Y(vAct[t]), Y(sold[t])) - 6 : Math.max(Y(vAct[t]), Y(sold[t])) + 12;
+      return `<text x="${X(t).toFixed(1)}" y="${y.toFixed(1)}" class="vx-lab" text-anchor="middle">${text}</text>`;
+    };
+    const labels = imb ? label(1, "paid the long price") + label(-1, "bought at the short price")
+      : label(1, "costs the price gap") + label(-1, "costs the price gap");
     el.classList.toggle("anim", !vAnimated);
     vAnimated = true;
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="vx-svg" aria-hidden="true">
@@ -1474,14 +1486,15 @@
         <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">MW</text>
         <path d="${band}" class="vx-band"/>
         <path d="${gap}" class="vx-gap vx-short" clip-path="url(#vx-dn)"/>
-        <path d="${gap}" class="vx-gap vx-surplus" clip-path="url(#vx-up)"/>
+        <path d="${gap}" class="vx-gap ${upCls}" clip-path="url(#vx-up)"/>
         <path d="${line(sold)}" class="vx-sold"/>
         <path d="${line(vAct)}" class="vx-act" pathLength="1"/>
+        <g class="vx-labels">${labels}</g>
       </svg>
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
-        <li><i class="sw sw-short"></i><i class="sw sw-surplus"></i><div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "MWh above what you sold are paid the long price; MWh short are bought back at the short price" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
+        <li><i class="sw sw-short"></i>${imb ? '<i class="sw sw-surplus"></i>' : ""}<div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "MWh above what you sold are paid the long price; MWh short are bought back at the short price" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
   }

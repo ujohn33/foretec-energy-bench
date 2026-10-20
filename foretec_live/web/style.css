@@ -641,3 +641,5 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
 body:is([data-page="leaderboard"],[data-page="explorer"],[data-page="value"],[data-page="methodology"]) main{opacity:0; animation:main-reveal .2s ease-out 3s forwards}
 body.ready main{opacity:1 !important; animation:none; transition:opacity .22s ease-out}
 @keyframes main-reveal{to{opacity:1}}
+.vx-lab{font-family:var(--sans); font-size:10px; fill:var(--ink2); paint-order:stroke; stroke:var(--surface); stroke-width:3px; stroke-linejoin:round}
+.vexplain.anim .vx-labels{opacity:0; animation:vx-fade .6s ease-out 1.9s forwards}
