@@ -1451,52 +1451,100 @@
   const vMed = VHOURS.map((t) => 46 + 18 * Math.sin((2 * Math.PI * (t - 5)) / 24) + 7 * Math.sin((2 * Math.PI * t) / 9));
   const vAct = VHOURS.map((t, i) => Math.max(2, vMed[i] + 13 * Math.sin((2 * Math.PI * t) / 7 + 1) + 6 * Math.sin((2 * Math.PI * t) / 3.3)));
   const vSd = vMed.map((m) => 7 + 0.18 * m);
-  let vAnimated = false;
-  function renderExplainer() {
+  // the explainer draws one real day when it can: the selected model's forecast band (p10-p90), the percentile sold
+  // (interpolated between p10, the point forecast and p90) and the actual output of the zone, with arrows through the
+  // days of the rating window. Without data it falls back to a stylised day.
+  async function explainerDay() {
+    if (!VAL || !S.v.model) return null;
+    const zones = S.v.zone === "all" ? D.config.zones : [S.v.zone];
+    for (const z of zones) {
+      const s = VAL.series[`${z}_${S.v.target}`], m = S.v.model;
+      if (!s || !s.models[m]) continue;
+      const arr = s.models[m]["p" + S.v.p + VSFX()] || [];
+      const idx = s.days.map((d, i) => i).filter((i) => valueDayIn(s, i) && arr[i] != null);
+      if (!idx.length) continue;
+      if (S.v.xi == null || !idx.includes(S.v.xi) || S.v.xz !== z) { S.v.xi = idx[idx.length - 1]; S.v.xz = z; }
+      const day = await loadDay(s.days[S.v.xi]);
+      const ser = day && day.series[`${z}_${S.v.target}`], f = ser && ser.models[m];
+      if (!ser || !ser.actual || !f || !f.lo) continue;
+      return { z, s, idx, i: S.v.xi, day, act: ser.actual, f, kept: arr[S.v.xi] / s.perfect[S.v.xi] };
+    }
+    return null;
+  }
+  let vAnimated = false, vExplainSeq = 0;
+  async function renderExplainer() {
     const el = $("v-explain");
     if (!el) return;
-    const W = 440, H = 196, x0 = 34, x1 = 420, y0 = 20, y1 = 174;
-    const X = (t) => x0 + ((x1 - x0) * t) / 24, Y = (v) => y1 - ((y1 - y0) * Math.min(100, Math.max(0, v))) / 100;
-    const line = (vals) => vals.map((v, t) => `${t ? "L" : "M"}${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join("");
-    const lo = vMed.map((m, i) => m + VZ[10] * vSd[i]), hi = vMed.map((m, i) => m + VZ[90] * vSd[i]);
-    const sold = vMed.map((m, i) => m + VZ[S.v.p] * vSd[i]);
-    const band = line(hi) + VHOURS.slice().reverse().map((t) => `L${X(t).toFixed(1)},${Y(lo[t]).toFixed(1)}`).join("") + "Z";
-    const gap = line(vAct) + VHOURS.slice().reverse().map((t) => `L${X(t).toFixed(1)},${Y(sold[t]).toFixed(1)}`).join("") + "Z";
+    const seq = ++vExplainSeq;
+    const real = await explainerDay().catch(() => null);
+    if (seq !== vExplainSeq) return;   // a newer render has started
+    const W = 440, H = 196, x0 = 38, x1 = 420, y0 = 20, y1 = 174;
+    let n, act, lo, hi, sold, top, unit, tick;
+    if (real) {
+      const q = (k) => real.f[k].map((v) => (v == null ? null : v));
+      lo = q("lo"); hi = q("hi"); const pt = q("p");
+      const w = (S.v.p - 10) / 40, w2 = (S.v.p - 50) / 40;
+      sold = pt.map((v, k) => Math.max(0, S.v.p <= 50 ? lo[k] + (v - lo[k]) * w : v + (hi[k] - v) * w2));
+      act = real.act; n = act.length;
+      const mx = Math.max(...hi.filter((v) => v != null), ...act.filter((v) => v != null), 1);
+      const mag = Math.pow(10, Math.floor(Math.log10(mx))), step = mx / mag > 5 ? mag : mx / mag > 2 ? mag / 2 : mag / 5;
+      top = Math.ceil(mx / step) * step; unit = "MW"; tick = step;
+    } else {
+      n = 25; act = vAct; lo = vMed.map((m, i) => m + VZ[10] * vSd[i]); hi = vMed.map((m, i) => m + VZ[90] * vSd[i]);
+      sold = vMed.map((m, i) => m + VZ[S.v.p] * vSd[i]); top = 100; unit = "MW"; tick = 50;
+    }
+    const X = (t) => x0 + ((x1 - x0) * t) / (n - 1), Y = (v) => y1 - ((y1 - y0) * Math.min(top, Math.max(0, v))) / top;
+    const line = (vals) => vals.map((v, t) => `${t ? "L" : "M"}${X(t).toFixed(1)},${Y(v ?? 0).toFixed(1)}`).join("");
+    const back = (vals) => vals.map((v, t) => [t, v]).reverse().map(([t, v]) => `L${X(t).toFixed(1)},${Y(v ?? 0).toFixed(1)}`).join("");
+    const band = line(hi) + back(lo) + "Z", gap = line(act) + back(sold) + "Z";
     const above = line(sold) + `L${x1},${y0 - 4}L${x0},${y0 - 4}Z`, below = line(sold) + `L${x1},${y1}L${x0},${y1}Z`;
     const imb = S.v.mode === "imb";
     const mw = (VAL && VAL.asset_mw) || 100;
     // the gaps follow the settlement: as missed income both directions cost the price gap; at the imbalance price a
     // surplus is paid the long price and a shortfall is bought back at the short price. A label sits in the widest gap.
     const upCls = imb ? "vx-surplus" : "vx-short";
-    const widest = (sign) => VHOURS.slice(3, 22).reduce((b, t) => (sign * (vAct[t] - sold[t]) > sign * (vAct[b] - sold[b]) ? t : b), 3);
+    const edge = Math.round(n / 8);
+    const widest = (sign) => { let b = edge; for (let t = edge; t < n - edge; t++) if (sign * ((act[t] ?? 0) - sold[t]) > sign * ((act[b] ?? 0) - sold[b])) b = t; return b; };
     const label = (sign, text) => {
       const t = widest(sign);
-      if (sign * (vAct[t] - sold[t]) < 4) return "";
-      const y = sign > 0 ? Math.min(Y(vAct[t]), Y(sold[t])) - 6 : Math.max(Y(vAct[t]), Y(sold[t])) + 12;
+      if (sign * ((act[t] ?? 0) - sold[t]) < top * 0.04) return "";
+      const y = sign > 0 ? Math.min(Y(act[t]), Y(sold[t])) - 6 : Math.max(Y(act[t]), Y(sold[t])) + 12;
       return `<text x="${X(t).toFixed(1)}" y="${y.toFixed(1)}" class="vx-lab" text-anchor="middle">${text}</text>`;
     };
     const labels = imb ? label(1, "paid the long price") + label(-1, "bought at the short price")
       : label(1, "costs the price gap") + label(-1, "costs the price gap");
+    const hours = [0, 6, 12, 18, 24].map((h) => [h, (h / 24) * (n - 1)]);
+    const ticks = [0, tick, 2 * tick, 3 * tick, 4 * tick, 5 * tick].filter((v) => v <= top + 1e-9);
+    const fmtTick = (v) => (v >= 1000 ? (v / 1000).toLocaleString("en-GB", { maximumFractionDigits: 1 }) + "k" : String(v));
     el.classList.toggle("anim", !vAnimated);
     vAnimated = true;
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="vx-svg" aria-hidden="true">
+    const head = real
+      ? `<div class="vx-head"><button type="button" class="vx-nav" data-step="-1" aria-label="Earlier day" ${real.idx.indexOf(real.i) === 0 ? "disabled" : ""}>‹</button>
+          <span><b>${esc(zoneLabel(real.z))} ${esc((TARGET_LABEL[S.v.target] || S.v.target).toLowerCase())}</b> · delivery ${esc(real.day.delivery_date || addDays(real.s.days[real.i], 1))} · ${esc(S.v.model)} at p${S.v.p} · kept <b>${pct(real.kept)}</b> that day</span>
+          <button type="button" class="vx-nav" data-step="1" aria-label="Later day" ${real.idx.indexOf(real.i) === real.idx.length - 1 ? "disabled" : ""}>›</button></div>`
+      : `<div class="vx-head"><span>A stylised day</span></div>`;
+    el.innerHTML = `<div class="vx-fig">${head}<svg viewBox="0 0 ${W} ${H}" class="vx-svg" aria-hidden="true">
         <defs><clipPath id="vx-up"><path d="${above}"/></clipPath><clipPath id="vx-dn"><path d="${below}"/></clipPath></defs>
-        ${[0, 50, 100].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" class="vx-grid"/><text x="${x0 - 6}" y="${Y(v) + 4}" class="vx-ax" text-anchor="end">${v}</text>`).join("")}
-        ${[0, 6, 12, 18, 24].map((t) => `<text x="${X(t)}" y="${H - 6}" class="vx-ax" text-anchor="middle">${String(t).padStart(2, "0")}:00</text>`).join("")}
-        <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">MW</text>
+        ${ticks.map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" class="vx-grid"/><text x="${x0 - 6}" y="${Y(v) + 4}" class="vx-ax" text-anchor="end">${fmtTick(v)}</text>`).join("")}
+        ${hours.map(([h, t]) => `<text x="${X(t)}" y="${H - 6}" class="vx-ax" text-anchor="middle">${String(h).padStart(2, "0")}:00</text>`).join("")}
+        <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">${unit}</text>
         <path d="${band}" class="vx-band"/>
         <path d="${gap}" class="vx-gap vx-short" clip-path="url(#vx-dn)"/>
         <path d="${gap}" class="vx-gap ${upCls}" clip-path="url(#vx-up)"/>
         <path d="${line(sold)}" class="vx-sold"/>
-        <path d="${line(vAct)}" class="vx-act" pathLength="1"/>
+        <path d="${line(act)}" class="vx-act" pathLength="1"/>
         <g class="vx-labels">${labels}</g>
-      </svg>
+      </svg></div>
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
-        <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet</span></div></li>
+        <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>${real ? `drawn for the zone's whole fleet; scored as a <span id="v-mw">${mw}</span> MW share of it` : `a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet`}</span></div></li>
         <li><i class="sw sw-short"></i>${imb ? '<i class="sw sw-surplus"></i>' : ""}<div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "MWh above what you sold are paid the long price; MWh short are bought back at the short price" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
+    el.querySelectorAll(".vx-nav").forEach((b) => (b.onclick = () => {
+      const k = real.idx.indexOf(real.i) + +b.dataset.step;
+      if (k >= 0 && k < real.idx.length) { S.v.xi = real.idx[k]; renderExplainer(); }
+    }));
   }
   function renderValue() {
     if (!VAL) return;

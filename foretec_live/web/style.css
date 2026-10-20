@@ -643,3 +643,10 @@ body.ready main{opacity:1 !important; animation:none; transition:opacity .22s ea
 @keyframes main-reveal{to{opacity:1}}
 .vx-lab{font-family:var(--sans); font-size:10px; fill:var(--ink2); paint-order:stroke; stroke:var(--surface); stroke-width:3px; stroke-linejoin:round}
 .vexplain.anim .vx-labels{opacity:0; animation:vx-fade .6s ease-out 1.9s forwards}
+.vx-fig{min-width:0}
+.vx-head{display:flex; align-items:center; gap:8px; margin:0 0 4px; font-size:.82rem; color:var(--ink2); min-height:26px}
+.vx-head span{flex:1; min-width:0; text-align:center} .vx-head b{color:var(--ink); font-weight:600}
+.vx-nav{flex:none; width:26px; height:26px; border:1px solid var(--rule); border-radius:2px; background:var(--surface); color:var(--ink);
+  font:inherit; font-size:1rem; line-height:1; cursor:pointer}
+.vx-nav:hover{background:var(--raise)} .vx-nav:disabled{opacity:.35; cursor:default}
+.vx-nav:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
