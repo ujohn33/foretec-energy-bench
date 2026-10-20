@@ -1467,7 +1467,9 @@
       const day = await loadDay(s.days[S.v.xi]);
       const ser = day && day.series[`${z}_${S.v.target}`], f = ser && ser.models[m];
       if (!ser || !ser.actual || !f || !f.lo) continue;
-      return { z, s, idx, i: S.v.xi, day, act: ser.actual, f, kept: arr[S.v.xi] / s.perfect[S.v.xi] };
+      const priceSer = day.series[`${z}_price`];
+      return { z, s, idx, i: S.v.xi, day, act: ser.actual, f, kept: arr[S.v.xi] / s.perfect[S.v.xi],
+        da: priceSer && priceSer.actual, im: day.imbalance && day.imbalance[z] };
     }
     return null;
   }
@@ -1513,8 +1515,25 @@
       const y = sign > 0 ? Math.min(Y(act[t]), Y(sold[t])) - 6 : Math.max(Y(act[t]), Y(sold[t])) + 12;
       return `<text x="${X(t).toFixed(1)}" y="${y.toFixed(1)}" class="vx-lab" text-anchor="middle">${text}</text>`;
     };
-    const labels = imb ? label(1, "surplus: paid the long price") + label(-1, "shortfall: bought at the short price")
+    let labels = imb ? label(1, "surplus: paid the long price") + label(-1, "shortfall: bought at the short price")
       : label(1, "costs the price gap") + label(-1, "costs the price gap");
+    // at the imbalance price with the day's prices known: each quarter-hour's gap is green where it earned against the
+    // day-ahead price (surplus while the long price was above it, shortfall while the short price was below it), red where it cost
+    let perQh = "";
+    const priced = imb && real && real.da && real.im;
+    if (priced) {
+      let best = { v: 0 }, worst = { v: 0 };
+      for (let t = 0; t < n - 1; t++) {
+        const dev = (act[t] ?? 0) - sold[t];
+        const pi = dev > 0 ? real.im.long[t] : real.im.short[t], da = real.da[t];
+        if (Math.abs(dev) < top * 0.002 || pi == null || da == null) continue;
+        const v = dev * (pi - da);
+        perQh += `<path d="M${X(t).toFixed(1)},${Y(act[t]).toFixed(1)}L${X(t + 1).toFixed(1)},${Y(act[t + 1] ?? act[t]).toFixed(1)}L${X(t + 1).toFixed(1)},${Y(sold[t + 1]).toFixed(1)}L${X(t).toFixed(1)},${Y(sold[t]).toFixed(1)}Z" class="${v >= 0 ? "vx-gain" : "vx-loss"}"/>`;
+        if (v > best.v) best = { v, t }; if (v < worst.v) worst = { v, t };
+      }
+      const at = (o, text) => (o.t == null ? "" : `<text x="${X(Math.min(n - edge, Math.max(edge, o.t))).toFixed(1)}" y="${(Math.min(Y(act[o.t]), Y(sold[o.t])) - 6).toFixed(1)}" class="vx-lab" text-anchor="middle">${text}</text>`);
+      labels = at(best, "earned vs day-ahead") + at(worst, "cost vs day-ahead");
+    }
     const hours = [0, 6, 12, 18, 24].map((h) => [h, (h / 24) * (n - 1)]);
     const ticks = [0, tick, 2 * tick, 3 * tick, 4 * tick, 5 * tick].filter((v) => v <= top + 1e-9);
     const fmtTick = (v) => (v >= 1000 ? (v / 1000).toLocaleString("en-GB", { maximumFractionDigits: 1 }) + "k" : String(v));
@@ -1531,8 +1550,8 @@
         ${hours.map(([h, t]) => `<text x="${X(t)}" y="${H - 6}" class="vx-ax" text-anchor="middle">${String(h).padStart(2, "0")}:00</text>`).join("")}
         <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">${unit}</text>
         <path d="${band}" class="vx-band"/>
-        <path d="${gap}" class="vx-gap ${dnCls}" clip-path="url(#vx-dn)"/>
-        <path d="${gap}" class="vx-gap ${upCls}" clip-path="url(#vx-up)"/>
+        ${priced ? `<g class="vx-gap">${perQh}</g>` : `<path d="${gap}" class="vx-gap ${dnCls}" clip-path="url(#vx-dn)"/>
+        <path d="${gap}" class="vx-gap ${upCls}" clip-path="url(#vx-up)"/>`}
         <path d="${line(sold)}" class="vx-sold"/>
         <path d="${line(act)}" class="vx-act" pathLength="1"/>
         <g class="vx-labels">${labels}</g>
@@ -1540,7 +1559,10 @@
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>${real ? `drawn for the zone's whole fleet; scored as a <span id="v-mw">${mw}</span> MW share of it` : `a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet`}</span></div></li>
-        <li><i class="sw ${imb ? "sw-imb" : "sw-short"}"></i><div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "a surplus is paid the long price, a shortfall bought back at the short price: a gain when the price is on your side of the day-ahead price (long while the system is short, or short while it is long), a loss otherwise" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
+        <li>${priced ? '<i class="sw sw-gain"></i><i class="sw sw-loss"></i>' : `<i class="sw ${imb ? "sw-imb" : "sw-short"}"></i>`}<div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb
+          ? (priced ? "green: the gap earned against the day-ahead price (surplus while the long price was above it, shortfall while the short price was below it); red: it cost"
+            : "a surplus is paid the long price, a shortfall bought back at the short price: a gain when the price is on your side of the day-ahead price, a loss otherwise")
+          : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
     el.querySelectorAll(".vx-nav").forEach((b) => (b.onclick = () => {

@@ -113,6 +113,19 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
                         m["lo"], m["hi"] = _round(g[BAND[0]]), _round(g[BAND[1]])
                     entry["models"][model] = m
             out["series"][key] = entry
+    # long and short imbalance prices per zone, so the value page can show which quarter-hours a forecast gap earned or cost
+    from .market import load_imbalance
+    imb = {}
+    for zone in cfg["zones"]:
+        try:
+            df = load_imbalance(cfg, zone, delivery_date(issue_date))
+        except Exception:  # noqa: BLE001 - a missing or unreadable file only leaves the zone out
+            df = None
+        if df is not None and len(df):
+            df = df.reindex(idx)
+            if df[["long", "short"]].notna().any(axis=None):
+                imb[zone] = {"long": _round(df["long"], 2), "short": _round(df["short"], 2)}
+    out["imbalance"] = imb or None
     out["inputs"] = _day_inputs(issue_date, idx, cfg)
     srcs = {}
     for folder in (p["actuals_provisional"], p["actuals"]):      # frozen provenance wins over provisional
@@ -323,7 +336,8 @@ def build_site(cfg) -> Path:
         f = site / "data" / "days" / f"{issue_date}.json"
         # older days rarely change: rewrite only recent ones, or when forecasts/inputs are newer than the page data
         if f.exists() and issue_date < settled:
-            sources = list(folder.glob("*.parquet")) + list((Path(cfg["_root"]) / "data" / "covariates").glob(f"{issue_date}.*")) + model_cfgs
+            sources = list(folder.glob("*.parquet")) + list((Path(cfg["_root"]) / "data" / "covariates").glob(f"{issue_date}.*")) + model_cfgs \
+                + list((Path(cfg["_root"]) / "data" / "market" / "imbalance" / str(delivery_date(issue_date))).glob("*.parquet"))
             if max((x.stat().st_mtime for x in sources), default=0) <= f.stat().st_mtime:
                 continue
         js = _day_json(issue_date, folder, cfg)
