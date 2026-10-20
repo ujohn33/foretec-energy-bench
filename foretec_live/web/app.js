@@ -1502,7 +1502,9 @@
     const mw = (VAL && VAL.asset_mw) || 100;
     // the gaps follow the settlement: as missed income both directions cost the price gap; at the imbalance price a
     // surplus is paid the long price and a shortfall is bought back at the short price. A label sits in the widest gap.
-    const upCls = imb ? "vx-surplus" : "vx-short";
+    // at the imbalance price a gap can earn or cost (it earns when the price is on its side of the day-ahead price),
+    // so both directions are drawn in one neutral colour; as missed income both are always a cost
+    const upCls = imb ? "vx-imb" : "vx-short", dnCls = imb ? "vx-imb" : "vx-short";
     const edge = Math.round(n / 8);
     const widest = (sign) => { let b = edge; for (let t = edge; t < n - edge; t++) if (sign * ((act[t] ?? 0) - sold[t]) > sign * ((act[b] ?? 0) - sold[b])) b = t; return b; };
     const label = (sign, text) => {
@@ -1511,7 +1513,7 @@
       const y = sign > 0 ? Math.min(Y(act[t]), Y(sold[t])) - 6 : Math.max(Y(act[t]), Y(sold[t])) + 12;
       return `<text x="${X(t).toFixed(1)}" y="${y.toFixed(1)}" class="vx-lab" text-anchor="middle">${text}</text>`;
     };
-    const labels = imb ? label(1, "paid the long price") + label(-1, "bought at the short price")
+    const labels = imb ? label(1, "surplus: paid the long price") + label(-1, "shortfall: bought at the short price")
       : label(1, "costs the price gap") + label(-1, "costs the price gap");
     const hours = [0, 6, 12, 18, 24].map((h) => [h, (h / 24) * (n - 1)]);
     const ticks = [0, tick, 2 * tick, 3 * tick, 4 * tick, 5 * tick].filter((v) => v <= top + 1e-9);
@@ -1529,7 +1531,7 @@
         ${hours.map(([h, t]) => `<text x="${X(t)}" y="${H - 6}" class="vx-ax" text-anchor="middle">${String(h).padStart(2, "0")}:00</text>`).join("")}
         <text x="${x0 - 6}" y="9" class="vx-ax" text-anchor="end">${unit}</text>
         <path d="${band}" class="vx-band"/>
-        <path d="${gap}" class="vx-gap vx-short" clip-path="url(#vx-dn)"/>
+        <path d="${gap}" class="vx-gap ${dnCls}" clip-path="url(#vx-dn)"/>
         <path d="${gap}" class="vx-gap ${upCls}" clip-path="url(#vx-up)"/>
         <path d="${line(sold)}" class="vx-sold"/>
         <path d="${line(act)}" class="vx-act" pathLength="1"/>
@@ -1538,7 +1540,7 @@
       <ol class="vx-steps">
         <li><i class="sw sw-band"></i><i class="sw sw-sold"></i><div><b>Sell p${S.v.p} of the forecast</b><span>before the 12:00 gate, at the day-ahead price</span></div></li>
         <li><i class="sw sw-act"></i><div><b>Produce what the weather gives</b><span>${real ? `drawn for the zone's whole fleet; scored as a <span id="v-mw">${mw}</span> MW share of it` : `a <span id="v-mw">${mw}</span> MW asset that runs like its zone's fleet`}</span></div></li>
-        <li><i class="sw sw-short"></i>${imb ? '<i class="sw sw-surplus"></i>' : ""}<div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "MWh above what you sold are paid the long price; MWh short are bought back at the short price" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
+        <li><i class="sw ${imb ? "sw-imb" : "sw-short"}"></i><div><b>${imb ? "Settle the gap at the imbalance price" : "Every MWh off costs the price gap"}</b><span>${imb ? "a surplus is paid the long price, a shortfall bought back at the short price: a gain when the price is on your side of the day-ahead price (long while the system is short, or short while it is long), a loss otherwise" : "each MWh produced above or below what you sold loses |imbalance price − day-ahead price|"}</span></div></li>
         <li class="vx-score"><div><b>Score = revenue kept ÷ perfect foresight</b><span>move the percentile slider at the top to see the gaps change</span></div></li>
       </ol>`;
     el.querySelectorAll(".vx-nav").forEach((b) => (b.onclick = () => {
