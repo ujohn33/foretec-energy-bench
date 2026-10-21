@@ -1,5 +1,5 @@
 """Preprint extras: full field on the last four issue days, TSO pairs without DK, example-day data. Run from benchmark root."""
-import glob, json, sys
+import glob, json, os, sys
 import numpy as np, pandas as pd, yaml
 sys.argv += [] ; out = sys.argv[1]
 exec(open("scripts/research/preprint_all.py").read().split("ps = per_series(s)")[0].replace('out, last = sys.argv[1], sys.argv[2]', 'out, last = sys.argv[1], "2026-10-19"'))

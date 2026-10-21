@@ -10,7 +10,7 @@ for f in glob.glob("models/*/model.yaml"):
     y = yaml.safe_load(open(f)) or {}
     if y.get("hidden"): hidden.add(y.get("name", f.split("/")[1]))
 REF = {"tso_final"}
-s = pd.read_parquet("results/scores.parquet")
+s = pd.read_parquet(os.environ.get("SCORES", "results/scores.parquet"))
 s["issue_date"] = s.issue_date.astype(str)
 s = s[(s.issue_date <= last) & ~s.model.isin(hidden)].copy()
 s["n"] = s["n"].fillna(96)
