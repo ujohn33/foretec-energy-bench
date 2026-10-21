@@ -1,4 +1,4 @@
-% Foretec Energy Bench: methodology preprint.
+% Energy Bench: methodology preprint.
 % Build: latexmk -pdf energybench_methodology.tex. Table rows and elo_live.dat are generated from the scores by
 % scripts/research/preprint_results.py (numbers as of 15 Oct 2026).
 \documentclass[11pt,a4paper]{article}
@@ -29,9 +29,9 @@
 \definecolor{histc}{HTML}{8A8F98}
 \newcommand{\m}[1]{\texttt{#1}}
 
-\title{\textbf{Foretec Energy Bench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
+\title{\textbf{Energy Bench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
 \author{Evgenii Genov\\[2pt]
-\small Foretec \quad\textperiodcentered\quad Vrije Universiteit Brussel\\
+\small Vrije Universiteit Brussel\\
 \small\href{mailto:evgeny@foretec.be}{evgeny@foretec.be}}
 \date{\small Methodology preprint, 15 October 2026\\
 \href{https://energybench.foretec.co}{energybench.foretec.co} \quad\textperiodcentered\quad
@@ -44,7 +44,7 @@
 \noindent
 Comparisons of energy forecasting models usually rest on backtests, and backtests are easy to get subtly wrong: the
 information that was available when a forecast would have been sold is replaced by whatever is convenient to download
-later. Foretec Energy Bench removes the question by running every entry live. Each day at 11:30 CET/CEST, thirty
+later. Energy Bench removes the question by running every entry live. Each day at 11:30 CET/CEST, thirty
 minutes before the single day-ahead coupling (SDAC) gate closes, every model forecasts the next delivery day's
 day-ahead price, wind generation, solar generation and total load on the 15-minute market grid for six bidding zones
 (BE, NL, FR, DE-LU, DK1, DK2), from data that was public at that moment, including frozen numerical weather prediction
