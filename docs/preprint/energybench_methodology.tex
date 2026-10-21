@@ -18,6 +18,7 @@
 \usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots,fillbetween}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{enumitem}
@@ -31,7 +32,8 @@
 
 \title{\textbf{Energy Bench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
 \author{Evgenii Genov\\[2pt]
-\small Vrije Universiteit Brussel\\
+\small EVERGi, Mobility, Logistics and Automotive Technology Research Centre (MOBI)\\
+\small Vrije Universiteit Brussel, Pleinlaan 2, 1050 Brussels, Belgium\\
 \small\href{mailto:evgeny@foretec.be}{evgeny@foretec.be}}
 \date{\small Methodology preprint, 21 October 2026\\
 \href{https://energybench.foretec.co}{energybench.foretec.co} \quad\textperiodcentered\quad
@@ -44,28 +46,23 @@
 \noindent
 Comparisons of energy forecasting models usually rest on backtests, and backtests are easy to get subtly wrong: the
 information that was available when a forecast would have been sold is replaced by whatever is convenient to download
-later. Energy Bench removes the question by running every entry live. Each day at 11:30 CET/CEST, thirty
-minutes before the single day-ahead coupling (SDAC) gate closes, every model forecasts the next delivery day's
-day-ahead price, wind generation, solar generation and total load on the 15-minute market grid for six bidding zones
-(BE, NL, FR, DE-LU, DK1, DK2), from data that was public at that moment, including frozen numerical weather prediction
-(NWP) runs. Unlike existing live benchmarks, it runs every model itself on that one frozen, published information
-set, so foundation models are compared with and without the same weather covariates under a real market deadline. A
-forecast that is not locked before the gate is never scored. Actuals come from the transmission system
-operators' (TSOs') publications with recorded provenance, explicit completeness rules and a revision check. Models
-are compared on errors pooled per series relative to a same-quarter-hour-last-week baseline, and ranked by a
-Bradley--Terry rating of all pairwise comparisons on the Elo scale, with a confidence interval from resampling issue
-days. A separate view values each wind and solar forecast as the day-ahead revenue of a 100\,MW asset settled at
-published imbalance prices. The field, 40 active entries, spans naive and climatological baselines, linear and
-gradient-boosted models on the frozen weather ensemble, tabular neural networks, ten families of pretrained
-time-series foundation models with and without covariates, ensembles of them, and the TSOs' own forecasts as
-references. This paper
-describes the protocol, data, scoring and ranking, and reports the first eighteen live days. Covariates roughly
-halve the error of foundation models: on matched races, giving the same model the frozen weather table cuts its error
-relative to the seasonal-naive baseline by 42--49\% for five of six model families (by 66--74\% on wind and 52--62\% on
-solar), and a covariate-aware foundation model leads the standings. Used zero-shot, five of the six beat a LightGBM
-model trained on the same inputs. The grid operators' own forecasts remain the bar: on the series they cover, the best
-entries are level with the forecasts published before the gate on wind but behind on solar and load, and behind the
-final forecasts published after it. A model enters the benchmark by pull request.
+later. Energy Bench removes the question by running every entry live. Each day at 11:30 CET/CEST, thirty minutes
+before the single day-ahead coupling (SDAC) gate closes, every model forecasts the next delivery day's day-ahead price,
+wind generation, solar generation and total load on the 15-minute market grid for six bidding zones (BE, NL, FR,
+DE-LU, DK1, DK2). Unlike existing live benchmarks, Energy Bench runs every model itself, on one information set that it
+freezes at the cut-off and publishes, including the runs of three numerical weather prediction (NWP) models, so
+foundation models can be compared with and without the same weather covariates under a real market deadline. Actuals
+come from the transmission system operators' (TSOs') publications with recorded provenance and a revision check.
+Models are compared on errors pooled per series relative to a seasonal-naive baseline and ranked by a Bradley--Terry
+rating on the Elo scale with a day-bootstrap interval; a second view values wind and solar forecasts as the revenue of
+a 100\,MW asset settled at imbalance prices. The field of 40 entries spans baselines, linear and gradient-boosted
+models on the frozen weather, tabular neural networks, ten families of time-series foundation models with and without
+covariates, ensembles, and the TSOs' own forecasts as references. Over the first eighteen live days, covariates
+roughly halve the error of foundation models: on matched races, the seven models that accept covariates natively cut
+their error by 43--49\% (by 54--66\% on wind and 62--66\% on solar), and used zero-shot they beat a LightGBM model
+trained on the same inputs. The grid operators' own forecasts remain the bar: the best entries are level with their
+pre-gate forecasts on wind but behind on solar and load, and behind their final forecasts, published after the gate.
+A model enters the benchmark by pull request.
 \end{abstract}
 
 \section{Introduction}
@@ -237,6 +234,7 @@ trained model falls back to the latest earlier one rather than train. The TSOs' 
 an input: Regulation (EU) 543/2013~\cite{reg543} has them published by 18:00 on $D-1$, after the gate.
 
 \subsection{Actuals and provenance}
+\label{sec:actuals}
 
 The primary source is the ENTSO-E Transparency Platform~\cite{entsoe}, parsed from its XML: day-ahead prices (document
 A44, the 15-minute SDAC prices), actual generation per production type (A75; wind as onshore B19 plus offshore B18,
@@ -436,20 +434,53 @@ the benchmark. On the site, backtest and live results are always shown apart; th
 \section{Results: the first eighteen live days}
 \label{sec:results}
 
-The live record covers issue days 2--19 October 2026, the last day with all four targets scored when this paper was
-written. Coverage is uneven: load was added on 6 October, the Dutch wind, solar and load series were redefined on
-10--11 October (earlier live forecasts are voided), and several models joined during the period. The results below
-cover BE, NL and FR (12 series); the three zones added on 15 October have five issue days and are not reported yet.
-Table~\ref{tab:live} gives the standings for the entries with at least 60 races, and Figure~\ref{fig:elo} the ratings
-with their intervals.
+\subsection{Coverage}
+
+The live record covers issue days 2--19 October 2026, the last day with every target scored when this paper was
+written. It is uneven by design: series enter the record when they can be scored on a stable definition, and not
+before (Table~\ref{tab:coverage}). BE, NL and FR price, wind and solar run from 2 October and load from 6 October;
+the Dutch wind, solar and load forecasts made before the switch to NED's national series (Section~\ref{sec:actuals})
+are voided, so the Dutch record starts on 11--12 October. DE-LU, DK1 and DK2 run from 15 October. Danish wind lost
+two issue days to its own switch of source, and Danish load is not scored yet because ENTSO-E has published only
+part of its hours since 10 October. The record therefore holds 22 of the 24 series, with between 3 and 18 issue days
+each. Models also joined at different times, which is why every comparison below is made on the races the compared
+models share.
+
+\begin{table}[t]
+\centering\small
+\caption{Scored issue days per series in the live record, 2--19 October 2026.}
+\label{tab:coverage}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+& BE & NL & FR & DE-LU & DK1 & DK2 \\
+\midrule
+Price & 18 & 18 & 18 & 5 & 5 & 5 \\
+Wind & 18 & 9 & 18 & 5 & 3 & 3 \\
+Solar & 18 & 9 & 18 & 5 & 5 & 5 \\
+Load & 14 & 8 & 14 & 5 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Standings}
+
+Table~\ref{tab:live} gives the standings for the 26 entries that have run over the whole record (at least 100 races)
+and for the pre-gate TSO reference, and Figure~\ref{fig:elo} shows their ratings. Chronos-2 with covariates leads
+both the rating (Elo 1229) and the pooled error (Rel.\ MAE 0.340). Its interval overlaps those of the grid operators'
+pre-gate forecast and of TimesFM 3.0 with covariates, but not that of t0-beta with covariates or anything below it.
+Behind the leading group the field splits cleanly in two. Every covariate-aware foundation model is separated by its
+interval from every history-only model, and the best history-only models, TimesFM 3.0 and Chronos-2 at Elo 956, sit
+behind eight covariate models. Among the history-only foundation models the differences are small (pooled Rel.\ MAE
+0.66--0.81) next to the effect of giving any of them the weather (0.34--0.47 with covariates, Table~\ref{tab:cov}).
 
 \begin{table}[!t]
 \centering\scriptsize
 \setlength{\tabcolsep}{4pt}
 \begin{threeparttable}
-\caption{Live standings, issue days 2--19 October 2026, BE, NL and FR (12 series). Elo with its day-bootstrap 95\%
+\caption{Live standings, issue days 2--19 October 2026, all six zones (22 series). Elo with its day-bootstrap 95\%
 interval; Rel.\ MAE and Rel.\ RMSE pooled per series against \m{naive\_weekly}, geometric mean over the series a model
-forecasts (``all'') or over the three zones of one target. Covariate models in bold.}
+forecasts (``all'') or over the zones of one target. Entries that have run over the whole record; covariate models in
+bold.}
 \label{tab:live}
 \begin{tabular}{@{}rlrcrrrrrrr@{}}
 \toprule
@@ -457,42 +488,43 @@ forecasts (``all'') or over the three zones of one target. Covariate models in b
 \cmidrule(lr){6-7}\cmidrule(l){8-11}
 & & & & & \multicolumn{2}{c}{all series} & \multicolumn{4}{c}{Rel.\ MAE per target} \\
 \midrule
-% rows generated from the scores by scripts/research/preprint_results.py (issue days up to 2026-10-19)
-    1 & \texttt{\textbf{chronos2\_cov}} & 1226 & [1186, 1278] & 173 & 0.378 & 0.394 & 0.331 & 0.211 & 0.408 & 0.717 \\
-    2 & \texttt{tso\_cutoff} & 1175 & [1119, 1246] & 84 & 0.423 & 0.421 & -- & 0.238 & 0.357 & 0.697 \\
-    3 & \texttt{\textbf{timesfm3\_cov}} & 1170 & [1141, 1213] & 173 & 0.386 & 0.395 & 0.354 & 0.211 & 0.370 & 0.800 \\
-    4 & \texttt{\textbf{t0\_beta\_cov}} & 1147 & [1125, 1175] & 159 & 0.414 & 0.430 & 0.378 & 0.220 & 0.458 & 0.766 \\
-    5 & \texttt{\textbf{t0\_alpha\_cov}} & 1106 & [1080, 1131] & 159 & 0.442 & 0.460 & 0.450 & 0.226 & 0.418 & 0.898 \\
-    6 & \texttt{\textbf{tirex2\_cov}} & 1071 & [1053, 1095] & 134 & 0.434 & 0.440 & 0.452 & 0.242 & 0.383 & 0.842 \\
-    7 & \texttt{\textbf{lgbm\_cov}} & 1057 & [1027, 1097] & 173 & 0.464 & 0.467 & 0.425 & 0.220 & 0.372 & 1.329 \\
-    8 & \texttt{\textbf{timesfm25\_cov}} & 1039 & [1007, 1074] & 173 & 0.515 & 0.510 & 0.427 & 0.259 & 0.422 & 1.513 \\
-    9 & \texttt{\textbf{lin\_cov\_2y}} & 979 & [947, 1008] & 72 & 0.533 & 0.505 & 0.426 & 0.275 & 0.426 & 1.618 \\
-    10 & \texttt{chronos2} & 966 & [932, 1000] & 180 & 0.743 & 0.760 & 0.504 & 0.767 & 1.074 & 0.733 \\
-    11 & \texttt{timesfm3} & 966 & [934, 1005] & 173 & 0.724 & 0.738 & 0.453 & 0.804 & 0.980 & 0.768 \\
-    12 & \texttt{timesfm25} & 941 & [911, 963] & 173 & 0.732 & 0.738 & 0.513 & 0.754 & 0.889 & 0.836 \\
-    13 & \texttt{chronos\_bolt} & 934 & [906, 965] & 173 & 0.758 & 0.770 & 0.514 & 0.779 & 1.004 & 0.824 \\
-    14 & \texttt{t0\_beta} & 929 & [899, 963] & 159 & 0.755 & 0.765 & 0.562 & 0.783 & 0.975 & 0.758 \\
-    15 & \texttt{tirex2} & 916 & [872, 959] & 134 & 0.743 & 0.745 & 0.544 & 0.791 & 0.878 & 0.809 \\
-    16 & \texttt{\textbf{lin\_cov}} & 914 & [868, 963] & 72 & 0.626 & 0.583 & 0.500 & 0.293 & 0.608 & 1.725 \\
-    17 & \texttt{sundial} & 902 & [869, 936] & 173 & 0.777 & 0.766 & 0.521 & 0.783 & 1.064 & 0.838 \\
-    18 & \texttt{tirex} & 901 & [874, 929] & 173 & 0.786 & 0.792 & 0.542 & 0.773 & 0.868 & 1.049 \\
-    19 & \texttt{lin\_lags} & 898 & [831, 971] & 72 & 0.733 & 0.710 & 0.447 & 0.734 & 0.908 & 0.971 \\
-    20 & \texttt{moirai2} & 897 & [856, 933] & 173 & 0.800 & 0.811 & 0.530 & 0.826 & 1.042 & 0.896 \\
-    21 & \texttt{t0\_alpha} & 895 & [847, 938] & 159 & 0.807 & 0.824 & 0.556 & 0.837 & 1.001 & 0.910 \\
-    22 & \texttt{toto} & 855 & [807, 893] & 173 & 0.869 & 0.883 & 0.535 & 0.852 & 1.001 & 1.247 \\
-    23 & \texttt{lgbm\_lags} & 853 & [793, 901] & 180 & 1.000 & 1.034 & 0.643 & 0.922 & 1.147 & 1.470 \\
-    24 & \texttt{ttm\_r2} & 822 & [780, 858] & 173 & 0.903 & 0.859 & 0.591 & 0.808 & 1.013 & 1.374 \\
-    25 & \texttt{naive\_weekly} & 819 & [773, 864] & 180 & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
-    26 & \texttt{naive\_daily} & 792 & [720, 857] & 180 & 1.114 & 1.149 & 0.680 & 0.960 & 1.029 & 2.293 \\
-    27 & \texttt{climatology} & 752 & [692, 792] & 173 & 1.233 & 1.143 & 1.582 & 0.691 & 1.009 & 2.093 \\
-\midrule
-    -- & \texttt{tso\_final} (ref.) & -- & -- & -- & 0.264 & 0.270 & -- & 0.220 & 0.318 & -- \\
+% rows generated by scripts/research/preprint_all.py (issue days up to 2026-10-19)
+    1 & \texttt{\textbf{chronos2\_cov}} & 1229 & [1193, 1270] & 219 & 0.340 & 0.350 & 0.271 & 0.228 & 0.369 & 0.772 \\
+    2 & \texttt{tso\_cutoff} & 1167 & [1114, 1245] & 89 & 0.460 & 0.458 & -- & 0.238 & 0.357 & 0.728 \\
+    3 & \texttt{\textbf{timesfm3\_cov}} & 1166 & [1143, 1204] & 219 & 0.360 & 0.370 & 0.313 & 0.228 & 0.381 & 0.814 \\
+    4 & \texttt{\textbf{t0\_beta\_cov}} & 1161 & [1140, 1183] & 205 & 0.366 & 0.372 & 0.331 & 0.236 & 0.391 & 0.745 \\
+    5 & \texttt{\textbf{t0\_alpha\_cov}} & 1105 & [1085, 1127] & 205 & 0.401 & 0.405 & 0.409 & 0.245 & 0.376 & 0.896 \\
+    6 & \texttt{\textbf{tirex2\_cov}} & 1088 & [1060, 1115] & 180 & 0.393 & 0.392 & 0.365 & 0.251 & 0.383 & 0.892 \\
+    7 & \texttt{\textbf{lgbm\_cov}} & 1052 & [1027, 1085] & 219 & 0.433 & 0.431 & 0.397 & 0.246 & 0.410 & 1.256 \\
+    8 & \texttt{\textbf{timesfm25\_cov}} & 1037 & [1009, 1070] & 219 & 0.472 & 0.471 & 0.438 & 0.260 & 0.425 & 1.516 \\
+    9 & \texttt{\textbf{lin\_cov\_2y}} & 1003 & [968, 1031] & 118 & 0.478 & 0.459 & 0.321 & 0.286 & 0.524 & 1.631 \\
+    10 & \texttt{timesfm3} & 956 & [928, 995] & 219 & 0.662 & 0.672 & 0.401 & 0.600 & 1.041 & 0.823 \\
+    11 & \texttt{chronos2} & 956 & [921, 989] & 226 & 0.669 & 0.687 & 0.423 & 0.588 & 1.100 & 0.763 \\
+    12 & \texttt{timesfm25} & 942 & [920, 961] & 219 & 0.660 & 0.669 & 0.412 & 0.554 & 1.034 & 0.884 \\
+    13 & \texttt{chronos\_bolt} & 934 & [898, 969] & 219 & 0.679 & 0.699 & 0.416 & 0.613 & 1.072 & 0.833 \\
+    14 & \texttt{t0\_beta} & 928 & [894, 959] & 205 & 0.680 & 0.688 & 0.469 & 0.579 & 1.093 & 0.740 \\
+    15 & \texttt{\textbf{lin\_cov}} & 925 & [891, 957] & 118 & 0.556 & 0.519 & 0.470 & 0.281 & 0.621 & 1.685 \\
+    16 & \texttt{tirex2} & 913 & [879, 945] & 180 & 0.692 & 0.699 & 0.457 & 0.624 & 1.020 & 0.842 \\
+    17 & \texttt{tirex} & 908 & [884, 929] & 219 & 0.702 & 0.708 & 0.429 & 0.598 & 1.025 & 1.055 \\
+    18 & \texttt{sundial} & 904 & [872, 939] & 219 & 0.705 & 0.694 & 0.436 & 0.694 & 1.064 & 0.804 \\
+    19 & \texttt{moirai2} & 900 & [872, 927] & 219 & 0.723 & 0.740 & 0.438 & 0.659 & 1.105 & 0.933 \\
+    20 & \texttt{lin\_lags} & 897 & [850, 962] & 118 & 0.691 & 0.674 & 0.414 & 0.601 & 1.063 & 0.961 \\
+    21 & \texttt{t0\_alpha} & 881 & [849, 917] & 205 & 0.742 & 0.750 & 0.498 & 0.715 & 0.981 & 0.934 \\
+    22 & \texttt{toto} & 860 & [814, 900] & 219 & 0.763 & 0.779 & 0.426 & 0.684 & 1.130 & 1.199 \\
+    23 & \texttt{lgbm\_lags} & 853 & [797, 893] & 226 & 0.840 & 0.857 & 0.538 & 0.720 & 1.146 & 1.296 \\
+    24 & \texttt{ttm\_r2} & 817 & [782, 850] & 219 & 0.811 & 0.780 & 0.517 & 0.642 & 1.082 & 1.470 \\
+    25 & \texttt{naive\_weekly} & 812 & [772, 856] & 226 & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
+    26 & \texttt{naive\_daily} & 780 & [724, 835] & 226 & 0.996 & 1.008 & 0.576 & 0.747 & 1.212 & 2.601 \\
+    27 & \texttt{climatology} & 740 & [699, 769] & 219 & 1.137 & 1.054 & 1.578 & 0.542 & 1.115 & 2.181 \\
+    \midrule
+    -- & \texttt{tso\_final} (ref.) & -- & -- & -- & 0.244 & 0.251 & -- & 0.226 & 0.274 & -- \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}\footnotesize
-\item \m{tso\_cutoff} forecasts 7 of the 12 series (BE and NL wind and solar, load); \m{tso\_final} covers BE, FR and NL
-wind and solar. Live from 16 October, with 48 races each and not listed: \m{lgbm\_prod}, \m{t0\_gamma(\_cov)},
-\m{tabby(\_cov)}, \m{tabby\_pretrain(\_cov)}, \m{timestral(\_cov)} and the three ensembles.
+\item \m{tso\_cutoff} forecasts 8 of the 22 series (BE and NL wind and solar; load in BE, NL, FR and DE-LU).
+\m{tso\_final} covers wind and solar in BE, NL, FR, DE-LU, DK1 and DK2; its Danish forecasts cover a different scope
+from the actuals (Section~\ref{sec:tso}). The entries that joined on 16 October are compared in
+Table~\ref{tab:late}.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -502,10 +534,10 @@ wind and solar. Live from 16 October, with 48 races each and not listed: \m{lgbm
 \begin{tikzpicture}
 \begin{axis}[
   width=0.86\linewidth, height=11.5cm,
-  xmin=600, xmax=1380, ymin=-0.7, ymax=26.7,
+  xmin=650, xmax=1320, ymin=-0.7, ymax=26.7,
   ytick={0,...,26}, yticklabels from table={elo_live.dat}{label},
   yticklabel style={font=\ttfamily\scriptsize},
-  xlabel={Elo (live, BE/NL/FR, 2--19 October 2026)}, xlabel style={font=\small},
+  xlabel={Elo (live, six zones, 2--19 October 2026)}, xlabel style={font=\small},
   tick label style={font=\scriptsize}, xmajorgrids, grid style={gray!20},
   axis line style={gray!60}, tick style={gray!60},
   extra x ticks={1000}, extra x tick style={grid style={black!50,dashed}, tick label style={opacity=0}},
@@ -516,67 +548,193 @@ wind and solar. Live from 16 October, with 48 races each and not listed: \m{lgbm
   table[x=elo, y=y, x error plus=hi, x error minus=lo, restrict expr to domain={\thisrow{cov}}{1:1}] {elo_live.dat};
 \end{axis}
 \end{tikzpicture}
-\caption{Live Elo ratings with day-bootstrap 95\% intervals. Blue: models using the frozen covariates, and the
-pre-gate TSO forecast \m{tso\_cutoff}; grey: history only. The dashed line is the field average.}
+\caption{Live Elo ratings with day-bootstrap 95\% intervals, entries of Table~\ref{tab:live}. Blue: models using the
+frozen covariates, and the pre-gate TSO forecast \m{tso\_cutoff}; grey: history only. The dashed line is the field
+average.}
 \label{fig:elo}
 \end{figure}
 
 \subsection{Covariates halve the error of foundation models}
 
-Six foundation-model families have run both on the series' own history and with the frozen covariate table for most
-of the record, so the value of the weather can be read off model by model on exactly the same races
-(Table~\ref{tab:cov}). For five of the six, the covariates cut the pooled relative error by 42--49\%; for TimesFM 2.5,
-whose covariates enter through an in-context ridge regression rather than natively, by 30\%. The gain sits where the
-weather drives the target: 66--74\% on wind and 52--62\% on solar, where a model that sees only the last four weeks of
-output cannot know tomorrow's wind or cloud. On price it is 17--33\%, through the load forecast, fuel cost and the
-expected renewable infeed. On load the covariates change little ($-2$\% to $+4$\%, and $+81$\% for TimesFM 2.5): a
-load curve is dominated by daily and weekly cycles that the history already shows. In the standings
-(Figure~\ref{fig:elo}) every covariate-aware foundation model is separated by its interval from every history-only
-model, and the best history-only models, \m{chronos2} and \m{timesfm3}, are behind eight covariate models.
+Ten foundation models run both on the series' own history and with the frozen covariate table, so the value of the
+weather can be read off model by model on exactly the same races (Table~\ref{tab:cov}). For the seven that take
+covariates natively, the covariates cut the pooled relative error by 43--49\%: by 54--66\% on wind and 62--66\% on
+solar, where a model that sees only the last four weeks of output cannot know tomorrow's wind or cloud; by 18--36\% on
+price, through the load forecast, fuel cost and the expected renewable infeed; and on load hardly at all ($-14$\% to
+$+6$\%), since a load curve is dominated by daily and weekly cycles that the history already shows. The three models
+that receive the covariates through an in-context ridge regression gain less (28--36\%): as much on wind and solar,
+but nothing on price, and TimesFM 2.5 loses 71\% on load, where the ridge fitted on 28 days extrapolates badly.
+
+The effect does not depend on the zone. Chronos-2's pooled error is 46--51\% lower with covariates in each of the six
+zones (Figure~\ref{fig:zones}), from DE-LU and DK2, where both versions do best relative to the seasonal-naive
+baseline, to the Netherlands, where both do worst.
 
 \begin{table}[t]
 \centering\small
-\caption{The same foundation model without and with the frozen covariates, on the races both forecast (live, BE, NL,
-FR, issue days 2--19 October 2026). Rel.\ MAE pooled per series, geometric mean over series; change is the geometric
-mean of the per-series ratios minus one.}
+\setlength{\tabcolsep}{4.5pt}
+\caption{The same foundation model without and with the frozen covariates, on the races both forecast (live, all
+zones, issue days 2--19 October 2026). ``Native'': the model takes known-future covariates itself; ``ridge'': an
+in-context ridge regression on the covariates, the model forecasting its residual (Tabby forecasts load without
+covariates). Rel.\ MAE pooled per series, geometric mean over series; a change is the geometric mean of the
+per-series ratios minus one.}
 \label{tab:cov}
-\begin{tabular}{@{}lrrrrrrrr@{}}
+\begin{tabular}{@{}llrrrrrrrrr@{}}
 \toprule
-& & \multicolumn{2}{c}{Rel.\ MAE} & \multicolumn{5}{c}{Change with covariates} \\
-\cmidrule(lr){3-4}\cmidrule(l){5-9}
-Model family & Races & without & with & all & price & wind & solar & load \\
+& & & & \multicolumn{2}{c}{Rel.\ MAE} & \multicolumn{5}{c}{Change with covariates} \\
+\cmidrule(lr){5-6}\cmidrule(l){7-11}
+Model & Covariates & Days & Races & without & with & all & price & wind & solar & load \\
 \midrule
-Chronos-2 & 173 & 0.739 & 0.378 & $-49\%$ & $-33\%$ & $-73\%$ & $-62\%$ & $-2\%$ \\
-TimesFM 3.0 & 173 & 0.724 & 0.386 & $-47\%$ & $-22\%$ & $-74\%$ & $-62\%$ & $+4\%$ \\
-t0-alpha & 159 & 0.807 & 0.442 & $-45\%$ & $-19\%$ & $-73\%$ & $-58\%$ & $-1\%$ \\
-t0-beta & 159 & 0.755 & 0.414 & $-45\%$ & $-33\%$ & $-72\%$ & $-53\%$ & $+1\%$ \\
-TiRex-2 & 134 & 0.743 & 0.434 & $-42\%$ & $-17\%$ & $-69\%$ & $-56\%$ & $+4\%$ \\
-TimesFM 2.5 & 173 & 0.732 & 0.515 & $-30\%$ & $-17\%$ & $-66\%$ & $-52\%$ & $+81\%$ \\
+Chronos-2 & native & 17 & 219 & 0.667 & 0.340 & $-49\%$ & $-36\%$ & $-61\%$ & $-66\%$ & $+1\%$ \\
+TimesFM 3.0 & native & 17 & 219 & 0.662 & 0.360 & $-46\%$ & $-22\%$ & $-62\%$ & $-63\%$ & $-1\%$ \\
+t0-beta & native & 15 & 205 & 0.680 & 0.366 & $-46\%$ & $-29\%$ & $-59\%$ & $-64\%$ & $+1\%$ \\
+t0-alpha & native & 15 & 205 & 0.742 & 0.401 & $-46\%$ & $-18\%$ & $-66\%$ & $-62\%$ & $-4\%$ \\
+TiRex-2 & native & 12 & 180 & 0.692 & 0.393 & $-43\%$ & $-20\%$ & $-60\%$ & $-62\%$ & $+6\%$ \\
+\addlinespace
+t0-gamma & native & 4 & 84 & 0.694 & 0.388 & $-44\%$ & $-21\%$ & $-54\%$ & $-64\%$ & $-14\%$ \\
+Timestral & native & 4 & 84 & 0.686 & 0.384 & $-44\%$ & $-20\%$ & $-61\%$ & $-62\%$ & $+2\%$ \\
+\midrule
+TimesFM 2.5 & ridge & 17 & 219 & 0.660 & 0.472 & $-28\%$ & $+6\%$ & $-53\%$ & $-59\%$ & $+71\%$ \\
+Tabby & ridge & 4 & 84 & 0.705 & 0.455 & $-35\%$ & $+7\%$ & $-54\%$ & $-59\%$ & $+0\%$ \\
+Tabby-Pretrain & ridge & 4 & 84 & 0.687 & 0.442 & $-36\%$ & $-1\%$ & $-55\%$ & $-55\%$ & $+0\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Against purpose-built models and the grid operators}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.78\linewidth, height=5.6cm, ymin=0, ymax=1.35,
+  xtick={0,...,5}, xticklabels={BE, NL, FR, DE-LU, DK1, DK2}, xmin=-0.5, xmax=5.5,
+  ylabel={Rel.\ MAE (pooled, geometric mean)}, ylabel style={font=\small},
+  tick label style={font=\scriptsize}, ymajorgrids, grid style={gray!20}, axis line style={gray!60}, tick style={gray!60},
+  legend style={font=\scriptsize, draw=none, fill=none, at={(0.5,1.02)}, anchor=south, legend columns=5},
+  extra y ticks={1}, extra y tick style={grid style={black!50,dashed}},
+]
+\addplot[only marks, mark=square*, mark size=2pt, black!40] table[x=x, y=naivedaily] {zones.dat};
+\addplot[only marks, mark=*, mark size=2.2pt, histc] table[x=x, y=chronos2] {zones.dat};
+\addplot[only marks, mark=*, mark size=2.2pt, covc] table[x=x, y=chronos2cov] {zones.dat};
+\addplot[only marks, mark=triangle*, mark size=2.5pt, orange!80!black] table[x=x, y=lgbmcov] {zones.dat};
+\addplot[only marks, mark=diamond*, mark size=2.6pt, accent] table[x=x, y=tsofinal] {zones.dat};
+\legend{\m{naive\_daily}, \m{chronos2}, \m{chronos2\_cov}, \m{lgbm\_cov}, \m{tso\_final} (ref.)}
+\end{axis}
+\end{tikzpicture}
+\caption{Pooled relative error per zone over the targets each zone has (live, 2--19 October 2026). The dashed line is
+the seasonal-naive baseline. \m{tso\_final} has wind and solar only and is left out for DK1 and DK2
+(Section~\ref{sec:tso}).}
+\label{fig:zones}
+\end{figure}
 
-The covariate-aware foundation models are used zero-shot, yet five of the six beat a LightGBM trained on exactly the
-same inputs and 28-day window (\m{lgbm\_cov}, Rel.\ MAE 0.464, against 0.378--0.442). LightGBM is as good on wind
-(0.220) and solar (0.372) but falls far behind on load (1.329), where 28 days are too few to learn the weather
-response. Its production configuration with two years of history, \m{lgbm\_prod}, has been live only since 16 October.
+Figure~\ref{fig:example} shows what the difference looks like on two delivery days chosen from the upper quartile of
+the covariate effect; in the median wind or solar race, Chronos-2 with covariates has 37\% of the error of Chronos-2
+without. On 8 October Belgian wind blew at 3.3--3.9\,GW through the morning and fell to about 1.1\,GW by the evening.
+Chronos-2 on its own history carried its recent output forward and forecast less than 0.3\,GW all day; the covariate
+version followed the forecast weather, though it was late on the evening decline, as was Elia's pre-gate forecast.
+On 14 October French solar peaked at 15.8\,GW: Chronos-2 alone reached 10.6\,GW, the covariate version 14.8\,GW,
+close to RTE's final forecast published after the gate.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.4cm},
+  width=0.5\linewidth, height=5.4cm, xmin=0, xmax=24, xtick={0,6,12,18,24},
+  xlabel={hour of delivery day (CET/CEST)}, xlabel style={font=\scriptsize},
+  tick label style={font=\scriptsize}, ymajorgrids, grid style={gray!20}, axis line style={gray!60}, tick style={gray!60},
+  legend style={font=\scriptsize, draw=none, fill=white, fill opacity=0.85, text opacity=1}, legend cell align=left]
+\nextgroupplot[title={\small BE wind, delivery 8 October}, ylabel={GW}, ylabel style={font=\scriptsize}, ymin=0,
+  ymax=5, legend pos=south west]
+\addplot[name path=lo, draw=none, forget plot] table[x=h, y=lo] {example_BE_wind.dat};
+\addplot[name path=hi, draw=none, forget plot] table[x=h, y=hi] {example_BE_wind.dat};
+\addplot[covc!20, forget plot] fill between[of=lo and hi];
+\addplot[black, very thick] table[x=h, y=actual] {example_BE_wind.dat};
+\addplot[histc, thick, dashed] table[x=h, y=chronos2] {example_BE_wind.dat};
+\addplot[covc, thick] table[x=h, y=chronos2_cov] {example_BE_wind.dat};
+\addplot[accent, thick, densely dotted] table[x=h, y=tso_cutoff] {example_BE_wind.dat};
+\legend{actual, \m{chronos2}, \m{chronos2\_cov}, \m{tso\_cutoff}}
+\nextgroupplot[title={\small FR solar, delivery 14 October}, ymin=0, legend pos=north west]
+\addplot[name path=lo, draw=none, forget plot] table[x=h, y=lo] {example_FR_solar.dat};
+\addplot[name path=hi, draw=none, forget plot] table[x=h, y=hi] {example_FR_solar.dat};
+\addplot[covc!20, forget plot] fill between[of=lo and hi];
+\addplot[black, very thick] table[x=h, y=actual] {example_FR_solar.dat};
+\addplot[histc, thick, dashed] table[x=h, y=chronos2] {example_FR_solar.dat};
+\addplot[covc, thick] table[x=h, y=chronos2_cov] {example_FR_solar.dat};
+\addplot[orange!80!black, thick, dashdotted] table[x=h, y=tso_final] {example_FR_solar.dat};
+\legend{actual, \m{chronos2}, \m{chronos2\_cov}, \m{tso\_final}}
+\end{groupplot}
+\end{tikzpicture}
+\caption{Two delivery days: actual output, Chronos-2 without and with covariates (shaded: the covariate version's
+10--90\% band), and a TSO forecast (Elia's pre-gate forecast for BE; RTE's final forecast, published after the gate,
+for FR).}
+\label{fig:example}
+\end{figure}
+
+\subsection{Against purpose-built models}
+
+The covariate-aware foundation models are used zero-shot, yet the five that take covariates natively and have run
+over the whole record all beat a LightGBM trained on exactly the same inputs and 28-day window (\m{lgbm\_cov}, Rel.\
+MAE 0.433, against 0.340--0.401). LightGBM is close on wind (0.246, against 0.228--0.251) and solar (0.410, against 0.369--0.391) but
+falls far behind on load (1.256), where 28 days are too few to learn the weather response. Its production configuration, \m{lgbm\_prod},
+trained on two years, joined on 16 October and has not yet shown an advantage (Table~\ref{tab:late}); its first days
+include 17 October, when an incomplete weather run reached it at the cut-off (Section~\ref{sec:limits}).
+
+\subsection{The full field over the last four days}
+
+Twelve entries joined on 16 October, among them t0-gamma, Timestral, Tabby with covariates, \m{lgbm\_prod} and three
+ensembles. Table~\ref{tab:late} compares the whole field on the four issue days 16--19 October, on which every entry
+ran (84 races each). Chronos-2 with covariates still leads, followed by the two ensembles of covariate models, and
+the newer covariate models t0-gamma and Timestral are level with TimesFM 3.0 and t0-beta. The median ensemble of the
+five covariate models (\m{ens\_fm\_cov}, Rel.\ MAE 0.369) is better than four of its five members but not than the best
+of them, and adding \m{lgbm\_prod} as a sixth member (\m{ens\_hybrid}) changes nothing. An ensemble is chosen in
+advance and does not need to know which member will be best, so it is the more useful decision even where it is not
+the best result; four days are too few to say more.
+
+\begin{table}[t]
+\centering\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{The full field on the issue days 16--19 October 2026, all zones (84 races per entry; \m{tso\_cutoff} 32).
+Top 16 by Elo and, for reference, the two best history-only models and the baseline. Columns as in
+Table~\ref{tab:live}.}
+\label{tab:late}
+\begin{tabular}{@{}rlrcrrrrr@{}}
+\toprule
+& Model & Elo & 95\% interval & Rel.\ MAE & Price & Wind & Solar & Load \\
+\midrule
+    1 & \texttt{\textbf{chronos2\_cov}} & 1269 & [1231, 1310] & 0.362 & 0.285 & 0.351 & 0.330 & 0.625 \\
+    2 & \texttt{\textbf{ens\_hybrid}} & 1254 & [1239, 1288] & 0.371 & 0.308 & 0.340 & 0.313 & 0.724 \\
+    3 & \texttt{\textbf{ens\_fm\_cov}} & 1250 & [1226, 1284] & 0.369 & 0.305 & 0.339 & 0.309 & 0.733 \\
+    4 & \texttt{tso\_cutoff} & 1200 & [1111, 1319] & 0.452 & -- & 0.458 & 0.232 & 0.626 \\
+    5 & \texttt{\textbf{t0\_gamma\_cov}} & 1195 & [1159, 1243] & 0.388 & 0.349 & 0.352 & 0.307 & 0.746 \\
+    6 & \texttt{\textbf{timestral\_cov}} & 1194 & [1152, 1258] & 0.384 & 0.342 & 0.328 & 0.320 & 0.763 \\
+    7 & \texttt{\textbf{t0\_beta\_cov}} & 1167 & [1151, 1179] & 0.405 & 0.355 & 0.373 & 0.320 & 0.791 \\
+    8 & \texttt{\textbf{timesfm3\_cov}} & 1161 & [1132, 1192] & 0.395 & 0.337 & 0.347 & 0.311 & 0.873 \\
+    9 & \texttt{\textbf{tabby\_pretrain\_cov}} & 1116 & [1087, 1151] & 0.442 & 0.447 & 0.365 & 0.365 & 0.771 \\
+    10 & \texttt{\textbf{t0\_alpha\_cov}} & 1101 & [1083, 1129] & 0.439 & 0.429 & 0.373 & 0.319 & 0.935 \\
+    11 & \texttt{\textbf{tabby\_cov}} & 1096 & [1048, 1147] & 0.455 & 0.448 & 0.367 & 0.387 & 0.818 \\
+    12 & \texttt{\textbf{tirex2\_cov}} & 1095 & [1059, 1128] & 0.446 & 0.388 & 0.385 & 0.356 & 0.955 \\
+    13 & \texttt{\textbf{lgbm\_prod}} & 1056 & [1011, 1096] & 0.484 & 0.471 & 0.392 & 0.423 & 0.847 \\
+    14 & \texttt{\textbf{lgbm\_cov}} & 1041 & [1006, 1069] & 0.485 & 0.446 & 0.371 & 0.390 & 1.140 \\
+    15 & \texttt{\textbf{timesfm25\_cov}} & 1033 & [995, 1071] & 0.499 & 0.455 & 0.370 & 0.370 & 1.408 \\
+    16 & \texttt{\textbf{lin\_cov\_2y}} & 1011 & [989, 1042] & 0.527 & 0.385 & 0.391 & 0.483 & 1.501 \\
+    17 & \texttt{chronos2} & 956 & [904, 1005] & 0.711 & 0.462 & 0.847 & 0.894 & 0.741 \\
+    18 & \texttt{timesfm3} & 933 & [896, 965] & 0.724 & 0.450 & 0.821 & 0.905 & 0.875 \\
+    19 & \texttt{naive\_weekly} & 834 & [787, 895] & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Against the grid operators}
+\label{sec:tso}
 
 The grid operators' forecasts are compared on the races they cover, and they remain the bar. Against the forecasts as
-published before the gate (\m{tso\_cutoff}: BE and NL wind and solar, load in all three zones, 84 races), the best
-entries are level on wind (Rel.\ MAE 0.238 for \m{lgbm\_cov}, 0.240 for TimesFM 3.0 with covariates, against 0.238)
-but behind on solar (0.376 for TiRex-2 with covariates against 0.357) and load (0.717 for Chronos-2 with covariates
-against 0.697). Against the final forecasts, published hours after the gate (\m{tso\_final}: BE, FR and NL wind and
-solar, 82 races), the operators are ahead on both: wind 0.220 against 0.230 for TimesFM 3.0 with covariates, solar
-0.318 against 0.361 for \m{lgbm\_cov}. The comparison is not settled: over the first fourteen days the best
-entries had been ahead of both references on wind.
-
-\m{chronos2\_cov} leads both the rating and the pooled error (Rel.\ MAE 0.378); its interval overlaps those of
-\m{tso\_cutoff} and \m{timesfm3\_cov} but not that of \m{t0\_beta\_cov}. Among the entries that joined on 16 October,
-the ensembles of covariate models (\m{ens\_hybrid}, \m{ens\_fm\_cov}) rate highest, on four days too few to rank.
-\m{lgbm\_lags} was replaced on 13 October by a two-year, monthly-retrained version, so its live record (Rel.\ MAE 1.00)
-is mostly that of the earlier 28-day model.
+published before the gate (\m{tso\_cutoff}: BE and NL wind and solar, load in BE, NL, FR and DE-LU; 89 races), the best
+entries are level on wind (Rel.\ MAE 0.238 for \m{lgbm\_cov} and 0.240 for TimesFM 3.0 with covariates, against
+0.238) but behind on solar (0.376 for TiRex-2 with covariates, against 0.357) and load (0.745 for t0-beta with
+covariates, against 0.728). The final forecasts, published hours after the gate, are further ahead: on wind and solar
+in BE, NL, FR and DE-LU (94 races) they reach 0.175 and 0.274, against 0.204 and 0.336 for the best entries.
+Denmark is left out of the latter comparison because its final forecast and its actuals do not measure the same
+thing: Energinet's day-ahead forecast for DK1 wind has run at about 0.8 of measured output for two years, a gap of
+level rather than of skill. Over the first fourteen live days, in BE, NL and FR, the best entries had been ahead of
+both references on wind; eighteen days do not settle the comparison.
 
 \section{Limitations}
 \label{sec:limits}
@@ -591,8 +749,10 @@ days are scored as they were run. The entries' settings were chosen
 before they went live, but by people who had seen the weeks before. The covariate models are deliberately simple and untuned; \m{lgbm\_cov} and \m{lin\_cov} train on the 28-day
 context for comparability with the foundation models, a known handicap that \m{lgbm\_prod} removes. The Dutch targets
 changed definition during the record, and the weather points rest on public capacity registers of uneven detail
-(municipal sums in NL and DK, regional ones in FR). The \m{tso\_cutoff} reference exists only where a TSO publishes before the gate (BE and NL wind and
-solar, load everywhere). A model that fails is left out of the races it missed, so a model that fails often is
+(municipal sums in NL and DK, regional ones in FR). The \m{tso\_cutoff} reference exists only where a TSO publishes
+before the gate (BE and NL wind and solar, and load), and the Danish final forecasts measure a different scope from the
+actuals. The three zones added on 15 October have five issue days, and entries that joined late are compared with the
+rest only on the days they share; both will mean more with time. A model that fails is left out of the races it missed, so a model that fails often is
 flagged by the run tracker rather than penalised in the rating; this is deliberate and open to argument. The value
 computation assumes a price-taking producer without intraday trading or curtailment. Finally, a benchmark is only as
 informative as its entries.
@@ -602,10 +762,11 @@ informative as its entries.
 A live, gated benchmark is the kind whose results cannot be improved by a more careful choice of backtest. Energy
 Bench runs one daily for the European day-ahead market, on quarter-hours, from frozen public data with recorded
 provenance, with ranking statistics that state their uncertainty and a value view that connects accuracy to revenue.
-After eighteen live days the main finding is clear: the weather the forecaster could know at the cut-off matters more
-than the model that uses it. The same foundation model forecasts with half the error once it is given that weather,
-and zero-shot foundation models with covariates beat a gradient-boosting model on the same inputs. The grid
-operators' own forecasts remain the bar, level with the best entries on wind and ahead on solar and load. The
+After eighteen live days in six zones the main finding is clear: the weather the forecaster could know at the cut-off
+matters more than the model that uses it. The same foundation model forecasts with about half the error once it is
+given that weather, in every zone, and zero-shot foundation models with covariates beat a gradient-boosting model
+trained on the same inputs. The grid operators' own forecasts remain the bar, level with the best entries on wind
+before the gate and ahead on solar and load. The
 repository accepts entries by pull request; the next zones, references and value settlements will be added the same
 way.
 
