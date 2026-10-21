@@ -16,7 +16,7 @@
 \usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing}
+\usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing,calc}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \usepgfplotslibrary{groupplots,fillbetween}
@@ -599,9 +599,11 @@ history already shows. The three models that receive the covariates through an i
 (30--36\%): nearly as much on wind and solar, but nothing on price, and the load error of TimesFM 2.5 rises by 46\%,
 where the ridge fitted on 28 days extrapolates badly.
 
-The effect does not depend on the zone. Chronos-2's pooled error is 47--53\% lower with covariates in each of the six
-zones (Figure~\ref{fig:zones}), from DE-LU and DK2, where both versions do best relative to the seasonal-naive
-baseline, to the Netherlands, where both do worst.
+The effect does not depend on the zone (Figure~\ref{fig:zones}, where every point of a zone is computed on the same
+races). In each of the six zones the covariates cut Chronos-2's error by 51--69\% on wind and solar and by 28--42\% on
+price, while on load they change it by between $-15$\% and $+15$\%. On wind and solar the covariate models approach but do not reach
+the grid operators' pre-gate forecasts in BE and NL, and the final forecasts stay ahead of them except in NL; on load,
+Chronos-2 with covariates is ahead of the pre-gate forecast in BE and NL and behind it in FR and DE-LU.
 
 \begin{table}[t]
 \centering\small
@@ -634,28 +636,46 @@ Tabby-Pretrain & ridge & 4 & 84 & 0.687 & 0.439 & $-36\%$ & $+2\%$ & $-56\%$ & $
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure}[!htb]
 \centering
 \begin{tikzpicture}
-\begin{axis}[
-  width=0.78\linewidth, height=5.6cm, ymin=0, ymax=1.35,
-  xtick={0,...,5}, xticklabels={BE, NL, FR, DE-LU, DK1, DK2}, xmin=-0.5, xmax=5.5,
-  ylabel={Rel.\ MAE (pooled, geometric mean)}, ylabel style={font=\small},
-  tick label style={font=\scriptsize}, ymajorgrids, grid style={gray!20}, axis line style={gray!60}, tick style={gray!60},
-  legend style={font=\scriptsize, draw=none, fill=none, at={(0.5,1.02)}, anchor=south, legend columns=5},
-  extra y ticks={1}, extra y tick style={grid style={black!50,dashed}},
-]
-\addplot[only marks, mark=square*, mark size=2pt, black!40] table[x=x, y=naivedaily] {zones.dat};
-\addplot[only marks, mark=*, mark size=2.2pt, histc] table[x=x, y=chronos2] {zones.dat};
-\addplot[only marks, mark=*, mark size=2.2pt, covc] table[x=x, y=chronos2cov] {zones.dat};
-\addplot[only marks, mark=triangle*, mark size=2.5pt, orange!80!black] table[x=x, y=lgbmcov] {zones.dat};
-\addplot[only marks, mark=diamond*, mark size=2.6pt, accent] table[x=x, y=tsofinal] {zones.dat};
-\legend{\m{naive\_daily}, \m{chronos2}, \m{chronos2\_cov}, \m{lgbm\_cov}, \m{tso\_final} (ref.)}
-\end{axis}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=0.35cm, y descriptions at=edge left},
+  width=0.39\linewidth, height=5.4cm, ymode=log, ymin=0.1, ymax=4.5,
+  ytick={0.125,0.25,0.5,1,2,4}, yticklabels={0.125,0.25,0.5,1,2,4},
+  xtick={0,...,5}, xticklabels={BE, NL, FR, DE-LU, DK1, DK2}, xmin=-0.6, xmax=5.6,
+  x tick label style={font=\scriptsize, rotate=90, anchor=east}, y tick label style={font=\scriptsize},
+  ymajorgrids, grid style={gray!20}, axis line style={gray!60}, tick style={gray!60},
+  extra y ticks={1}, extra y tick labels={}, extra y tick style={grid style={black!50,dashed}},
+  title style={font=\small, yshift=-1ex}]
+\nextgroupplot[title={price}, ylabel={Rel.\ MAE (log scale)}, ylabel style={font=\scriptsize},
+  legend to name=zoneleg, legend columns=6, legend style={font=\scriptsize, draw=none, /tikz/every even column/.append style={column sep=6pt}}]
+\addplot[only marks, mark=square*, mark size=1.8pt, black!40] table[x expr={\thisrow{x}-0.30}, y=naivedaily] {zones_price.dat};
+\addplot[only marks, mark=*, mark size=2pt, histc] table[x=x, y=chronos2] {zones_price.dat};
+\addplot[only marks, mark=triangle*, mark size=2.4pt, orange!80!black] table[x expr={\thisrow{x}-0.06}, y=lgbmcov] {zones_price.dat};
+\addplot[only marks, mark=*, mark size=2pt, covc] table[x expr={\thisrow{x}+0.06}, y=chronos2cov] {zones_price.dat};
+\addlegendimage{only marks, mark=pentagon*, mark size=2.4pt, teal}
+\addlegendimage{only marks, mark=diamond*, mark size=2.6pt, accent}
+\legend{\m{naive\_daily}, \m{chronos2}, \m{lgbm\_cov}, \m{chronos2\_cov}, \m{tso\_cutoff}, \m{tso\_final}}
+\nextgroupplot[title={wind and solar}]
+\addplot[only marks, mark=square*, mark size=1.8pt, black!40] table[x expr={\thisrow{x}-0.30}, y=naivedaily] {zones_ws.dat};
+\addplot[only marks, mark=*, mark size=2pt, histc] table[x=x, y=chronos2] {zones_ws.dat};
+\addplot[only marks, mark=triangle*, mark size=2.4pt, orange!80!black] table[x expr={\thisrow{x}-0.06}, y=lgbmcov] {zones_ws.dat};
+\addplot[only marks, mark=*, mark size=2pt, covc] table[x expr={\thisrow{x}+0.06}, y=chronos2cov] {zones_ws.dat};
+\addplot[only marks, mark=pentagon*, mark size=2.4pt, teal] table[x expr={\thisrow{x}+0.18}, y=tsocutoff] {zones_ws.dat};
+\addplot[only marks, mark=diamond*, mark size=2.6pt, accent] table[x expr={\thisrow{x}+0.30}, y=tsofinal] {zones_ws.dat};
+\nextgroupplot[title={load}, xmax=3.6]
+\addplot[only marks, mark=square*, mark size=1.8pt, black!40] table[x expr={\thisrow{x}-0.30}, y=naivedaily] {zones_load.dat};
+\addplot[only marks, mark=*, mark size=2pt, histc] table[x=x, y=chronos2] {zones_load.dat};
+\addplot[only marks, mark=triangle*, mark size=2.4pt, orange!80!black] table[x expr={\thisrow{x}-0.06}, y=lgbmcov] {zones_load.dat};
+\addplot[only marks, mark=*, mark size=2pt, covc] table[x expr={\thisrow{x}+0.06}, y=chronos2cov] {zones_load.dat};
+\addplot[only marks, mark=pentagon*, mark size=2.4pt, teal] table[x expr={\thisrow{x}+0.18}, y=tsocutoff] {zones_load.dat};
+\end{groupplot}
+\node at ($(group c2r1.north)+(0,1.0cm)$) {\pgfplotslegendfromname{zoneleg}};
 \end{tikzpicture}
-\caption{Pooled relative error per zone over the targets each zone has (live, 2--19 October 2026). The dashed line is
-the seasonal-naive baseline. \m{tso\_final} has wind and solar only and is left out for DK1 and DK2
-(Section~\ref{sec:tso}).}
+\caption{Pooled Rel.\ MAE per zone and target group (live, 2--19 October 2026, log scale; the dashed line is the
+seasonal-naive baseline). Every point of a zone and panel is computed on the same races: those that all models shown
+there forecast, the TSO references included where they exist (\m{tso\_cutoff}: BE and NL wind and solar, and load;
+\m{tso\_final}: wind and solar outside Denmark, Section~\ref{sec:tso}). Danish load is not yet scored.}
 \label{fig:zones}
 \end{figure}
 
