@@ -709,9 +709,7 @@ over the whole record all beat a LightGBM trained on the same covariate table (\
 0.336--0.398), although LightGBM receives more of it: every NWP model's columns, the calendar and, for price,
 yesterday's price, against a handful of ensemble means and spreads. LightGBM is close on wind (0.246, against
 0.223--0.250) but behind on solar (0.402, against 0.363--0.380) and far behind on load (1.110), where 28 days are too
-few to learn the weather response. Its production configuration, \m{lgbm\_prod}, trained on two years, joined on
-16 October and has not yet shown an advantage (Table~\ref{tab:late}); its first days include 17 October, when an
-incomplete weather run reached it at the cut-off (Section~\ref{sec:limits}).
+few to learn the weather response.
 
 \subsection{The full field over the last four days}
 
@@ -719,9 +717,8 @@ Nine entries joined on 16 October: t0-gamma, Timestral, Tabby and Tabby-Pretrain
 and \m{lgbm\_prod}. Table~\ref{tab:late} compares the whole field on the four issue days 16--19 October, on which every
 entry ran (84 races each). Chronos-2 with covariates still leads (Elo 1290, Rel.\ MAE 0.358), and the newer
 native-covariate models t0-gamma and Timestral follow it, level with TimesFM 3.0 and t0-beta with covariates
-(0.382 against 0.393 and 0.405). Tabby with covariates, through the ridge route, is a step behind (0.44--0.45), and
-\m{lgbm\_prod} is no better than \m{lgbm\_cov} on these days (0.489 against 0.486). Four days are too few to rank the
-newcomers.
+(0.382 against 0.393 and 0.405). Tabby with covariates, through the ridge route, is a step behind (0.44--0.45). Four days are too few to
+rank the newcomers.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -779,7 +776,7 @@ served by one provider, and their spread stands in for forecast uncertainty. Tha
 failure: on six of the eighteen live days (3, 4, 5, 10, 13 and 17 October) it served the 06 UTC ICON-EU run at the
 cut-off before the run was fully ingested, with missing values over the delivery day. Models built on the
 three-model ensemble means were barely affected; models that read each NWP model's own columns lost accuracy on
-those days (\m{lgbm\_prod}'s Danish and French solar on 17 October most visibly). A completeness check has rejected such runs since 19 October; the affected
+those days. A completeness check has rejected such runs since 19 October; the affected
 days are scored as they were run. The two-year training frames match the lead time of the live runs but take ICON-EU and GFS from a previous-runs product that can contain runs initialised after the cut-off of the day they describe; this concerns the training data of two entries, never what is scored. The entries' settings were chosen
 before they went live, but by people who had seen the weeks before. The covariate models are deliberately simple and untuned; \m{lgbm\_cov} and \m{lin\_cov} train on the 28-day
 context for comparability with the foundation models, a known handicap that \m{lgbm\_prod} removes. The Dutch targets
