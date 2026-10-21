@@ -498,8 +498,7 @@ next to the effect of giving any of them the weather (0.34--0.46 with covariates
 \begin{threeparttable}
 \caption{Live standings, issue days 2--19 October 2026, all six zones (22 series). Elo with its day-bootstrap 95\%
 interval; Rel.\ MAE and Rel.\ RMSE pooled per series against \m{naive\_weekly}, geometric mean over the series a model
-forecasts (``all'') or over the zones of one target. Entries that have run over the whole record; covariate models in
-bold.}
+forecasts (``all'') or over the zones of one target. Entries with at least 100 races; covariate models in bold.}
 \label{tab:live}
 \begin{tabular}{@{}rlrcrrrrrrr@{}}
 \toprule
@@ -776,14 +775,12 @@ forecast and its actuals do not measure the same thing: Energinet's day-ahead fo
 \label{sec:limits}
 
 The record is short and covers one season; the standings will move. The weather inputs are three deterministic models
-served by one provider, and their spread stands in for forecast uncertainty. The two-year training frames match the
-lead time of the live runs but take ICON-EU and GFS from a previous-runs product that can contain runs initialised
-after the cut-off of the day they describe; this concerns the training data of two entries, never what is scored. That provider is a single point of
+served by one provider, and their spread stands in for forecast uncertainty. That provider is a single point of
 failure: on six of the eighteen live days (3, 4, 5, 10, 13 and 17 October) it served the 06 UTC ICON-EU run at the
 cut-off before the run was fully ingested, with missing values over the delivery day. Models built on the
 three-model ensemble means were barely affected; models that read each NWP model's own columns lost accuracy on
 those days (\m{lgbm\_prod}'s Danish and French solar on 17 October most visibly). A completeness check has rejected such runs since 19 October; the affected
-days are scored as they were run. The entries' settings were chosen
+days are scored as they were run. The two-year training frames match the lead time of the live runs but take ICON-EU and GFS from a previous-runs product that can contain runs initialised after the cut-off of the day they describe; this concerns the training data of two entries, never what is scored. The entries' settings were chosen
 before they went live, but by people who had seen the weeks before. The covariate models are deliberately simple and untuned; \m{lgbm\_cov} and \m{lin\_cov} train on the 28-day
 context for comparability with the foundation models, a known handicap that \m{lgbm\_prod} removes. The Dutch targets
 changed definition during the record, and the weather points rest on public capacity registers of uneven detail
