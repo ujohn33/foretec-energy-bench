@@ -1,7 +1,7 @@
-"""Preprint Table 4: each foundation model without vs with covariates on the races both forecast (live, BE/NL/FR, issue days to 2026-10-15). Run from the benchmark root."""
+"""Preprint Table 4: each foundation model without vs with covariates on the races both forecast (live, BE/NL/FR, issue days to 2026-10-19). Run from the benchmark root."""
 import numpy as np, pandas as pd
 s = pd.read_parquet("results/scores.parquet"); s["issue_date"] = s.issue_date.astype(str)
-s = s[s.zone.isin(["BE", "NL", "FR"]) & (s.issue_date <= "2026-10-15")]
+s = s[s.zone.isin(["BE", "NL", "FR"]) & (s.issue_date <= "2026-10-19")]
 base = s[s.model == "naive_weekly"].set_index(["issue_date", "zone", "target"])[["mae"]]
 def rel(x):
     x = x.join(base, on=["issue_date", "zone", "target"], rsuffix="_b")
