@@ -6,6 +6,11 @@
        daily averages
   DK1, Energinet CapacityPerMunicipality, monthly, municipalities assigned to DK1/DK2 by region (Wikidata); the
   DK2  offshore pseudo-municipality 1 (Thor, from 2026) is DK1
+  FR   ODRÉ parc-national-annuel-prod-eolien-solaire (RTE and the distribution operators), installed wind (onshore and
+       offshore) and solar at 31 December: cap/fr_parc_national_annuel.json
+  NL   CBS 82610NED, installed capacity at year end, wind onshore + offshore and solar: cap/nl_cbs_82610NED.json
+       FR and NL: linear between year ends; after the last one the last year's growth continues (no mid-year
+       figures published; CBS publishes the first half-year of solar in November)
 Usage: FORETEC_HOME=... python scripts/research/build_capacity.py /srv/foretec/mastr
 Writes data/static/capacity/<zone>_<target>.parquet (index date, column mw).
 """
@@ -59,3 +64,24 @@ for a in ("DK1", "DK2"):
     g = rec[rec["area"] == a].groupby("month")[["OnshoreWindCapacity", "OffshoreWindCapacity", "SolarPowerCapacity"]].sum()
     save(f"{a}_wind", g["OnshoreWindCapacity"] + g["OffshoreWindCapacity"])
     save(f"{a}_solar", g["SolarPowerCapacity"])
+
+
+# FR, NL: year-end figures, linear in between, the last year's growth after the last one
+def from_year_ends(year_end: dict) -> pd.Series:
+    s = pd.Series({pd.Timestamp(f"{y}-12-31"): v for y, v in year_end.items()}).sort_index()
+    rate = (s.iloc[-1] - s.iloc[-2]) / (s.index[-1] - s.index[-2]).days
+    ahead = pd.Series({d: s.iloc[-1] + rate * (d - s.index[-1]).days for d in DAYS if d > s.index[-1]})
+    return pd.concat([s, ahead]).reindex(s.index.union(DAYS)).interpolate("time").reindex(DAYS)
+
+
+fr = {int(r["annee"]): r for r in json.loads((src / "cap" / "fr_parc_national_annuel.json").read_text())["results"]}
+nl: dict = {}
+for r in json.loads((src / "cap" / "nl_cbs_82610NED.json").read_text())["value"]:
+    if r["OpgesteldElektrischVermogenEindeJaar_8"] is not None:
+        nl.setdefault(r["BronTechniek"].strip(), {})[int(r["Perioden"][:4])] = r["OpgesteldElektrischVermogenEindeJaar_8"]
+years = [y for y in sorted(fr) if y >= 2020]
+save("FR_wind", from_year_ends({y: fr[y]["parc_installe_eolien"] for y in years}))
+save("FR_solar", from_year_ends({y: fr[y]["parc_installe_solaire"] for y in years}))
+years = [y for y in sorted(nl["E006590"]) if y >= 2020]
+save("NL_wind", from_year_ends({y: nl["E006637"][y] + nl["E006638"][y] for y in years}))   # onshore + offshore
+save("NL_solar", from_year_ends({y: nl["E006590"][y] for y in years}))

@@ -124,10 +124,16 @@ def end_for(spec: dict, key: str, issue_date: dt.date) -> dt.date:
 def scale_kind(cfg, spec: dict, key: str) -> str | None:
     """scale: {target: capacity}: the target is divided by installed capacity (data/static/capacity/<key>.parquet,
     scripts/research/build_capacity.py), or, without a capacity series, by a proxy: the highest output in the 90 days
-    up to two days before (known at the cut-off). Removes capacity growth the trees cannot extrapolate."""
-    if (spec.get("scale") or {}).get(key.split("_")[1]) != "capacity":
+    up to two days before (known at the cut-off). Removes capacity growth the trees cannot extrapolate.
+    scale: {target: {capacity: [zones]}} does it for those zones only (installed capacity required), the others raw."""
+    zone, target = key.split("_")
+    rule = (spec.get("scale") or {}).get(target)
+    has_capacity = (Path(cfg["_root"]) / "data" / "static" / "capacity" / f"{key}.parquet").exists()
+    if isinstance(rule, dict):
+        return "capacity" if zone in (rule.get("capacity") or []) and has_capacity else None
+    if rule != "capacity":
         return None
-    return "capacity" if (Path(cfg["_root"]) / "data" / "static" / "capacity" / f"{key}.parquet").exists() else "proxy"
+    return "capacity" if has_capacity else "proxy"
 
 
 def scale_rows(cfg, key: str, kind: str, y: pd.Series, index: pd.DatetimeIndex) -> np.ndarray:

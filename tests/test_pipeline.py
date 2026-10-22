@@ -218,6 +218,25 @@ def test_half_ingested_nwp_run_is_rejected(cfg, monkeypatch):
     assert out["cloud_cover"].notna().all() and set(out["centroid"]) == {0, 1}
 
 
+def test_capacity_scaling_per_zone(cfg, tmp_path):
+    """scale: {solar: capacity} scales every zone (proxy without a series); {wind: {capacity: [FR]}} only FR, given a series."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models" / "_shared"))
+    from fl_covmodel import scale_kind
+
+    d = Path(cfg["_root"]) / "data" / "static" / "capacity"
+    d.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"mw": [1.0]}, index=pd.DatetimeIndex(["2026-01-01"], name="date")).to_parquet(d / "FR_wind.parquet")
+    pd.DataFrame({"mw": [1.0]}, index=pd.DatetimeIndex(["2026-01-01"], name="date")).to_parquet(d / "BE_solar.parquet")
+    spec = {"scale": {"solar": "capacity", "wind": {"capacity": ["FR", "DK1"]}}}
+    assert scale_kind(cfg, spec, "BE_solar") == "capacity"
+    assert scale_kind(cfg, spec, "NL_solar") == "proxy"
+    assert scale_kind(cfg, spec, "FR_wind") == "capacity"
+    assert scale_kind(cfg, spec, "DK1_wind") is None          # listed, but no capacity series here
+    assert scale_kind(cfg, spec, "DE_wind") is None
+    assert scale_kind(cfg, spec, "FR_price") is None
+
+
 def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
     from foretec_live.covariates import fuel_quotes
