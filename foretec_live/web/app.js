@@ -742,6 +742,10 @@
     // place in the whole field, so the number does not change with the covariate filter or the top-N slider
     const place = Object.fromEntries(full.filter((x) => !x.provisional).map((x, i) => [x.model, i + 1]));
     const st = full.filter((x) => shown(x.model));
+    // positions are numbered among the models shown (so a filter never leaves gaps); the place in the whole field is in
+    // the hover text when it differs
+    const fieldPlace = place;
+    const shownPlace = Object.fromEntries(st.filter((x) => !x.provisional).map((x, i) => [x.model, i + 1]));
     const bt = S.phase === "backtest";
     // Diebold-Mariano against #1 of the whole field, on the races of the selected period
     const inPeriod = new Set(periodDays(DAYS, S.phase).map((x) => x.d));
@@ -761,8 +765,8 @@
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${sortTh("relw", "Rel. WIS", "relw")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("wis", "WIS" + unit, "wis") + sortTh("winkler", "Winkler 80%" + unit, "winkler") + sortTh("cover", "Coverage 80%", "cover") : ""}
       ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
-      sortRows(st.map((s) => ({ ...s, pos: place[s.model] ?? 1e3, dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}">
-        <td class="pos">${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
+      sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}">
+        <td class="pos" ${!s.provisional && s.fpos !== s.pos ? `title="${s.fpos}${["th", "st", "nd", "rd"][(s.fpos % 100 - 20) % 10] || ["th", "st", "nd", "rd"][s.fpos % 100] || "th"} in the whole field"` : ""}>${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
         ${det ? `<td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>` : ""}${dmOn ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
