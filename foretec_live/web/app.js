@@ -104,7 +104,7 @@
   // field, a model at rank r scores 100 (n - r) / (n - 1), ties sharing the average rank: the winner gets 100
   // whatever the field size. A model whose run failed or was skipped is not in that race at all (no 0), so the
   // standing is its average over the races it finished; the run tracker still shows the failures.
-  const MIN_RACES = 24;
+  const MIN_RACES = 12, MIN_SHARE = 0.2;   // provisional below 12 races or a fifth of the busiest model's
 
   // ---------- Diebold-Mariano ----------
   // Loss = Rel. MAE of each race, so series of different scale pool. The loss differential of A against B
@@ -354,7 +354,7 @@
       }
     }
     const list = Object.values(res);
-    const need = Math.min(MIN_RACES, Math.ceil(0.5 * Math.max(0, ...list.map((s) => s.races))));
+    const need = Math.min(MIN_RACES, Math.ceil(MIN_SHARE * Math.max(0, ...list.map((s) => s.races))));
     const elo = eloScores(sel, 200);
     return list.map((s) => ({
       ...s,
@@ -617,7 +617,7 @@
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
     pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. A failed run is left out of the race.`],
     ci: () => ["95% interval", "How much the Elo score would move if the set of issue days had been different: the 2.5th to 97.5th percentile of 200 refits, each on the period's issue days drawn at random with replacement (a bootstrap over issue days; whole days, because all races of a day share the same weather). Overlapping intervals mean the order of two models is not settled yet. Sorting uses the lower end."],
-    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or half of the most any model has, is provisional and listed after the ranked ones.`],
+    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or a fifth of the most any model has, is provisional and listed after the ranked ones.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
