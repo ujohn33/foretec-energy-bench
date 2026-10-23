@@ -403,7 +403,7 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 .agg{display:flex; align-items:center; gap:10px} .agg .lbl{font-size:.8rem; color:var(--ink2)}
 .tagline{background:var(--surface); border-bottom:1px solid var(--rule); font-size:.86rem; color:var(--ink2); padding:7px 0; line-height:1.45} .tagline a{color:var(--blue-ink); white-space:nowrap; margin-left:6px}
 /* Forecast Value: curve, slider and read-outs, laid out like the foretec.be widget */
-.vcard{padding:18px 18px 0; overflow:hidden}
+.vcard{padding:18px 18px 14px; overflow:hidden}
 .vcard .chart-box{height:360px}
 .vcard .legend{margin-top:8px; font-size:.86rem; color:var(--ink2)}
 .vslider{padding:18px 0 14px}

@@ -1404,22 +1404,53 @@
     }
     return res;
   }
+  // the value chart's annotations: the committed percentile (line, dot on the chosen model's curve and a callout with
+  // the share kept, the money and the cost per MWh), the best percentile (ring and label) and the point forecast's level
   const vCursor = {
     id: "vCursor",
     afterDatasetsDraw(chart, _a, o) {
       if (!o || o.p == null) return;
-      const { ctx, chartArea: a, scales: { x } } = chart;
-      const line = (p, dash, col, text, below) => {
-        const px = x.getPixelForValue(p);
-        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = dash ? 1 : 1.5; ctx.setLineDash(dash ? [3, 3] : []);
-        ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
-        ctx.setLineDash([]); ctx.fillStyle = css("--ink2"); ctx.font = "12px 'Source Code Pro', monospace";
-        ctx.textAlign = px > a.right - 80 ? "right" : "left";
-        ctx.fillText(text, px + (ctx.textAlign === "right" ? -6 : 6), below ? a.bottom - 8 : a.top + 12);
-        ctx.restore();
-      };
-      if (o.best != null && o.best !== o.p) line(o.best, true, css("--ink2"), `best p${o.best}`, false);
-      line(o.p, false, css("--ink"), `p${o.p}`, true);
+      const { ctx, chartArea: a, scales: { x, y } } = chart;
+      const ink = css("--ink"), ink2 = css("--ink2"), surf = css("--surface"), rule = css("--rule");
+      const px = x.getPixelForValue(o.p);
+      ctx.save();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+      ctx.globalAlpha = 1;
+      // point forecast level, labelled at the right end of its line
+      if (o.pointY != null) {
+        ctx.font = "11px 'Source Sans 3', sans-serif"; ctx.fillStyle = ink2; ctx.textAlign = "right";
+        ctx.fillText(`point forecast ${o.pointY.toFixed(1)}%`, a.right - 4, y.getPixelForValue(o.pointY) - 5);
+      }
+      // best percentile: a ring on the curve
+      if (o.best && o.best.p !== o.p && o.best.y != null) {
+        const bx = x.getPixelForValue(o.best.p), by = y.getPixelForValue(o.best.y);
+        ctx.strokeStyle = o.color; ctx.lineWidth = 2; ctx.fillStyle = surf;
+        ctx.beginPath(); ctx.arc(bx, by, 5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        ctx.font = "600 11.5px 'Source Sans 3', sans-serif"; ctx.fillStyle = ink2; ctx.textAlign = "center";
+        ctx.fillText(`best p${o.best.p} · ${o.best.y.toFixed(1)}%`, bx, by - 11);
+      }
+      // the committed percentile: a dot and a callout
+      if (o.y != null) {
+        const py = y.getPixelForValue(o.y);
+        ctx.fillStyle = o.color; ctx.strokeStyle = surf; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        const l1 = `${o.y.toFixed(1)}% at p${o.p}`, l2 = o.sub || "", l3 = o.sub2 || "";
+        ctx.font = "700 14px 'Source Sans 3', sans-serif"; const w1 = ctx.measureText(l1).width;
+        ctx.font = "12px 'Source Sans 3', sans-serif"; const w2 = Math.max(ctx.measureText(l2).width, ctx.measureText(l3).width);
+        const w = Math.max(w1, w2) + 20, h = l3 ? 58 : l2 ? 42 : 26;
+        let bx = px + 14, by = py + 14;
+        if (bx + w > a.right) bx = px - 14 - w;
+        if (by + h > a.bottom) by = py - 14 - h;
+        ctx.fillStyle = surf; ctx.strokeStyle = rule; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.rect(bx, by, w, h); ctx.fill(); ctx.stroke();
+        ctx.textAlign = "left"; ctx.fillStyle = ink; ctx.font = "700 14px 'Source Sans 3', sans-serif";
+        ctx.fillText(l1, bx + 10, by + 18);
+        ctx.fillStyle = ink2; ctx.font = "12px 'Source Sans 3', sans-serif";
+        if (l2) ctx.fillText(l2, bx + 10, by + 34);
+        if (l3) ctx.fillText(l3, bx + 10, by + 50);
+      }
+      ctx.restore();
     },
   };
   function renderValueControls(res) {
@@ -1587,7 +1618,6 @@
     const m = S.v.model, r = m && res[m];
     if (!r) {
       $("v-table").innerHTML = '<tbody><tr><td class="empty">No priced and scored days for this selection yet.</td></tr></tbody>';
-      ["v-r1", "v-r2", "v-r3"].forEach((id) => { $(id).textContent = "–"; $(id + "-s").textContent = ""; });
       if (S.charts["c-value"]) { S.charts["c-value"].destroy(); delete S.charts["c-value"]; }
       return;
     }
@@ -1606,25 +1636,18 @@
     o.scales.x.type = "linear"; o.scales.x.min = VAL.percentiles[0]; o.scales.x.max = VAL.percentiles[VAL.percentiles.length - 1];
     o.scales.x.ticks.stepSize = 10; o.scales.x.ticks.callback = (v) => "p" + v;
     o.scales.y.ticks.callback = (v) => v + "%";
-    o.plugins.vCursor = { p: S.v.p, best: r.bestP };
+    const tq = r.st["p" + S.v.p + VSFX()], cq = r.cost(tq);
+    const eur = (v) => (Math.abs(v) >= 1e6 ? `€${(v / 1e6).toFixed(2)}m` : `€${(v / 1e3).toFixed(0)}k`);
+    o.plugins.vCursor = {
+      p: S.v.p, color: color(m), y: at(m) == null ? null : 100 * at(m), pointY: r.point == null ? null : 100 * r.point,
+      best: r.bestP != null ? { p: r.bestP, y: 100 * r.best } : null,
+      sub: cq == null ? "" : `€${cq.toFixed(2)} / MWh ${S.v.mode === "imb" ? "imbalance cost" : "missed income at DA"}`,
+      sub2: tq ? `${eur(tq.r)} of ${eur(tq.perfect)}${r.bestP === S.v.p ? " · the best percentile" : ""}` : "",
+    };
     o.onClick = (e, _el, chart) => { const p = Math.round(chart.scales.x.getValueForPixel(e.x) / 5) * 5; if (p >= 10 && p <= 90) { S.v.p = p; renderValue(); } };
     if (S.charts["c-value"]) S.charts["c-value"].destroy();
     S.charts["c-value"] = new Chart($("c-value").getContext("2d"), { type: "line", data: { datasets }, options: o, plugins: [vCursor] });
     $("l-value").innerHTML = datasets.map((ds, i) => `<span style="display:inline-flex;align-items:center;gap:7px;margin-right:16px"><i style="display:inline-block;width:18px;border-top:${i === 0 ? 3 : 2}px ${ds.borderDash ? "dashed" : "solid"} ${ds.borderColor}"></i>${esc(ds.label)}</span>`).join("");
-
-    const t = r.st["p" + S.v.p + VSFX()];
-    const zoneTxt = S.v.zone === "all" ? "all zones" : zoneLabel(S.v.zone);
-    $("v-r1-l").textContent = `Committed p${S.v.p} · ${m}`;
-    $("v-r1").textContent = pct(at(m));
-    const eur = (v) => (Math.abs(v) >= 1e6 ? `€${(v / 1e6).toFixed(2)}m` : `€${(v / 1e3).toFixed(0)}k`);
-    $("v-r1-s").textContent = t ? `${eur(t.r)} of ${eur(t.perfect)} · point forecast ${pct(r.point)}` : "";
-    $("v-r2").textContent = r.bestP != null ? "p" + r.bestP : "–";
-    $("v-r2-s").textContent = r.best != null ? `${pct(r.best)} · ${r.bestP === S.v.p ? "you are on it" : `${((r.best - at(m)) * 100).toFixed(1)} pts above p${S.v.p}`}` : "";
-    const c = r.cost(t);
-    $("v-r3-l").textContent = costLabel();
-    $("v-r3").textContent = c == null ? "–" : `€${c.toFixed(2)}`;
-    const nz = valueSeries().filter((x) => x.phase.some((ph, i) => valueDayIn(x, i) && (x.models[m] || {})["p" + S.v.p]?.[i] != null)).length;   // zones in the sum
-    $("v-r3-s").textContent = t ? `per MWh produced, ${(t.energy / 1e3).toFixed(1)} GWh from ${nz > 1 ? `${nz} assets of ${VAL.asset_mw} MW` : `${VAL.asset_mw} MW`} in ${zoneTxt}` : "";
 
     // three groups: models with percentiles (ranked at the slider's percentile), point-only models (ranked on their
     // point forecast) and the reference entries published after the gate
