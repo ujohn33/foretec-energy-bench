@@ -1417,10 +1417,15 @@
       ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
       ctx.globalAlpha = 1;
-      // point forecast level, labelled at the right end of its line
-      if (o.pointY != null) {
-        ctx.font = "11px 'Source Sans 3', sans-serif"; ctx.fillStyle = ink2; ctx.textAlign = "right";
-        ctx.fillText(`point forecast ${o.pointY.toFixed(1)}%`, a.right - 4, y.getPixelForValue(o.pointY) - 5);
+      // flat lines (the model's point forecast, the grid operators' point forecasts) named at their right end;
+      // labels closer than 13 px are stacked so overlapping lines stay readable
+      const flats = (o.flats || []).filter((f) => f.y != null).map((f) => ({ ...f, py: y.getPixelForValue(f.y) - 5 })).sort((p1, p2) => p1.py - p2.py);
+      ctx.font = "600 11px 'Source Sans 3', sans-serif"; ctx.textAlign = "right";
+      let last = -1e9;
+      for (const f of flats) {
+        const yy = Math.max(f.py, last + 13); last = yy;
+        ctx.fillStyle = surf; const tw = ctx.measureText(f.text).width; ctx.fillRect(a.right - 8 - tw, yy - 10, tw + 6, 13);
+        ctx.fillStyle = f.color; ctx.fillText(f.text, a.right - 5, yy);
       }
       // best percentile: a ring on the curve
       if (o.best && o.best.p !== o.p && o.best.y != null) {
@@ -1627,9 +1632,9 @@
     const xy = (curve) => VAL.percentiles.map((p, i) => ({ x: p, y: curve[i] == null ? null : 100 * curve[i] }));
     const datasets = [
       { label: m, data: xy(r.curve), borderColor: color(m), backgroundColor: color(m), borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, order: -1 },
-      { label: `${m} point forecast`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * r.point })), borderColor: color(m), borderWidth: 1.2, borderDash: [2, 3], pointRadius: 0, pointHoverRadius: 0 },
+      { label: `${m} point forecast`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * r.point })), borderColor: color(m), borderWidth: 1.6, borderDash: [2, 3], pointRadius: 0, pointHoverRadius: 0 },
       ...others.map((x) => ({ label: x, data: xy(res[x].curve), borderColor: alpha(color(x), 0.75), backgroundColor: color(x), borderWidth: 1.3, pointRadius: 0, pointHoverRadius: 3, tension: 0.25 })),
-      ...tso.map((x) => ({ label: `${x} (point)`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * res[x].point })), borderColor: color(x), borderWidth: 1.4, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0 })),
+      ...tso.map((x) => ({ label: `${x} (point forecast)`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * res[x].point })), borderColor: alpha(css("--ink2").startsWith("#") ? css("--ink2") : "#4E6578", 0.55), borderWidth: 1.2, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0 })),
     ];
     const o = baseOptions({ yTitle: "Share of perfect-foresight revenue (%)", rightPad: 12, endLabels: false,
       tooltip: { title: (it) => `committed p${it[0].raw.x}`, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw.y, 1)}%` } });
@@ -1639,7 +1644,11 @@
     const tq = r.st["p" + S.v.p + VSFX()], cq = r.cost(tq);
     const eur = (v) => (Math.abs(v) >= 1e6 ? `€${(v / 1e6).toFixed(2)}m` : `€${(v / 1e3).toFixed(0)}k`);
     o.plugins.vCursor = {
-      p: S.v.p, color: color(m), y: at(m) == null ? null : 100 * at(m), pointY: r.point == null ? null : 100 * r.point,
+      p: S.v.p, color: color(m), y: at(m) == null ? null : 100 * at(m),
+      flats: [
+        { y: r.point == null ? null : 100 * r.point, text: `${m} point forecast ${pct(r.point)}`, color: color(m) },
+        ...tso.map((x) => ({ y: 100 * res[x].point, text: `${x} ${pct(res[x].point)}`, color: css("--ink2") })),
+      ],
       best: r.bestP != null ? { p: r.bestP, y: 100 * r.best } : null,
       sub: cq == null ? "" : `€${cq.toFixed(2)} / MWh ${S.v.mode === "imb" ? "imbalance cost" : "missed income at DA"}`,
       sub2: tq ? `${eur(tq.r)} of ${eur(tq.perfect)}${r.bestP === S.v.p ? " · the best percentile" : ""}` : "",
