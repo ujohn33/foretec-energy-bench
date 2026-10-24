@@ -1,0 +1,8 @@
+name: toto2
+author: Datadog
+description: "Toto 2.0 (Datadog/Toto-2.0-313m, 2026, Apache-2.0): a u-μP-scaled decoder-only transformer with alternating time/variate attention and a quantile head, zero-shot on the target's own history (Toto 2.0 has no covariate input yet), 9 quantiles."
+family: toto
+inputs: [history]
+runner: subprocess
+env: toto2
+script: forecaster.py

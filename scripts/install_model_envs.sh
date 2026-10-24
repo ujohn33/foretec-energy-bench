@@ -24,6 +24,8 @@ declare -A PKGS=(
   [tabby]="transformers>=4.40,<5|einops|safetensors|huggingface_hub|tabby-tsfm @ git+https://github.com/huawei-noah/trustworthyAI.git@2e0804cb9135ff73d9888f649e8f9248914bfce4#subdirectory=TabbyTSFM"
   # Timestral (Mistral AI): standalone inference package, Apache-2.0; weights pinned in models/_shared/fl_timestral.py
   [timestral]="timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"
+  # Toto 2.0 (Datadog, Apache-2.0); Toto 1.0 stays in [toto]
+  [toto2]="toto-2==2.0.0"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"
