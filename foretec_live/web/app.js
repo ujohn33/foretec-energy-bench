@@ -413,12 +413,13 @@
       { k: "without", label: "Without", title: "Models that only see the target's own history, plus the benchmarks (baselines and the grid operators' forecasts)" },
     ], S.covFilter, (k) => { S.covFilter = k; renderAll(); renderExplorerChart(); });
     ensBox("f-ens", () => { renderAll(); renderExplorerChart(); });
-    // a quiet text toggle: the key columns by default, the rest on request
+    // the column toggle: a strip along the table's right edge, an arrow out for more columns, back for fewer
     if ($("f-cols")) {
       const fc = $("f-cols");
-      fc.textContent = S.details ? "Fewer columns" : "All columns";
+      fc.innerHTML = `<span aria-hidden="true">${S.details ? "‹" : "›"}</span>`;
       fc.setAttribute("aria-pressed", String(S.details));
-      fc.title = S.details ? "Back to the key columns" : "Also the 95% interval, MAE, RMSE, WIS, Winkler 80%, coverage 80%, best and worst day";
+      fc.setAttribute("aria-label", S.details ? "Fewer columns" : "All columns");
+      fc.title = S.details ? "Fewer columns" : "More columns: 95% interval, MAE, RMSE, WIS, Winkler 80%, coverage 80%, best and worst day";
       fc.onclick = () => { S.details = !S.details; renderAll(); };
     }
     updateFilterSummary();
@@ -775,7 +776,7 @@
     $("standings").classList.toggle("is-bt", bt);
 
     const t = $("standings-table");
-    const unit = S.target === "all" ? "" : ` (${D.config.targets[S.target].unit})`;
+    const unit = "";   // units are in each column's explanation, not in the header
     const det = S.details;
     const multi = det && !singleSeries();   // the series count only matters when more than one series is combined
     const dmOn = det && SHOW_DM;

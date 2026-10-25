@@ -652,3 +652,17 @@ body.ready main{opacity:1 !important; animation:none; transition:opacity .22s ea
 .vx-nav:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 .vx-imb{fill:#C98500; fill-opacity:.3} .sw-imb{background:#C98500; opacity:.5}
 .vx-gain{fill:var(--green); fill-opacity:.42} .vx-loss{fill:var(--onair); fill-opacity:.38} .sw-gain{background:var(--green); opacity:.6} .sw-loss{background:var(--onair); opacity:.5}
+
+/* standings: more or fewer columns from a strip along the table's right edge, shown on hover */
+.st-wrap{position:relative}
+.col-edge{position:absolute; top:1px; right:1px; bottom:1px; width:30px; border:0; border-left:1px solid var(--rule); padding:0;
+  background:linear-gradient(90deg, transparent, var(--surface) 40%); color:var(--ink2); font-size:1.4rem; line-height:1; cursor:pointer;
+  opacity:0; transition:opacity .15s}
+.st-wrap:hover .col-edge,.col-edge:focus-visible{opacity:.75}
+.col-edge:hover{opacity:1; color:var(--ink); background:var(--raise)}
+.col-edge:focus-visible{outline:2px solid var(--blue); outline-offset:-2px}
+@media (hover:none){ .col-edge{opacity:.6} }
+#standings-table th:last-child,#standings-table td:last-child{padding-right:42px}
+.col-edge{display:flex; flex-direction:column; align-items:center; justify-content:flex-start}
+.col-edge span{position:sticky; top:45vh; margin-top:14px; display:grid; place-items:center; width:22px; height:22px; border-radius:50%;
+  background:var(--surface); border:1px solid var(--rule); font-size:1.1rem}
