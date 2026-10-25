@@ -1,0 +1,31 @@
+[Unit]
+Description=Foretec Energy Bench: share links and their preview images (GET /s/..., behind Caddy)
+After=network.target
+
+[Service]
+# its own virtualenv (playwright) and a headless Chromium in /opt/ms-playwright; a throwaway user whose only writable
+# path is its state directory, where the rendered images are cached
+ExecStart=/srv/foretec/share-venv/bin/python -I /srv/foretec/foretec-live/foretec_live/share.py
+Environment=HOME=/var/lib/foretec-share PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+DynamicUser=yes
+StateDirectory=foretec-share
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+SystemCallArchitectures=native
+# no MemoryDenyWriteExecute: Chromium's JavaScript engine needs it
+MemoryMax=1500M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

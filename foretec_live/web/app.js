@@ -510,6 +510,91 @@
     place();
   }
 
+  // ---------- share: a link to this view and a LinkedIn-ready image of its ranking ----------
+  // link parameters: z zone, t target, r rated over (d7 | d30 | all | bt), c covariates, e ensembles (0 | 1), a across
+  // series, m the highlighted model. /s/<token> serves the preview page and /s/<token>.png the image (share.py).
+  const ratedKey = () => (S.phase === "backtest" ? "bt" : S.win);
+  function shareQuery(model) {
+    const q = new URLSearchParams({ z: S.zone, t: S.target, r: ratedKey(), c: S.covFilter, e: S.ens ? "1" : "0", a: S.agg });
+    if (model) q.set("m", model);
+    return q;
+  }
+  /** applies the link's filters (leaderboard only); returns the highlighted model, if any */
+  function applyLinkFilters() {
+    const q = new URLSearchParams(location.search);
+    if (!["z", "t", "r", "m", "card"].some((k) => q.has(k))) return null;
+    if (q.get("z") === "all" || D.config.zones.includes(q.get("z"))) S.zone = q.get("z");
+    if (q.get("t") === "all" || q.get("t") in D.config.targets) S.target = q.get("t");
+    const r = q.get("r");
+    if (r === "bt") { S.phase = "backtest"; S.win = "all"; } else if (r in WINDOWS) { S.phase = "live"; S.win = r; }
+    if (["all", "with", "without"].includes(q.get("c"))) S.covFilter = q.get("c");
+    if (q.has("e")) S.ens = q.get("e") === "1";
+    if (q.get("a") in AGGS) S.agg = q.get("a");
+    return MODELS.includes(q.get("m")) ? q.get("m") : null;
+  }
+  const b64url = (str) => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const rankedShown = () => standings(DAYS, S.phase).filter((x) => shown(x.model) && !x.provisional);
+  function ratedText() { return S.phase === "backtest" ? "the backtest" : { d7: "the last 7 days", d30: "the last 30 days", all: "all live days" }[S.win]; }
+  function viewTitle() {
+    const zone = S.zone === "all" ? "all zones" : zoneLabel(S.zone), target = S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target;
+    return `${target} · ${zone}`;
+  }
+  /** the 1200 x 627 card the share service screenshots (index.html?card=1&...) */
+  function renderShareCard(m) {
+    const el = $("share-card");
+    if (!el) return;
+    const st = rankedShown(), n = st.length, mi = st.findIndex((x) => x.model === m);
+    const rows = st.slice(0, 7).map((x, i) => [x, i + 1]);
+    if (mi >= 7) rows.push(null, [st[mi], mi + 1]);
+    const lo = Math.min(...st.map((x) => x.score)), hi = Math.max(...st.map((x) => x.score));
+    const w = (v) => Math.round(8 + (92 * (v - lo)) / Math.max(1, hi - lo));
+    const up = new Date(D.generated_utc.replace("Z", ":00Z")).toLocaleDateString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", year: "numeric" });
+    const head = mi >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${mi + 1} of ${n}` : esc(viewTitle());
+    el.innerHTML = `<div class="sc">
+      <div class="sc-head"><div class="lockup"><span class="product">EnergyBench</span><span class="by">by <b>Foretec</b></span></div>
+        <span class="sc-tag"><i></i>Live day-ahead forecasting benchmark</span></div>
+      <h1 class="sc-title">${head}</h1>
+      <p class="sc-sub">${mi >= 0 ? esc(viewTitle()) + " · " : ""}Elo over ${esc(ratedText())} · forecasts locked before the 12:00 day-ahead gate, scored against the grid operators</p>
+      <table class="sc-tab"><thead><tr><th>#</th><th>Model</th><th>Elo</th><th class="r">Rel. MAE</th></tr></thead><tbody>${rows.map((r) => r == null
+        ? `<tr class="gap"><td colspan="4">…</td></tr>`
+        : `<tr class="${r[0].model === m ? "hl" : ""}"><td class="pos"><span class="${r[1] <= 3 ? "m" + r[1] : ""}">${r[1]}</span></td><td class="model"><i style="background:${color(r[0].model)}"></i>${esc(r[0].model)}</td>
+            <td class="elo"><em><span style="width:${w(r[0].score)}%;background:${color(r[0].model)}"></span></em><b>${fmt(r[0].score, 0)}</b></td><td class="r">${fmt(r[0].rel, 3)}</td></tr>`).join("")}</tbody></table>
+      <div class="sc-foot"><span>energybench.foretec.co</span><span>${n} models · updated ${esc(up)}</span></div></div>`;
+    el.hidden = false;
+  }
+  function setupShare() {
+    const btn = $("share-open"), dlg = $("share-dlg");
+    if (!btn || !dlg || !dlg.showModal) { if (btn) btn.hidden = true; return; }
+    const sel = $("share-model"), img = $("share-img"), wait = $("share-wait");
+    const refresh = () => {
+      const m = sel.value || null, q = shareQuery(m);
+      const v = String(D.generated_utc || "").replace(/\D/g, "").slice(0, 12);
+      const token = `${b64url(q.toString())}.${v}`, link = `${location.origin}/s/${token}`;
+      $("share-url").value = link;
+      $("share-li").href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`;
+      $("share-dl").href = `/s/${token}.png`;
+      $("share-dl").download = `energybench-${S.zone}-${S.target}${m ? "-" + m : ""}.png`;
+      img.hidden = true; wait.hidden = false; wait.textContent = "Preparing the image…";
+      img.onload = () => { wait.hidden = true; img.hidden = false; };
+      img.onerror = () => { wait.textContent = "The image could not be prepared just now; the link still opens this view."; };
+      img.src = `/s/${token}.png`;
+    };
+    btn.onclick = () => {
+      const st = rankedShown();
+      options(sel, [{ k: "", label: "None, the top of the ranking" }, ...st.map((x, i) => ({ k: x.model, label: `#${i + 1}  ${x.model}` }))], S.hl || "");
+      sel.onchange = refresh;
+      refresh();
+      dlg.showModal();
+    };
+    $("share-close").onclick = () => dlg.close();
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+    $("share-copy").onclick = async () => {
+      try { await navigator.clipboard.writeText($("share-url").value); $("share-copy").textContent = "Copied"; }
+      catch (e) { $("share-url").select(); $("share-copy").textContent = "Press Ctrl+C"; }
+      setTimeout(() => { $("share-copy").textContent = "Copy link"; }, 1600);
+    };
+  }
+
   // ---------- chart plumbing ----------
   const backtestBand = {
     id: "btBand",
@@ -785,7 +870,7 @@
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${sortTh("relw", "Rel. WIS", "relw")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("wis", "WIS" + unit, "wis") + sortTh("winkler", "Winkler 80%" + unit, "winkler") + sortTh("cover", "Coverage 80%", "cover") : ""}
       ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
-      sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}">
+      sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}${s.model === S.hl ? " hl" : ""}">
         <td class="pos" ${!s.provisional && s.fpos !== s.pos ? `title="${s.fpos}${["th", "st", "nd", "rd"][(s.fpos % 100 - 20) % 10] || ["th", "st", "nd", "rd"][s.fpos % 100] || "th"} in the whole field"` : ""}>${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
         <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
         <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
@@ -1811,11 +1896,19 @@
       $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     }
     if (PAGE === "leaderboard") {
+      S.hl = applyLinkFilters();
+      if (S.phase === "live" && !hasLive) S.phase = "backtest";
+      if (S.hl) S.pin.add(S.hl);
+      const card = new URLSearchParams(location.search).has("card");
+      if (card) { document.documentElement.dataset.theme = "light"; document.body.classList.add("card-mode"); }
       on("f-zone", "onchange", (e) => { S.zone = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       on("f-target", "onchange", (e) => { S.target = e.target.value; if (!rawAllowed()) S.view = "rank"; renderAll(); });
       setupFilterBar();
       renderAll();
       renderTracker();
+      setupShare();
+      if (card) renderShareCard(S.hl);
+      else if (S.hl) { const row = document.querySelector("#standings-table tr.hl"); if (row) setTimeout(() => row.scrollIntoView({ block: "center" }), 400); }
     }
     if (PAGE === "explorer") {
       if (S.zone !== "all" && D.config.zones.includes(S.zone)) S.x.zone = S.zone;
@@ -1870,5 +1963,6 @@
     const fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
     fonts.then(() => afterFonts && afterFonts());
     Promise.race([fonts, new Promise((r) => setTimeout(r, 800))]).then(() => requestAnimationFrame(() => document.body.classList.add("ready")));
+    fonts.then(() => setTimeout(() => document.body.setAttribute("data-card-ready", "1"), 150));   // the share service waits for this
   });
 })();

@@ -64,6 +64,7 @@
         <p class="intro">Day-ahead forecasts locked before the 12:00 gate, with the weather and other covariates public at 11:30, scored against the grid operators.</p>
         <p class="meta mono">Cut-off <span data-k="issue_time">11:30</span> · gate <span data-k="gate">12:00</span> CET/CEST · updated <span id="updated">–</span> · data ENTSO-E · <a href="methodology.html#gate-aligned">Methodology</a></p>
       </div>
+      <button type="button" class="share-btn" id="share-open"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg>Share</button>
     </div>
     <div class="st-wrap"><div class="panel tablewrap"><table id="standings-table"></table></div><button type="button" class="col-edge" id="f-cols" aria-pressed="false"></button></div>
     <p class="st-notes" id="st-notes"></p>
@@ -106,6 +107,16 @@
 </section>
 
 </main>
+
+<dialog class="share-dlg" id="share-dlg" aria-labelledby="share-h">
+  <div class="share-top"><h3 id="share-h">Share this ranking</h3><button type="button" class="share-x" id="share-close" aria-label="Close">×</button></div>
+  <div class="field"><label for="share-model">Highlight a model</label><select id="share-model"></select></div>
+  <div class="share-img"><img id="share-img" alt="The image the link shows on LinkedIn" width="1200" height="627" hidden><span id="share-wait">Preparing the image…</span></div>
+  <div class="share-link"><input id="share-url" readonly aria-label="Link to this ranking"><button type="button" id="share-copy">Copy link</button></div>
+  <div class="share-acts"><a id="share-li" target="_blank" rel="noopener" class="share-go">Share on LinkedIn</a><a id="share-dl" download>Download image</a></div>
+  <p class="share-note">The link opens this leaderboard with these filters; on LinkedIn it shows the image above.</p>
+</dialog>
+<div id="share-card" hidden></div>
 
 <footer>
   <div class="wrap foot">

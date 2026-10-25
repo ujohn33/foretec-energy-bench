@@ -666,3 +666,47 @@ body.ready main{opacity:1 !important; animation:none; transition:opacity .22s ea
 .col-edge{display:flex; flex-direction:column; align-items:center; justify-content:flex-start}
 .col-edge span{position:sticky; top:45vh; margin-top:14px; display:grid; place-items:center; width:22px; height:22px; border-radius:50%;
   background:var(--surface); border:1px solid var(--rule); font-size:1.1rem}
+
+/* share */
+.share-btn{display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 14px; border:1px solid var(--rule); border-radius:2px;
+  background:var(--surface); color:var(--ink); font:inherit; font-size:.88rem; font-weight:500; cursor:pointer; align-self:flex-end}
+.share-btn svg{width:15px; height:15px} .share-btn:hover{background:var(--raise)}
+.share-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+tr.hl td{background:color-mix(in srgb, var(--blue) 14%, transparent)} tr.hl td.model{font-weight:700}
+.share-dlg{width:min(720px, calc(100vw - 32px)); border:1px solid var(--rule); border-radius:4px; padding:20px 22px; background:var(--ground); color:var(--ink)}
+.share-dlg::backdrop{background:rgba(5,15,30,.55)}
+.share-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px}
+.share-top h3{font-size:1.15rem}
+.share-x{border:0; background:none; color:var(--ink2); font-size:1.6rem; line-height:1; cursor:pointer}
+.share-dlg .field{margin-bottom:12px} .share-dlg select{width:100%}
+.share-img{position:relative; aspect-ratio:1200/627; border:1px solid var(--rule); background:var(--surface); display:grid; place-items:center; margin-bottom:12px}
+.share-img img{width:100%; height:100%; display:block} .share-img span{font-size:.86rem; color:var(--ink2); padding:0 16px; text-align:center}
+.share-link{display:flex; gap:8px; margin-bottom:12px}
+.share-link input{flex:1; min-width:0; font:inherit; font-size:.84rem; padding:7px 10px; border:1px solid var(--rule); background:var(--surface); color:var(--ink); border-radius:2px}
+.share-link button,.share-acts a{display:inline-flex; align-items:center; height:34px; padding:0 14px; border:1px solid var(--rule); border-radius:2px;
+  background:var(--surface); color:var(--ink); font:inherit; font-size:.88rem; text-decoration:none; cursor:pointer; white-space:nowrap}
+.share-acts{display:flex; gap:8px; flex-wrap:wrap} .share-acts a.share-go{background:#0A66C2; border-color:#0A66C2; color:#fff}
+.share-note{margin:12px 0 0; font-size:.8rem; color:var(--ink2)}
+/* the card the share service screenshots: 1200 x 627, light */
+body.card-mode{background:#fff; margin:0}
+body.card-mode > *:not(#share-card){display:none !important}
+#share-card{width:1200px; height:627px; box-sizing:border-box; padding:40px 56px 34px; background:#F3F8FA; color:#0B1F3A; overflow:hidden; font-family:var(--sans)}
+.sc{display:flex; flex-direction:column; height:100%}
+.sc-head{display:flex; justify-content:space-between; align-items:center}
+.sc-head .lockup .product{font-size:2.3rem} .sc-head .lockup .by{font-size:.95rem}
+.sc-tag{display:inline-flex; align-items:center; gap:8px; font-size:1rem; color:#4E6578; font-weight:600}
+.sc-tag i{width:9px; height:9px; border-radius:50%; background:#D7263D}
+.sc-title{font-family:var(--brand); font-style:italic; font-weight:800; font-size:2.35rem; letter-spacing:-.03em; margin:22px 0 4px}
+.sc-sub{margin:0 0 14px; font-size:1.02rem; color:#4E6578}
+.sc-tab{width:100%; border-collapse:collapse; font-size:1.12rem}
+.sc-tab th{text-align:left; font-size:.82rem; font-weight:600; color:#4E6578; padding:4px 10px; border-bottom:1.5px solid #C6D9E0; background:none; text-transform:none; letter-spacing:0}
+.sc-tab td{padding:6px 10px; border-bottom:1px solid #DCE9EF} .sc-tab .r{text-align:right; font-variant-numeric:tabular-nums}
+.sc-tab td.pos{width:44px} .sc-tab td.pos span{display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%; font-weight:700; font-size:.95rem}
+.sc-tab td.pos .m1{background:#E3B341} .sc-tab td.pos .m2{background:#C3CCD6} .sc-tab td.pos .m3{background:#D19A66}
+.sc-tab td.model{font-weight:600} .sc-tab td.model i{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:10px}
+.sc-tab td.elo{width:38%} .sc-tab td.elo em{display:inline-block; width:62%; height:9px; background:#DCE9EF; vertical-align:middle; margin-right:12px}
+.sc-tab td.elo em span{display:block; height:100%} .sc-tab td.elo b{font-variant-numeric:tabular-nums}
+.sc-tab tr.hl td{background:#DCEBF5} .sc-tab tr.hl td.model{font-weight:800}
+.sc-tab tr.gap td{color:#4E6578; padding:0 10px; border-bottom:0; line-height:1}
+.sc-foot{margin-top:auto; display:flex; justify-content:space-between; font-size:1rem; color:#4E6578; font-weight:600}
+.sc-title .sc-m{color:#3F6C8B}
