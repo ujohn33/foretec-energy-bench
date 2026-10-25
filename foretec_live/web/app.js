@@ -528,15 +528,15 @@
       ctx.restore();
     },
   };
+  // labels at the end of each line: placed at their line's last value, spread at least 13 px apart and kept inside the
+  // chart area (a group that would run past the bottom is shifted up as a whole)
   const endLabels = {
     id: "endLabels",
     afterDatasetsDraw(chart, _a, opts) {
       if (!opts || !opts.on) return;
-      const { ctx } = chart;
-      const placed = [];
-      ctx.save();
-      ctx.font = "12px 'Source Sans 3', sans-serif";
-      ctx.textBaseline = "middle";
+      const { ctx, chartArea: area } = chart;
+      const GAP = 13, lo = area.top + 6, hi = area.bottom - 4;
+      const items = [];
       chart.data.datasets.forEach((ds, i) => {
         if (!ds.endLabel || !chart.isDatasetVisible(i)) return;
         const meta = chart.getDatasetMeta(i);
@@ -544,14 +544,25 @@
         while (k >= 0 && ds.data[k] == null) k--;
         if (k < 0) return;
         const p = meta.data[k];
-        let y = p.y;
-        while (placed.some((q) => Math.abs(q - y) < 13)) y += 13;
-        placed.push(y);
-        ctx.fillStyle = ds.endColor;
-        ctx.beginPath(); ctx.arc(p.x + 9, y, 3.5, 0, 2 * Math.PI); ctx.fill();
-        ctx.fillStyle = css("--ink2");
-        ctx.fillText(ds.endLabel, p.x + 16, y);
+        items.push({ ds, x: p.x, y: Math.min(hi, Math.max(lo, p.y)) });
       });
+      items.sort((a, b) => a.y - b.y);
+      for (let k = 1; k < items.length; k++) items[k].y = Math.max(items[k].y, items[k - 1].y + GAP);
+      const over = items.length ? items[items.length - 1].y - hi : 0;
+      if (over > 0) {
+        items[items.length - 1].y = hi;
+        for (let k = items.length - 2; k >= 0; k--) items[k].y = Math.min(items[k].y, items[k + 1].y - GAP);
+      }
+      ctx.save();
+      ctx.font = "12px 'Source Sans 3', sans-serif";
+      ctx.textBaseline = "middle";
+      for (const it of items) {
+        if (it.y < area.top - 2) continue;   // more labels than fit: the topmost are left out rather than drawn off the chart
+        ctx.fillStyle = it.ds.endColor;
+        ctx.beginPath(); ctx.arc(it.x + 9, it.y, 3.5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = css("--ink2");
+        ctx.fillText(it.ds.endLabel, it.x + 16, it.y);
+      }
       ctx.restore();
     },
   };
