@@ -1318,7 +1318,8 @@
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
-      itemSort: (a, b) => (b.dataset.label === "Actual") - (a.dataset.label === "Actual"),
+      // the actual first, then the forecasts from the highest value to the lowest
+      itemSort: (a, b) => (b.dataset.label.startsWith("Actual") - a.dataset.label.startsWith("Actual")) || ((b.raw ?? -Infinity) - (a.raw ?? -Infinity)),
       tooltip: { label: (c) => (c.dataset.label.startsWith("_") ? null : ` ${c.dataset.label}: ${fmt(c.raw, 1)} ${unit}`) },
     });
     // the tooltip lists the actual and the lines drawn in full; the faint ones are counted
