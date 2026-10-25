@@ -546,12 +546,20 @@
         const p = meta.data[k];
         items.push({ ds, x: p.x, y: Math.min(hi, Math.max(lo, p.y)) });
       });
-      items.sort((a, b) => a.y - b.y);
-      for (let k = 1; k < items.length; k++) items[k].y = Math.max(items[k].y, items[k - 1].y + GAP);
-      const over = items.length ? items[items.length - 1].y - hi : 0;
-      if (over > 0) {
-        items[items.length - 1].y = hi;
-        for (let k = items.length - 2; k >= 0; k--) items[k].y = Math.min(items[k].y, items[k + 1].y - GAP);
+      // only labels whose lines end at about the same place are stacked together (e.g. an actual that stops mid-day
+      // keeps its label next to its own line end)
+      const groups = [];
+      for (const it of items.sort((p1, p2) => p1.x - p2.x)) {
+        const g = groups.find((gr) => Math.abs(gr[0].x - it.x) < 90);
+        g ? g.push(it) : groups.push([it]);
+      }
+      for (const g of groups) {
+        g.sort((p1, p2) => p1.y - p2.y);
+        for (let k = 1; k < g.length; k++) g[k].y = Math.max(g[k].y, g[k - 1].y + GAP);
+        if (g[g.length - 1].y > hi) {
+          g[g.length - 1].y = hi;
+          for (let k = g.length - 2; k >= 0; k--) g[k].y = Math.min(g[k].y, g[k + 1].y - GAP);
+        }
       }
       ctx.save();
       ctx.font = "12px 'Source Sans 3', sans-serif";
