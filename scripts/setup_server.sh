@@ -73,6 +73,10 @@ if [ $WEB -eq 1 ]; then
   # the competition waiting list (foretec_live/waitlist.py, foretec-waitlist.service): the only dynamic path
   WAITLIST=$(printf '  request_body /api/waitlist {\n    max_size 4KB\n  }\n  reverse_proxy /api/waitlist 127.0.0.1:8091\n')
   WAITLIST="$WAITLIST"$'\n'
+  # share cards (foretec_live/share.py, foretec-share.service)
+  WAITLIST="$WAITLIST"$(printf '  reverse_proxy /s/* 127.0.0.1:8092\n')$'\n'
+  # one address for the home page: /index.html (the old internal link) redirects to /, keeping any query
+  WAITLIST="$WAITLIST"$(printf '  @index path /index.html\n  route @index {\n    @withquery expression {query} != ""\n    redir @withquery /?{query} permanent\n    redir * / permanent\n  }\n')$'\n'
   # the domain and aliases are remembered, so a later plain --web never downgrades HTTPS back to plain HTTP
   [ -n "$DOMAIN" ] && echo "$DOMAIN" > $BASE/site_domain
   [ -z "$DOMAIN" ] && [ -f $BASE/site_domain ] && DOMAIN=$(cat $BASE/site_domain)
@@ -104,7 +108,7 @@ if [ $WEB -eq 1 ]; then
   fi
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
   systemctl daemon-reload
-  systemctl enable --now foretec-waitlist.service
+  systemctl enable --now foretec-waitlist.service foretec-share.service
   # daily email report of the waiting list: the Resend key (RESEND_KEY) lives in /root/.env, never in the repo
   [ -f /etc/foretec-waitlist.env ] || install -m 600 /dev/null /etc/foretec-waitlist.env
   grep -q '^REPORT_TO=' /etc/foretec-waitlist.env || echo 'REPORT_TO=evgeny@foretec.be' >> /etc/foretec-waitlist.env
