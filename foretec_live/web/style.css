@@ -603,8 +603,8 @@ table.mini td{padding:6px 0; color:var(--ink2); border-bottom:1px solid var(--ru
 .join h2{font-size:1.6rem}
 .compete h2.how{font-size:1.3rem; margin-bottom:0}
 .jrow{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px}
-.join input[type=email]{font:inherit; padding:9px 11px; border:1px solid var(--rule); border-radius:2px; background:var(--surface); color:var(--ink); width:100%; box-sizing:border-box}
-.join input[type=email]:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var(--blue)}
+.join input[type=email],.join input#w-org{font:inherit; padding:9px 11px; border:1px solid var(--rule); border-radius:2px; background:var(--surface); color:var(--ink); width:100%; box-sizing:border-box}
+.join input[type=email]:focus,.join input#w-org:focus{outline:2px solid var(--blue); outline-offset:1px; border-color:var(--blue)}
 .join .consent{display:flex; gap:10px; align-items:flex-start; margin:16px 0; font-size:.9rem; color:var(--ink2)}
 .join .consent input{margin-top:3px; accent-color:var(--ink)}
 .join .hp{position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden}
@@ -733,3 +733,6 @@ body.card-mode > *:not(#share-card){display:none !important}
 .sc-chart{position:relative; flex:1; min-height:0; margin:4px 0 10px}
 .sc-chart canvas{position:absolute; inset:0; width:100% !important; height:100% !important}
 .sc-title-x{font-size:2.1rem; margin-top:18px}
+.w-org[hidden]{display:none}
+.sponsor-note{margin:12px 0 0; font-size:.9rem; color:var(--ink2)} .sponsor-note a{color:var(--blue-ink)}
+.jrow .w-org{grid-column:1/-1}

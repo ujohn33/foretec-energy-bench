@@ -4,8 +4,9 @@ Standard library only, so it runs on the system Python with nothing imported fro
 127.0.0.1 behind Caddy, which terminates HTTPS and caps the body; systemd runs it as a throwaway user with only its
 state directory writable (scripts/systemd/foretec-waitlist.service).
 
-  accepted   email (checked, lower-cased, at most 254 characters), role (one of ROLES), consent (must be true)
-  stored     {"t": UTC time, "email", "role"}, one line each, in $STATE_DIRECTORY/waitlist.jsonl; an email already on
+  accepted   email (checked, lower-cased, at most 254 characters), role (one of ROLES), consent (must be true),
+             org (the organisation, required for a sponsor, at most 120 printable characters)
+  stored     {"t": UTC time, "email", "role", "org" (sponsors)}, one line each, in $STATE_DIRECTORY/waitlist.jsonl; an email already on
              the list is acknowledged and not stored twice
   refused    a filled-in honeypot field (silently accepted, not stored), more than PER_IP_HOUR requests an hour from one
              address, more than PER_DAY new entries a day in total
@@ -67,6 +68,9 @@ def add(data: dict) -> tuple[int, str]:
         return 400, "Please enter a valid email address."
     if role not in ROLES:
         return 400, "Please choose one of the options."
+    org = " ".join(str(data.get("org", "")).split())[:120] if role == "sponsor" else ""
+    if role == "sponsor" and (not org or not org.isprintable()):
+        return 400, "Please add your organisation."
     if not consent:
         return 400, "Please tick the box so we may email you."
     with _lock:
@@ -79,7 +83,10 @@ def add(data: dict) -> tuple[int, str]:
             return 429, "Too many sign-ups today, please try again tomorrow."
         STORE.parent.mkdir(parents=True, exist_ok=True)
         with STORE.open("a") as f:
-            f.write(json.dumps({"t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "email": email, "role": role}) + "\n")
+            row = {"t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "email": email, "role": role}
+            if org:
+                row["org"] = org
+            f.write(json.dumps(row) + "\n")
         os.chmod(STORE, 0o600)
         _day["n"] += 1
     return 200, "ok"
