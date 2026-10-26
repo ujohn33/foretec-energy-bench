@@ -191,7 +191,7 @@ class Handler(BaseHTTPRequestHandler):
 <meta property="og:url" content="{e(SITE + '/s/' + token)}"><meta property="og:image" content="{e(img)}">
 <meta property="og:image:width" content="2400"><meta property="og:image:height" content="1254">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{e(img)}">
-<link rel="canonical" href="{e(view)}"><meta http-equiv="refresh" content="0; url={e(view)}">
+<meta name="robots" content="noindex, follow"><link rel="canonical" href="{e(view)}"><meta http-equiv="refresh" content="0; url={e(view)}">
 </head><body><p><a href="{e(view)}">Open the leaderboard</a></p></body></html>"""
         return self._send(200, body.encode(), "text/html; charset=utf-8", "public, max-age=300")
 

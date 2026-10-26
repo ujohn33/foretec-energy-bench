@@ -257,7 +257,8 @@ def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, 
     csv = pd.concat([x.assign(phase=ph) for ph, x in (("live", st), ("backtest", bt)) if not x.empty], ignore_index=True)
     atomic_write(site / "leaderboard.csv", csv[cols].round(4).to_csv(index=False))
     atomic_write(site / "llms.txt", _llms(st, bt, best, s, cfg, generated))
-    atomic_write(site / "robots.txt", "User-agent: *\nAllow: /\n\n" + "".join(f"User-agent: {b}\nAllow: /\n\n" for b in AI_CRAWLERS)
+    # /api/ is the waiting-list form's endpoint (POST only), not a page: no crawler needs it
+    atomic_write(site / "robots.txt", "User-agent: *\nAllow: /\nDisallow: /api/\n\n" + "".join(f"User-agent: {b}\nAllow: /\nDisallow: /api/\n\n" for b in AI_CRAWLERS)
                  + f"Sitemap: {SITE_URL}/sitemap.xml\n")
     day = generated[:10]
     urls = [f"{SITE_URL}/{p}" for p, _ in PAGES.values()] + [f"{SITE_URL}/llms.txt"]

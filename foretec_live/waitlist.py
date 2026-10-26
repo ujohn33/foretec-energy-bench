@@ -123,6 +123,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
 
+    def do_GET(self):   # a visit (or a crawler following the form's action) goes to the form, not to a 405
+        self.send_response(301)
+        self.send_header("Location", f"{PAGE}#join")
+        self.send_header("X-Robots-Tag", "noindex")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_HEAD(self):
+        self.do_GET()
+
     def do_POST(self):
         as_json = "application/json" in (self.headers.get("Accept", "") + self.headers.get("Content-Type", ""))
         if self.path.split("?")[0] != "/api/waitlist":
@@ -148,8 +158,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(400, "Invalid request.", as_json)
         self._reply(*add(data), as_json)
 
-    def do_GET(self):
-        self._reply(405, "Use the form on the competition page.", True)
 
 
 if __name__ == "__main__":
