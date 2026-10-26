@@ -28,6 +28,7 @@ SUMMARY = Path(os.environ.get("SHARE_SUMMARY", "/srv/foretec/foretec-live/site/d
 CACHE = Path(os.environ.get("STATE_DIRECTORY", "/var/lib/foretec-share"))
 RATED = {"d7": "the last 7 days", "d30": "the last 30 days", "all": "all live days", "bt": "the backtest"}
 COV, AGG = {"all", "with", "without"}, {"mean", "median", "gmean"}
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TOKEN = re.compile(r"^([A-Za-z0-9_-]{8,400})\.(\d{8,14})(\.png)?$")
 RENDERS_PER_IP_HOUR, MAX_CACHE_FILES, KEEP_DAYS = 30, 5000, 90
 
@@ -56,6 +57,16 @@ def parse(token: str) -> tuple[dict, str, bool] | None:
         return None
     q = {k: v[0] for k, v in parse_qs(raw, max_num_fields=8).items()}
     k = known()
+    if q.get("p") == "x":   # a forecast-explorer day: zone, target, issue day (its day page must exist), optional model
+        p = {"p": "x", "d": q.get("d", ""), "z": q.get("z", ""), "t": q.get("t", "")}
+        if not DAY.match(p["d"]) or not (SUMMARY.parent / "days" / f"{p['d']}.json").exists() \
+                or p["z"] not in k["zones"] or p["t"] not in k["targets"]:
+            return None
+        if q.get("m"):
+            if q["m"] not in k["models"]:
+                return None
+            p["m"] = q["m"]
+        return p, m.group(2), bool(m.group(3))
     p = {"z": q.get("z", "all"), "t": q.get("t", "all"), "r": q.get("r", "d7"), "c": q.get("c", "all"),
          "e": q.get("e", "0"), "a": q.get("a", "mean")}
     if (p["z"] != "all" and p["z"] not in k["zones"]) or (p["t"] != "all" and p["t"] not in k["targets"]) \
@@ -68,8 +79,24 @@ def parse(token: str) -> tuple[dict, str, bool] | None:
     return p, m.group(2), bool(m.group(3))
 
 
+def page_url(p: dict, card: bool = False) -> str:
+    """The view a token stands for (and its card for the renderer)."""
+    if p.get("p") == "x":
+        q = {"day": p["d"], "zone": p["z"], "target": p["t"], **({"m": p["m"]} if p.get("m") else {})}
+        return f"{SITE}/explorer.html?{urlencode(q)}" + ("&card=1" if card else "")
+    return f"{SITE}/?{urlencode(p)}" + ("&card=1" if card else "")
+
+
 def describe(p: dict) -> tuple[str, str]:
     k = known()
+    if p.get("p") == "x":
+        from datetime import date, timedelta
+        d = date.fromisoformat(p["d"]) + timedelta(days=1)
+        tl = {"price": "day-ahead price", "wind": "wind", "solar": "solar", "load": "load"}
+        what = f"{k['labels'].get(p['z'], p['z'])} {tl.get(p['t'], p['t'])}, {d.day} {d.strftime('%b %Y')}"
+        title = f"{p['m']} on {what}" if p.get("m") else f"{what}: day-ahead forecasts vs actual"
+        return title, ("Every model's day-ahead forecast, locked before the 12:00 gate, against what actually happened. "
+                       "Foretec EnergyBench, the live open benchmark for energy forecasts.")
     zone = "all zones" if p["z"] == "all" else k["labels"].get(p["z"], p["z"])
     tl = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
     target = "All targets" if p["t"] == "all" else tl.get(p["t"], p["t"])
@@ -97,7 +124,7 @@ def _prune() -> None:
 
 def render(p: dict, out: Path) -> None:
     from playwright.sync_api import sync_playwright
-    url = f"{SITE}/?{urlencode(p)}&card=1"
+    url = page_url(p, card=True)
     tmp = out.with_suffix(".tmp.png")
     with sync_playwright() as pw:
         browser = pw.chromium.launch(args=["--disable-dev-shm-usage"])
@@ -154,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, out.read_bytes(), "image/png", "public, max-age=604800, immutable")
         title, desc = describe(p)
         token = path[3:]
-        view = f"{SITE}/?{urlencode(p)}"
+        view = page_url(p)
         img = f"{SITE}/s/{token}.png"
         e = lambda s: html.escape(s, quote=True)  # noqa: E731
         body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">

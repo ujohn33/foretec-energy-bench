@@ -728,3 +728,8 @@ body.card-mode > *:not(#share-card){display:none !important}
 .sc-title .sc-m{color:#3F6C8B}
 .share-acts button{display:inline-flex; align-items:center; height:34px; padding:0 14px; border:1px solid var(--rule); border-radius:2px; font:inherit; font-size:.88rem; cursor:pointer; white-space:nowrap}
 .share-img img[hidden]{display:none}
+.share-acts button.share-go.xx{background:#0F1419; border-color:#0F1419; color:#fff}
+.share-acts button.share-go.bs{background:#1185FE; border-color:#1185FE; color:#fff}
+.sc-chart{position:relative; flex:1; min-height:0; margin:4px 0 10px}
+.sc-chart canvas{position:absolute; inset:0; width:100% !important; height:100% !important}
+.sc-title-x{font-size:2.1rem; margin-top:18px}

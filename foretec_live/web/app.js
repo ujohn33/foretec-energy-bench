@@ -562,31 +562,41 @@
       <div class="sc-foot"><span>energybench.foretec.co</span><span>${n} models · updated ${esc(up)}</span></div></div>`;
     el.hidden = false;
   }
-  function setupShare() {
-    const btn = $("share-open"), dlg = $("share-dlg");
-    if (!btn || !dlg || !dlg.showModal) { if (btn) btn.hidden = true; return; }
-    const sel = $("share-model"), img = $("share-img"), wait = $("share-wait"), msg = $("share-wait-msg"), go = $("share-li"), hint = $("share-hint");
+  // the share dialog, the same on every page: a model to highlight, the image, the link, LinkedIn, X and Bluesky
+  function shareDialog() {
+    if ($("share-dlg")) return $("share-dlg");
+    const row = '<div class="sk-row"><i class="sk-dot"></i><i style="width:24%"></i><i style="width:30%;margin-left:auto"></i><i style="width:8%"></i></div>';
+    const d = document.createElement("dialog");
+    d.className = "share-dlg"; d.id = "share-dlg"; d.setAttribute("aria-labelledby", "share-h");
+    d.innerHTML = `<div class="share-top"><h3 id="share-h">Share</h3><button type="button" class="share-x" id="share-close" aria-label="Close">×</button></div>
+      <div class="field"><label for="share-model">Highlight a model</label><select id="share-model"></select></div>
+      <div class="share-img"><img id="share-img" alt="The image the link shows as its preview" width="1200" height="627" hidden>
+        <div class="sk" id="share-wait" aria-live="polite"><div class="sk-head"><i style="width:24%;height:100%"></i><i style="width:30%;height:45%"></i></div>
+          <i style="width:52%;height:7%"></i><i style="width:74%;height:3%"></i><div class="sk-rows">${row.repeat(7)}</div>
+          <span class="sk-msg" id="share-wait-msg">Preparing the image…</span></div></div>
+      <div class="share-link"><input id="share-url" readonly aria-label="Link to this view"><button type="button" id="share-copy">Copy link</button></div>
+      <div class="share-acts"><button type="button" id="share-li" class="share-go li">LinkedIn</button><button type="button" id="share-x" class="share-go xx">X</button>
+        <button type="button" id="share-bs" class="share-go bs">Bluesky</button><a id="share-dl" download>Download image</a></div>
+      <p class="share-note">Each opens a post draft with a short caption and the link; the image above is the link's preview.</p>`;
+    document.body.appendChild(d);
+    return d;
+  }
+  /** P: { title, none, models() -> [{k, label}], initial(), query(m) -> URLSearchParams, caption(m), file(m) } */
+  function setupShare(P) {
+    const btn = $("share-open");
+    if (!btn) return;
+    const dlg = shareDialog();
+    if (!dlg.showModal) { btn.hidden = true; return; }
+    const sel = $("share-model"), img = $("share-img"), wait = $("share-wait"), msg = $("share-wait-msg");
     let seq = 0, caption = "";
-    const defaultHint = "Opens a LinkedIn post draft with this caption and the link; LinkedIn shows the image above as its preview.";
-    // a short caption: what is ranked, where, over which window, and the one-line pitch
-    const what = () => {
-      const zone = S.zone === "all" ? "European" : S.zone;
-      const target = { price: "day-ahead prices", wind: "wind", solar: "solar", load: "load" }[S.target] || "energy";
-      return `${zone} ${target}`;
-    };
-    const windowText = () => (S.phase === "backtest" ? "in the backtest" : { d7: "over the last 7 days", d30: "over the last 30 days", all: "since launch" }[S.win]);
     const refresh = async () => {
-      const m = sel.value || null, q = shareQuery(m), me = ++seq;
+      const m = sel.value || null, me = ++seq;
       const v = String(D.generated_utc || "").replace(/\D/g, "").slice(0, 12);
-      const token = `${b64url(q.toString())}.${v}`, link = `${location.origin}/s/${token}`;
-      const st = rankedShown(), mi = st.findIndex((x) => x.model === m);
-      caption = (mi >= 0 ? `${m} ranks #${mi + 1} of ${st.length} on ${what()} ${windowText()}.`
-        : `Who forecasts ${what()} best? The live leaderboard ${windowText()}.`) +
-        " EnergyBench: day-ahead forecasts locked before the 12:00 gate, scored against reality.";
+      const token = `${b64url(P.query(m).toString())}.${v}`, link = `${location.origin}/s/${token}`;
+      caption = P.caption(m);
       $("share-url").value = link;
       $("share-dl").href = `/s/${token}.png`;
-      $("share-dl").download = `energybench-${S.zone}-${S.target}${m ? "-" + m : ""}.png`;
-      hint.textContent = defaultHint;
+      $("share-dl").download = P.file(m);
       img.hidden = true; wait.hidden = false; wait.classList.remove("failed"); msg.textContent = "Preparing the image…";
       try {
         const r = await fetch(`/s/${token}.png`);
@@ -600,14 +610,15 @@
         wait.classList.add("failed"); msg.textContent = "The image could not be prepared just now; the link still opens this view.";
       }
     };
-    // LinkedIn opens a post draft with the caption and the link; its link preview shows the card (share.py's og:image)
-    go.onclick = () => {
-      const text = `${caption}\n\n${$("share-url").value}`;
-      window.open(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`, "_blank", "noopener");
-    };
+    // each network's own compose screen, with the caption and the link; their link preview shows the card (og:image)
+    const open = (url) => window.open(url, "_blank", "noopener");
+    const enc = encodeURIComponent;
+    $("share-li").onclick = () => open(`https://www.linkedin.com/feed/?shareActive=true&text=${enc(`${caption}\n\n${$("share-url").value}`)}`);
+    $("share-x").onclick = () => open(`https://x.com/intent/post?text=${enc(caption)}&url=${enc($("share-url").value)}`);
+    $("share-bs").onclick = () => open(`https://bsky.app/intent/compose?text=${enc(`${caption}\n\n${$("share-url").value}`)}`);
     btn.onclick = () => {
-      const st = rankedShown();
-      options(sel, [{ k: "", label: "None, the top of the ranking" }, ...st.map((x, i) => ({ k: x.model, label: `#${i + 1}  ${x.model}` }))], S.hl || "");
+      $("share-h").textContent = P.title;
+      options(sel, [{ k: "", label: P.none }, ...P.models()], P.initial());
       sel.onchange = refresh;
       refresh();
       dlg.showModal();
@@ -619,6 +630,84 @@
       catch (e) { $("share-url").select(); $("share-copy").textContent = "Press Ctrl+C"; }
       setTimeout(() => { $("share-copy").textContent = "Copy link"; }, 1600);
     };
+  }
+  const PITCH = "EnergyBench: day-ahead forecasts locked before the 12:00 gate, scored against reality.";
+  const targetWord = (t) => ({ price: "day-ahead prices", wind: "wind", solar: "solar", load: "load" }[t] || "energy");
+  function leaderboardShare() {
+    const what = () => `${S.zone === "all" ? "European" : S.zone} ${targetWord(S.target)}`;
+    const windowText = () => (S.phase === "backtest" ? "in the backtest" : { d7: "over the last 7 days", d30: "over the last 30 days", all: "since launch" }[S.win]);
+    return {
+      title: "Share this ranking", none: "None, the top of the ranking",
+      models: () => rankedShown().map((x, i) => ({ k: x.model, label: `#${i + 1}  ${x.model}` })),
+      initial: () => S.hl || "",
+      query: (m) => shareQuery(m),
+      caption: (m) => {
+        const st = rankedShown(), mi = st.findIndex((x) => x.model === m);
+        return (mi >= 0 ? `${m} ranks #${mi + 1} of ${st.length} on ${what()} ${windowText()}.` : `Who forecasts ${what()} best? The live leaderboard ${windowText()}.`) + " " + PITCH;
+      },
+      file: (m) => `energybench-${S.zone}-${S.target}${m ? "-" + m : ""}.png`,
+    };
+  }
+  // the explorer's day: the scored rows of the selected series (lowest MAE first) and a readable delivery date
+  const xScored = () => ROWS.filter((r) => r.issue_date === S.x.day && r.zone === S.x.zone && r.target === S.x.target && !REF.has(r.model) && r.mae != null)
+    .sort((a, b) => a.mae - b.mae);
+  const xDelivery = () => new Date(addDays(S.x.day, 1) + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  function explorerShare() {
+    const what = () => `${S.x.zone} ${targetWord(S.x.target)}`, unit = () => D.config.targets[S.x.target].unit;
+    return {
+      title: "Share this day", none: "None, the day's best",
+      models: () => [...document.querySelectorAll("#l-day button[data-m]")].map((b) => b.dataset.m).filter((m) => !REF.has(m)).map((m) => ({ k: m, label: m })),
+      initial: () => S.x.hl || [...S.xPin][0] || "",
+      query: (m) => { const q = new URLSearchParams({ p: "x", d: S.x.day, z: S.x.zone, t: S.x.target }); if (m) q.set("m", m); return q; },
+      caption: (m) => {
+        const sc = xScored(), k = sc.findIndex((r) => r.model === m), d = xDelivery();
+        if (m && k >= 0) return `${m} on ${what()} for ${d}: #${k + 1} of ${sc.length} models, MAE ${fmt(sc[k].mae, 0)} ${unit()}. ${PITCH}`;
+        if (m) return `${m}'s forecast of ${what()} for ${d}, locked before the 12:00 gate. ${PITCH}`;
+        if (sc.length) return `Best day-ahead forecast of ${what()} for ${d}: ${sc[0].model}, MAE ${fmt(sc[0].mae, 0)} ${unit()}, out of ${sc.length} models. ${PITCH}`;
+        return `Day-ahead forecasts of ${what()} for ${d}, waiting for reality. ${PITCH}`;
+      },
+      file: (m) => `energybench-${S.x.zone}-${S.x.target}-${addDays(S.x.day, 1)}${m ? "-" + m : ""}.png`,
+    };
+  }
+  /** the explorer's 1200 x 627 card (explorer.html?card=1&...): the day's chart with the actual, the highlighted model,
+   * the day's best (or best-ranked) models and the grid operators' forecasts */
+  async function renderExplorerCard(m) {
+    const el = $("share-card");
+    const ready = () => requestAnimationFrame(() => requestAnimationFrame(() => document.body.setAttribute("data-card-ready", "1")));
+    const day = el && await loadDay(S.x.day);
+    const ser = day && day.series[`${S.x.zone}_${S.x.target}`];
+    if (!ser) { ready(); return; }
+    const unit = D.config.targets[S.x.target].unit, sc = xScored(), maeOf = Object.fromEntries(sc.map((r) => [r.model, r.mae]));
+    const ranked = explorerRanking();
+    const cands = MODELS.filter((x) => !REF.has(x) && FAM[x] !== "tso" && inEns(x) && ser.models[x]);
+    const best = (sc.length ? sc.map((r) => r.model).filter((x) => cands.includes(x)) : cands.slice().sort((a, b) => (ranked.indexOf(a) + 1 || 1e3) - (ranked.indexOf(b) + 1 || 1e3))).slice(0, 3);
+    const lines = [...new Set([...(m && ser.models[m] ? [m] : []), ...best])];
+    const tso = MODELS.filter((x) => FAM[x] === "tso" && ser.models[x]);
+    const k = sc.findIndex((r) => r.model === m), what = `${zoneLabel(S.x.zone)} ${(TARGET_LABEL[S.x.target] || S.x.target).toLowerCase()}`;
+    const head = m && k >= 0 ? `<b class="sc-m">${esc(m)}</b> #${k + 1} of ${sc.length} on ${esc(what)}`
+      : m ? `<b class="sc-m">${esc(m)}</b> on ${esc(what)}` : `${esc(what[0].toUpperCase() + what.slice(1))}: forecasts vs actual`;
+    const sub = `Delivery ${esc(xDelivery())} · forecasts locked before the 12:00 day-ahead gate` + (m && k >= 0 ? ` · MAE ${fmt(sc[k].mae, 0)} ${esc(unit)}` : sc.length ? ` · best MAE ${fmt(sc[0].mae, 0)} ${esc(unit)}` : " · actuals not in yet");
+    el.innerHTML = `<div class="sc">
+      <div class="sc-head"><div class="lockup"><span class="product">EnergyBench</span><span class="by">by <b>Foretec</b></span></div>
+        <span class="sc-tag"><i></i>Live day-ahead forecasting benchmark</span></div>
+      <h1 class="sc-title sc-title-x">${head}</h1><p class="sc-sub">${sub}</p>
+      <div class="sc-chart"><canvas id="c-card"></canvas></div>
+      <div class="sc-foot"><span>energybench.foretec.co</span><span>${esc(S.x.zone)} ${esc(S.x.target)} · issued ${esc(S.x.day)} 11:30</span></div></div>`;
+    el.hidden = false;
+    const t0 = new Date(day.t0), tf = new Intl.DateTimeFormat("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" });
+    const labels = Array.from({ length: day.n }, (_, i) => tf.format(new Date(t0.getTime() + i * 900e3)));
+    const lab = (x) => (maeOf[x] != null ? `${x} · ${fmt(maeOf[x], 0)}` : x);
+    const datasets = [];
+    if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: "#0B1F3A", borderWidth: 3.2, pointRadius: 0, tension: 0, endLabel: "Actual", endColor: "#0B1F3A", order: -2 });
+    lines.forEach((x) => datasets.push({ label: x, data: ser.models[x].p, borderColor: color(x), borderWidth: x === m ? 3.4 : 2, pointRadius: 0, tension: 0,
+      endLabel: lab(x), endColor: color(x), order: x === m ? -1 : 0 }));
+    tso.forEach((x) => datasets.push({ label: x, data: ser.models[x].p, borderColor: "#4E6578", borderWidth: 1.6, borderDash: [6, 4], pointRadius: 0, tension: 0,
+      endLabel: lab(x), endColor: "#4E6578", order: 1 }));
+    const o = baseOptions({ yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`, rightPad: 190 });
+    o.plugins.tooltip = { enabled: false };
+    o.scales.x.ticks.maxTicksLimit = 9;
+    new Chart($("c-card").getContext("2d"), { type: "line", data: { labels, datasets }, options: o, plugins: [endLabels] });
+    ready();
   }
 
   // ---------- chart plumbing ----------
@@ -1932,7 +2021,7 @@
       setupFilterBar();
       renderAll();
       renderTracker();
-      setupShare();
+      setupShare(leaderboardShare());
       if (card) renderShareCard(S.hl);
       else if (S.hl) { const row = document.querySelector("#standings-table tr.hl"); if (row) setTimeout(() => row.scrollIntoView({ block: "center" }), 400); }
     }
@@ -1943,6 +2032,9 @@
       if (q.get("day") && D.days && (xPhase() === "all" || D.days[q.get("day")] === xPhase())) S.x.day = q.get("day");   // live days only
       if (D.config.zones.includes(q.get("zone"))) S.x.zone = q.get("zone");
       if (q.get("target") in D.config.targets) S.x.target = q.get("target");
+      if (MODELS.includes(q.get("m"))) { S.x.hl = q.get("m"); S.xPin.add(S.x.hl); }   // a shared link's highlighted model
+      const card = q.has("card");
+      if (card) { document.documentElement.dataset.theme = "light"; document.body.classList.add("card-mode"); document.body.dataset.cardAsync = "1"; }
       const changed = () => { S.zone = S.x.zone; S.target = S.x.target; saveFilters();
         history.replaceState(null, "", `?day=${S.x.day}&zone=${S.x.zone}&target=${S.x.target}`); };
       const segs = () => {
@@ -1957,8 +2049,10 @@
       on("cov-var", "onchange", (e) => { S.cov = e.target.value; renderExplorerChart(); });
       setupFilterBar();
       renderExplorerControls();
-      changed();
-      renderExplorerChart();
+      if (!card) changed();
+      await renderExplorerChart();
+      setupShare(explorerShare());
+      if (card) await renderExplorerCard(S.x.hl);
     }
     if (PAGE === "value") {
       await initValue();
@@ -1989,6 +2083,6 @@
     const fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
     fonts.then(() => afterFonts && afterFonts());
     Promise.race([fonts, new Promise((r) => setTimeout(r, 800))]).then(() => requestAnimationFrame(() => document.body.classList.add("ready")));
-    fonts.then(() => setTimeout(() => document.body.setAttribute("data-card-ready", "1"), 150));   // the share service waits for this
+    if (!document.body.dataset.cardAsync) fonts.then(() => setTimeout(() => document.body.setAttribute("data-card-ready", "1"), 150));   // the share service waits for this
   });
 })();
