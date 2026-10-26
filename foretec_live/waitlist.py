@@ -5,7 +5,8 @@ Standard library only, so it runs on the system Python with nothing imported fro
 state directory writable (scripts/systemd/foretec-waitlist.service).
 
   accepted   email (checked, lower-cased, at most 254 characters), role (one of ROLES), consent (must be true),
-             org (the organisation, required for a sponsor, at most 120 printable characters)
+             org (the organisation, optional: compete.html asks sponsors for it, foretec.be's form has none; at most 120
+             printable characters, kept for sponsors only)
   stored     {"t": UTC time, "email", "role", "org" (sponsors)}, one line each, in $STATE_DIRECTORY/waitlist.jsonl; an email already on
              the list is acknowledged and not stored twice
   refused    a filled-in honeypot field (silently accepted, not stored), more than PER_IP_HOUR requests an hour from one
@@ -69,8 +70,8 @@ def add(data: dict) -> tuple[int, str]:
     if role not in ROLES:
         return 400, "Please choose one of the options."
     org = " ".join(str(data.get("org", "")).split())[:120] if role == "sponsor" else ""
-    if role == "sponsor" and (not org or not org.isprintable()):
-        return 400, "Please add your organisation."
+    if not org.isprintable():
+        org = ""
     if not consent:
         return 400, "Please tick the box so we may email you."
     with _lock:
