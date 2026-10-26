@@ -565,19 +565,55 @@
   function setupShare() {
     const btn = $("share-open"), dlg = $("share-dlg");
     if (!btn || !dlg || !dlg.showModal) { if (btn) btn.hidden = true; return; }
-    const sel = $("share-model"), img = $("share-img"), wait = $("share-wait");
-    const refresh = () => {
-      const m = sel.value || null, q = shareQuery(m);
+    const sel = $("share-model"), img = $("share-img"), wait = $("share-wait"), msg = $("share-wait-msg"), go = $("share-li"), hint = $("share-hint");
+    let blob = null, file = null, seq = 0, caption = "";
+    const touch = matchMedia("(pointer: coarse)").matches;
+    const defaultHint = touch ? "Opens your share sheet with this image and a link back to this view: pick LinkedIn."
+      : "Opens a LinkedIn post with a link back to this view and puts the image on your clipboard to paste in.";
+    const refresh = async () => {
+      const m = sel.value || null, q = shareQuery(m), me = ++seq;
       const v = String(D.generated_utc || "").replace(/\D/g, "").slice(0, 12);
       const token = `${b64url(q.toString())}.${v}`, link = `${location.origin}/s/${token}`;
+      const st = rankedShown(), mi = st.findIndex((x) => x.model === m);
+      caption = (mi >= 0 ? `${m} ranks #${mi + 1} of ${st.length} for ${viewTitle().toLowerCase()} over ${ratedText()}`
+        : `Who forecasts best: ${viewTitle().toLowerCase()} over ${ratedText()}`) +
+        " on Foretec EnergyBench, an open benchmark of day-ahead energy forecasts locked before the 12:00 gate and scored against the grid operators.";
       $("share-url").value = link;
-      $("share-li").href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`;
       $("share-dl").href = `/s/${token}.png`;
       $("share-dl").download = `energybench-${S.zone}-${S.target}${m ? "-" + m : ""}.png`;
-      img.hidden = true; wait.hidden = false; wait.textContent = "Preparing the image…";
-      img.onload = () => { wait.hidden = true; img.hidden = false; };
-      img.onerror = () => { wait.textContent = "The image could not be prepared just now; the link still opens this view."; };
-      img.src = `/s/${token}.png`;
+      blob = file = null; go.disabled = true; hint.textContent = defaultHint;
+      img.hidden = true; wait.hidden = false; wait.classList.remove("failed"); msg.textContent = "Preparing the image…";
+      try {
+        const r = await fetch(`/s/${token}.png`);
+        if (!r.ok) throw new Error(String(r.status));
+        const b = await r.blob();
+        if (me !== seq) return;   // a newer choice is loading
+        blob = b; file = new File([b], $("share-dl").download, { type: "image/png" });
+        img.onload = () => { if (me === seq) { wait.hidden = true; img.hidden = false; } };
+        img.src = `/s/${token}.png`;   // just fetched, so it comes from the cache (the CSP allows no blob: images)
+      } catch (e) {
+        if (me !== seq) return;
+        wait.classList.add("failed"); msg.textContent = "The image could not be prepared just now; the link still opens this view.";
+      }
+      go.disabled = false;
+    };
+    // phones and tablets: the share sheet takes the image and the caption (LinkedIn opens a draft with both); elsewhere
+    // LinkedIn opens a draft with the caption and link, and the image goes to the clipboard to paste in
+    go.onclick = async () => {
+      const link = $("share-url").value, text = `${caption}\n\n${link}`;
+      if (touch && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], text }); } catch (e) { /* closed */ }
+        return;
+      }
+      window.open(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`, "_blank", "noopener");
+      if (blob && navigator.clipboard && window.ClipboardItem) {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          hint.innerHTML = `<b>The image is on your clipboard.</b> Paste it into the LinkedIn post with ${/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘V" : "Ctrl+V"}.`;
+          return;
+        } catch (e) { /* not allowed: fall through */ }
+      }
+      hint.innerHTML = "<b>Download the image</b> and add it to the LinkedIn post.";
     };
     btn.onclick = () => {
       const st = rankedShown();
