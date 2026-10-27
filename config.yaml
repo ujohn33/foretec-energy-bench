@@ -13,7 +13,8 @@ context_days: 28             # history handed to every model
 baseline: naive_weekly       # reference for relative MAE (skill)
 # relegation (foretec_live/relegation.py), checked weekly: a live model costing >= min_cost_s per run is stopped when a
 # model with the same kind of input at <= rival_cost_ratio of its cost beats it by >= min_gap on pooled Rel. MAE and in
-# >= min_win of shared live races over window_days; baselines, TSO forecasts, ensembles and their members never are
+# >= min_win of shared live races over window_days; baselines, TSO forecasts, ensembles, their members, `protected` and
+# the last live model of each family never are
 relegation: {window_days: 28, min_live_days: 10, min_cost_s: 30, rival_cost_ratio: 0.5, min_gap: 0.10, min_win: 0.60,
              protected: [lgbm_cov], budget_minutes: 22}
 rolling_days: 28             # leaderboard window

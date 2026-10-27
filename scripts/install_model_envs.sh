@@ -26,6 +26,8 @@ declare -A PKGS=(
   [timestral]="timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"
   # Toto 2.0 (Datadog, Apache-2.0); Toto 1.0 stays in [toto]
   [toto2]="toto-2==2.0.0"
+  # TimeH2O (H2O.ai): inference package Apache-2.0; weights gated (non-commercial licence), need HF_TOKEN in /root/.env
+  [timeh2o]="h2ofm==0.43.1"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"

@@ -740,3 +740,23 @@ def test_relegation_only_costly_and_clearly_beaten(cfg):
     assert relegated(cfg)["slow_m"]["date"] == "2026-10-13"
     live = run_forecasts(dt.date(2026, 9, 20), cfg, only_models=["slow_m", "fast_m"])
     assert {r["model"] for r in live["runs"]} == {"fast_m"}   # relegated: no longer run live
+
+
+def test_relegation_spares_last_model_of_family(cfg):
+    """The only live model of its family is never relegated, however clearly it is beaten."""
+    from foretec_live.relegation import check
+    root = Path(cfg["_root"])
+    for name, fam in (("solo_m", "solo"), ("fast_m", "x")):
+        d = root / "models" / name
+        d.mkdir()
+        (d / "model.yaml").write_text(f"name: {name}\nfamily: {fam}\nestimator: NaiveForecaster\nparams: {{strategy: last, sp: 96}}\n")
+    p = paths(cfg)
+    rows = []
+    for i in range(12):
+        d = str(dt.date(2026, 10, 1) + dt.timedelta(days=i))
+        (p["forecasts"] / d).mkdir(parents=True, exist_ok=True)
+        (p["forecasts"] / d / "_run.json").write_text(json.dumps({"run_started_utc": f"{d} 09:30:00+00:00", "run_finished_utc": f"{d} 09:47:00+00:00",
+            "runs": [{"model": "solo_m", "seconds": 300}, {"model": "fast_m", "seconds": 10}]}))
+        rows += [{"issue_date": d, "model": m, "zone": "BE", "target": "wind", "n": 96, "mae": v, "mae_base": 100.0} for m, v in (("solo_m", 95.0), ("fast_m", 60.0))]
+    pd.DataFrame(rows).to_parquet(p["scores"], index=False)
+    assert check(cfg, today=dt.date(2026, 10, 13))[0] == []

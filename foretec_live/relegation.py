@@ -5,7 +5,8 @@ same kind of input (history only, or covariates) beats it clearly over the last 
 Rel. MAE better by at least `min_gap` and a lower MAE in at least `min_win` of the races both ran. Cost is the model's
 time in the live run (median of the last 7 runs); models under `min_cost_s` cost the window next to nothing and are never
 relegated. Both need `min_live_days` of scored live days. Never relegated, and never counted as the rival: baselines,
-the grid operators' forecasts, ensembles; ensemble members and `protected` models are never relegated either.
+the grid operators' forecasts, ensembles; ensemble members, `protected` models and the last live model of each family
+(so every family stays in the live run) are never relegated either.
 
 A relegated model stops running live (data/relegated.json, the date and the reason); its live record and backtest stay
 on the site. Putting it back is deleting its entry. The check also warns when the median run takes longer than
@@ -76,10 +77,14 @@ def check(cfg, today=None) -> tuple[list[dict], dict]:
             and specs[m].get("live") is not False and not specs[m].get("reference") and not specs[m].get("live_only")
     uses_cov = lambda m: bool(set(specs[m].get("inputs", ["history"])) & COVARIATES)
     bench = lambda m: specs[m].get("family") in ("baseline", "tso", "ensemble")
+    running = {m for m, r in specs.items() if m not in done and r.get("live") is not False and not r.get("reference")}
+    family = lambda m: specs[m].get("family", m)
     out = []
     for m in sorted(sec.index, key=lambda x: -sec[x]):
         if not ok(m) or bench(m) or m in members or m in rc["protected"] or sec[m] < rc["min_cost_s"]:
             continue
+        if not any(family(x) == family(m) for x in running - {m} - {v["model"] for v in out}):
+            continue   # the last live model of its family
         for o in sorted(rel.index, key=lambda x: rel[x]):   # the strongest qualifying rival is named
             if o == m or not ok(o) or bench(o) or uses_cov(o) != uses_cov(m) or sec[o] > sec[m] * rc["rival_cost_ratio"]:
                 continue

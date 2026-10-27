@@ -5,3 +5,5 @@ runner: subprocess
 env: toto
 script: forecaster.py
 family: toto
+enabled: false
+retired: "27 Oct 2026: superseded by Toto 2.0 (toto2, toto2_1b). It was the slowest model in the live run (330 s per run, a fifth of all model time) and trailed Toto 2.0 in the backtest (Rel. MAE 0.81 against 0.71)."

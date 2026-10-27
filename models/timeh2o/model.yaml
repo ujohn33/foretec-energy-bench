@@ -1,0 +1,9 @@
+name: timeh2o
+author: H2O.ai
+description: "TimeH2O-v1 (h2oai/timeh2o-v1, October 2026, 108M parameters, non-commercial model licence): zero-shot on the target's own history, 9 quantiles."
+family: timeh2o
+inputs: [history]
+runner: subprocess
+env: timeh2o
+script: forecaster.py
+live: false   # until the gated weights are reachable and its backtest has run

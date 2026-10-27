@@ -1,0 +1,9 @@
+name: timeh2o_cov
+author: H2O.ai
+description: "TimeH2O-v1 zero-shot with its native future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost) over the history and the delivery day."
+family: timeh2o
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: timeh2o
+script: forecaster.py
+live: false   # until the gated weights are reachable and its backtest has run
