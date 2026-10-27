@@ -1111,7 +1111,7 @@
   }
 
   function renderHeatmap() {
-    const days = phaseDays();
+    const days = phaseDays().slice().reverse();   // most recent day first, like the run tracker
     const st = standings(DAYS, S.phase).filter((x) => shown(x.model));
     const t = $("heatmap");
     if (!days.length) { t.innerHTML = ""; return; }
