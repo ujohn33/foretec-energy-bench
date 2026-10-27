@@ -107,7 +107,7 @@ if pf.exists():
         ax.text(590, y, f"{r.label.replace('~', ' ')} ({r.params:.0f}M)", fontsize=5.8, color="#4A4F58", va="center")
     ax.axhline(1.0, color="#555", lw=0.6, ls="--"); ax.text(2.6, 1.0, "seasonal naive", fontsize=5.8, va="bottom", color="#555")
     ax.set_xscale("log"); ax.set_xlim(2.2, 1700); ax.set_ylim(0.3, 1.05)
-    ax.set_xlabel("parameters (millions, log scale)"); ax.set_ylabel("Rel. MAE, 16–19 October")
+    ax.set_xlabel("parameters (millions, log scale)"); ax.set_ylabel("Rel. MAE, 16–25 October")
     ax.grid(True, which="major", color="#E6E8EC", lw=0.5); ax.set_axisbelow(True)
     for sp in ("top", "right"): ax.spines[sp].set_visible(False)
     ax.legend(frameon=False, fontsize=6.5, loc="lower left")

@@ -2,16 +2,16 @@
 import glob, json, os, sys
 import numpy as np, pandas as pd, yaml
 sys.argv += [] ; out = sys.argv[1]
-exec(open("scripts/research/preprint_all.py").read().split("ps = per_series(s)")[0].replace('out, last = sys.argv[1], sys.argv[2]', 'out, last = sys.argv[1], "2026-10-19"'))
+exec(open(os.environ.get("ALLPY", "scripts/research/preprint_all.py")).read().split("ps = per_series(s)")[0].replace('out, last = sys.argv[1], sys.argv[2]', 'out, last = sys.argv[1], os.environ.get("LAST", "2026-10-19")'))
 # 1) full field, issue days 16-19
-w = s[s.issue_date >= "2026-10-16"]
+w = s[s.issue_date >= os.environ.get("LATE_FROM", "2026-10-16")]
 p = per_series(w); e = elo(w)
 ff = {}
 for m, g in p.groupby("model"):
     r = {"rel": gm(g.rel), "relr": gm(g.relr), "nser": len(g)}
     for t, gt in g.groupby("target"): r[t] = gm(gt.rel)
     r.update(e.get(m, {})); ff[m] = r
-json.dump(ff, open(f"{out}/late_field.json", "w"), indent=1)
+json.dump(ff, open(f"{out}/late_field_{os.environ.get('LATE_FROM', '2026-10-16')}.json", "w"), indent=1)
 # 2) TSO pairs without DK
 tp = {}
 for ref in ["tso_cutoff", "tso_final"]:

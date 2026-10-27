@@ -4,7 +4,7 @@ import os, sys
 import numpy as np, pandas as pd
 out = sys.argv[1]
 s = pd.read_parquet(os.environ.get("SCORES", "results/scores.parquet")); s["issue_date"] = s.issue_date.astype(str)
-s = s[s.issue_date <= "2026-10-19"]
+s = s[s.issue_date <= os.environ.get("LAST", "2026-10-19")]
 K = ["issue_date", "zone", "target"]
 base = s[s.model == "naive_weekly"].set_index(K).mae.rename("mae_b")
 MODELS = ["naive_daily", "chronos2", "lgbm_cov", "chronos2_cov", "tso_cutoff", "tso_final"]

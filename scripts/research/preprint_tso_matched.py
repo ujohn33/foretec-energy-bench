@@ -2,7 +2,7 @@
 import json, os, sys
 import numpy as np, pandas as pd
 s = pd.read_parquet(os.environ.get("SCORES", "results/scores.parquet")); s["issue_date"] = s.issue_date.astype(str)
-s = s[s.issue_date <= "2026-10-19"]
+s = s[s.issue_date <= os.environ.get("LAST", "2026-10-19")]
 K = ["issue_date", "zone", "target"]
 base = s[s.model == "naive_weekly"].set_index(K)[["mae"]]
 gm = lambda a: float(np.exp(np.mean(np.log(a))))
