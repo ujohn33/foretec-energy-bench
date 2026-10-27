@@ -180,9 +180,9 @@ def _dataset(cfg, s: pd.DataFrame, generated: str) -> list[dict]:
     zones = [v.get("label", z) for z, v in cfg["zones"].items()]
     org = {"@type": "Organization", "name": "Foretec", "url": "https://foretec.be/"}
     return [
-        {"@context": "https://schema.org", "@type": "WebSite", "name": "Foretec Energy Bench", "url": SITE_URL + "/", "publisher": org},
+        {"@context": "https://schema.org", "@type": "WebSite", "name": "EnergyBench", "alternateName": ["Energy Bench", "Foretec Energy Bench"], "url": SITE_URL + "/", "publisher": org},
         {"@context": "https://schema.org", "@type": "Dataset",
-         "name": "Foretec Energy Bench: live day-ahead electricity forecasting benchmark",
+         "name": "EnergyBench (Foretec Energy Bench): live day-ahead electricity forecasting benchmark", "alternateName": ["Energy Bench", "Foretec Energy Bench"],
          "description": ("Daily day-ahead forecasts of electricity price, wind, solar and load for " + ", ".join(zones) +
                          ", made by foundation models, gradient boosting and baselines before the 12:00 day-ahead auction gate "
                          "from one frozen set of public inputs (history, NWP weather forecasts, load forecast, fuel prices), "
