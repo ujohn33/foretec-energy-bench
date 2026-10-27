@@ -167,6 +167,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
     p = paths(cfg, results_subdir)
     started = str(pd.Timestamp.now(tz="UTC"))
     live = results_subdir == "results"
+    from .relegation import relegated
+    benched = relegated(cfg) if live else {}
     specs = []
     for spec in load_models(p["models"], only_models):
         is_ref = bool(spec.raw.get("reference"))
@@ -175,6 +177,8 @@ def run_forecasts(issue_date, cfg, results_subdir="results", only_models=None, s
         if not live and spec.raw.get("live_only"):   # e.g. "as published at the cut-off": unverifiable after the fact
             continue
         if live and spec.raw.get("live") is False:   # backtested, not yet run live (e.g. too slow for the gate)
+            continue
+        if live and spec.name in benched:            # relegated (relegation.py): its record stays, it no longer runs
             continue
         specs.append(spec)
     # ensembles combine the members' stored forecasts of the day, so they run after every other model

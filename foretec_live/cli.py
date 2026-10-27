@@ -233,6 +233,24 @@ def cmd_ensembles(cfg, args):
     return 0
 
 
+def cmd_relegate(cfg, args):
+    """Weekly relegation check (relegation.py): print the verdicts; --apply stops those models running live."""
+    from .relegation import apply, check
+    verdicts, facts = check(cfg)
+    m, b = facts["median_run_minutes"], facts["budget_minutes"]
+    if m is not None and m > b:
+        logging.warning("live run takes %.1f min (median of 7), over the %s min budget: consider relegating by hand", m, b)
+    print(f"median live run {m if m is None else round(m, 1)} min (budget {b})")
+    for v in verdicts:
+        print(f"{'RELEGATE' if args.apply else 'would relegate'} {v['model']}: {v['reason']}")
+    if not verdicts:
+        print("no model to relegate")
+    if args.apply and verdicts:
+        apply(cfg, verdicts)
+        _site(cfg)
+    return 0
+
+
 def cmd_pretrain(cfg, args):
     """Morning training of the models too slow to train inside the live run (pretrain: true), for today's issue."""
     d = args.date or local_today(cfg)
@@ -279,6 +297,7 @@ def main(argv=None):
     sub.add_parser("intervals")
     p = sub.add_parser("ensembles"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p.add_argument("--models", nargs="*"); p.add_argument("--backtest", action="store_true")
+    p = sub.add_parser("relegate"); p.add_argument("--apply", action="store_true")
     p = sub.add_parser("pretrain"); p.add_argument("--date", type=_date); p.add_argument("--models", nargs="*")
     p = sub.add_parser("covhist"); p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p = sub.add_parser("backfill"); p.add_argument("--start", type=_date, required=True)
@@ -295,7 +314,7 @@ def main(argv=None):
     if args.source:
         cfg["source"] = args.source
     return {"probe": cmd_probe, "forecast": cmd_forecast, "score": cmd_score, "provisional": cmd_provisional,
-            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain, "intervals": cmd_intervals, "ensembles": cmd_ensembles}[args.cmd](cfg, args)
+            "report": cmd_report, "backfill": cmd_backfill, "site": cmd_site, "catchup": cmd_catchup, "reference": cmd_reference, "covhist": cmd_covhist, "pretrain": cmd_pretrain, "intervals": cmd_intervals, "ensembles": cmd_ensembles, "relegate": cmd_relegate}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

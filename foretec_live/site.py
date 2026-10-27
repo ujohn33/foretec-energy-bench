@@ -344,6 +344,8 @@ def build_site(cfg) -> Path:
         js["phase"] = phase
         _atomic_write(f, json.dumps(js, separators=(",", ":"), allow_nan=False))
 
+    from .relegation import relegated
+    benched = relegated(cfg)
     models = []
     # every model folder, including retired ones: their backtest stays public, with the reason
     for yml in sorted(p["models"].glob("*/model.yaml")):
@@ -357,6 +359,8 @@ def build_site(cfg) -> Path:
                        "scope": [f"{z}_{t}" for z in (r.get("zones") or cfg["zones"]) for t in (r.get("targets") or cfg["targets"])
                                  if f"{z}_{t}" not in (r.get("exclude") or [])],
                        "enabled": r.get("enabled", True), "retired": r.get("retired", ""),
+                       "relegated": (benched.get(spec.name) or {}).get("date", ""),
+                       "relegated_reason": (benched.get(spec.name) or {}).get("reason", ""),
                        "reference": bool(r.get("reference")), "live_only": bool(r.get("live_only")),
                        "caveat": r.get("caveat", ""),
                        "ensemble": r.get("runner") == "ensemble", "members": r.get("members", []),

@@ -11,6 +11,11 @@ resolution: 15min
 quantiles: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 context_days: 28             # history handed to every model
 baseline: naive_weekly       # reference for relative MAE (skill)
+# relegation (foretec_live/relegation.py), checked weekly: a live model costing >= min_cost_s per run is stopped when a
+# model with the same kind of input at <= rival_cost_ratio of its cost beats it by >= min_gap on pooled Rel. MAE and in
+# >= min_win of shared live races over window_days; baselines, TSO forecasts, ensembles and their members never are
+relegation: {window_days: 28, min_live_days: 10, min_cost_s: 30, rival_cost_ratio: 0.5, min_gap: 0.10, min_win: 0.60,
+             protected: [lgbm_cov], budget_minutes: 22}
 rolling_days: 28             # leaderboard window
 revision_check: {days: 3, threshold: 0.005}   # wind/solar actuals re-fetched for 3 days; >0.5% of daily energy -> re-frozen, re-scored
 # actuals frozen under an earlier definition of the series: never re-checked, so their scores stay as they were

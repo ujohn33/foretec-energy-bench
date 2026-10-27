@@ -708,3 +708,35 @@ def test_ensemble_median_of_members(tmp_path):
     rows, out = run_ensemble(spec, tmp_path, idx, qs)
     assert {(r["zone"], r["target"]): r["status"] for r in rows}[("NL", "solar")] == "error"
     assert set(zip(out.zone, out.target)) == {("BE", "wind")}
+
+
+def test_relegation_only_costly_and_clearly_beaten(cfg):
+    """A slow model clearly beaten by one at half its cost is relegated; a light one or a protected one never is."""
+    from foretec_live.relegation import apply, check, relegated
+    from foretec_live.run import run_forecasts
+    root = Path(cfg["_root"])
+    for name in ("slow_m", "fast_m", "light_m", "kept_m"):
+        d = root / "models" / name
+        d.mkdir()
+        (d / "model.yaml").write_text(f"name: {name}\nfamily: x\nestimator: NaiveForecaster\nparams: {{strategy: last, sp: 96}}\n")
+    cost = {"slow_m": 300, "fast_m": 20, "light_m": 10, "kept_m": 200}
+    level = {"slow_m": 90.0, "fast_m": 70.0, "light_m": 95.0, "kept_m": 95.0}
+    cfg["relegation"] = {"protected": ["kept_m"]}
+    days = [str(dt.date(2026, 10, 1) + dt.timedelta(days=i)) for i in range(12)]
+    p = paths(cfg)
+    rows = []
+    for i, d in enumerate(days):
+        out = p["forecasts"] / d
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "_run.json").write_text(json.dumps({"run_started_utc": f"{d} 09:30:00+00:00", "run_finished_utc": f"{d} 09:47:00+00:00",
+                                                   "runs": [{"model": m, "zone": "BE", "target": "wind", "status": "ok", "seconds": c} for m, c in cost.items()]}))
+        for m, lv in level.items():
+            rows.append({"issue_date": d, "model": m, "zone": "BE", "target": "wind", "n": 96, "mae": lv + (i % 3), "mae_base": 100.0})
+    pd.DataFrame(rows).to_parquet(p["scores"], index=False)
+    verdicts, facts = check(cfg, today=dt.date(2026, 10, 13))
+    assert [v["model"] for v in verdicts] == ["slow_m"] and verdicts[0]["rival"] == "fast_m"
+    assert facts["median_run_minutes"] == 17
+    apply(cfg, verdicts, today=dt.date(2026, 10, 13))
+    assert relegated(cfg)["slow_m"]["date"] == "2026-10-13"
+    live = run_forecasts(dt.date(2026, 9, 20), cfg, only_models=["slow_m", "fast_m"])
+    assert {r["model"] for r in live["runs"]} == {"fast_m"}   # relegated: no longer run live
