@@ -61,7 +61,8 @@ weather, sixteen time-series foundation models from ten families (ten of them al
 and the TSOs' own forecasts as references. Over the first eighteen live days, covariates roughly halve the error of
 foundation models: on matched races, the seven models that accept covariates natively cut their error by 44--50\% (by
 55--66\% on wind and 62--67\% on solar), and the five with the full record beat, zero-shot, a LightGBM model trained on
-the same covariate table. The grid operators' own forecasts remain the bar: the best entries are level with their
+the same covariate table. Model size, from 3M to 331M parameters, matters far less: above about 100M it no longer
+predicts the error. The grid operators' own forecasts remain the bar: the best entries are level with their
 pre-gate forecasts on wind and load but behind on solar, and behind their final forecasts, published after the gate.
 A model enters the benchmark by pull request.
 \end{abstract}
@@ -334,9 +335,11 @@ Covariate models & Ridge and LightGBM on the covariates and calendar, trained on
 half-life, retrained daily for price and load and monthly for wind and solar, solar trained on its capacity factor).
 They take the full covariate table: every NWP model's columns, the ensemble statistics and differences, the calendar
 and, for price, yesterday's price. \\
-Foundation models, history only & Chronos-2 and Chronos-Bolt~\cite{chronos}, TimesFM 2.5 and 3.0~\cite{timesfm},
-Moirai~2~\cite{moirai}, TiRex and TiRex-2~\cite{tirex}, Toto, Sundial, TTM r2, Tabby and Tabby-Pretrain, Timestral
-(Mistral AI), and the t0 alpha, beta and gamma releases of The Forecasting Company; all zero-shot. \\
+Foundation models, history only & Chronos-2 (120M parameters) and Chronos-Bolt base (205M)~\cite{chronos},
+TimesFM 2.5 (231M) and 3.0 (331M)~\cite{timesfm}, Moirai~2 small (11M)~\cite{moirai}, TiRex (35M) and TiRex-2
+(95M)~\cite{tirex}, Toto (151M), Sundial (128M), TTM r2 (3.4M), Tabby (147M) and Tabby-Pretrain (146M), Timestral
+(Mistral AI, 209M), and the t0 alpha (102M), beta and gamma (256M each) releases of The Forecasting Company; all
+zero-shot. Sizes are counted from the checkpoints the benchmark loads. \\
 Foundation models with covariates & \m{chronos2\_cov}, \m{timesfm3\_cov}, \m{t0\_alpha/beta/gamma\_cov} and
 \m{tirex2\_cov} and \m{timestral\_cov} through their native known-future covariates; \m{timesfm25\_cov},
 \m{tabby\_cov} and \m{tabby\_pretrain\_cov} through an in-context ridge regression (the foundation model forecasts
@@ -720,6 +723,27 @@ and RTE's final forecast, published after the gate, 15.7\,GW.
 10--90\% band), and a TSO forecast (Elia's pre-gate forecast for BE; RTE's final forecast, published after the gate,
 for FR).}
 \label{fig:example}
+\end{figure}
+
+\subsection{Model size}
+
+Figure~\ref{fig:params} sets each foundation model's error against its number of parameters, on the four issue days
+16--19 October, the only ones on which all sixteen ran (84 races each). Without covariates, larger models do somewhat
+better overall (Spearman $\rho = -0.55$, $p = 0.03$), but the relation rests on the small end: TTM r2 (3.4M) and
+Moirai~2 (11M) are among the weakest. From about 100M parameters up, size no longer predicts the error ($\rho = -0.30$
+over the 13 models, not significant): the best history-only models range from 120M (Chronos-2) to 256M (t0-gamma),
+and Toto, at 151M, is the second weakest. With covariates the relation is weaker still ($\rho = -0.24$, ten models):
+Chronos-2 with covariates, at 120M, is the best of all, ahead of TimesFM 3.0 at 331M. Every covariate model, whatever
+its size, beats every history-only model; giving a 120M model the weather does far more than any size does without it.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_params.pdf}
+\caption{Pooled Rel.\ MAE against parameter count for the sixteen foundation models, without covariates (open) and,
+where a variant exists, with the frozen covariates (filled, joined to the same model without), on the issue days
+16--19 October 2026 (all zones, 84 races per model). Parameter counts are those of the checkpoints the benchmark loads;
+TiRex-2 uses about 38M of its 95M in univariate mode.}
+\label{fig:params}
 \end{figure}
 
 \subsection{Against purpose-built models}

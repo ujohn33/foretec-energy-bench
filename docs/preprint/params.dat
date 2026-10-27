@@ -1,0 +1,17 @@
+model params hist cov label
+chronos2 119.5 0.711 0.358 Chronos-2
+chronos_bolt 205.3 0.720 nan Chronos-Bolt
+timesfm25 231.3 0.724 0.498 TimesFM~2.5
+timesfm3 330.7 0.724 0.393 TimesFM~3.0
+moirai2 11.4 0.808 nan Moirai~2
+tirex 35.3 0.769 nan TiRex
+tirex2 95.1 0.797 0.447 TiRex-2
+toto 151.3 0.852 nan Toto
+sundial 128.3 0.775 nan Sundial
+ttm_r2 3.4 0.892 nan TTM~r2
+tabby 146.7 0.705 0.453 Tabby
+tabby_pretrain 145.8 0.687 0.439 Tabby-Pretrain
+t0_alpha 101.6 0.830 0.441 t0-alpha
+t0_beta 255.6 0.749 0.405 t0-beta
+t0_gamma 255.6 0.694 0.382 t0-gamma
+timestral 209.3 0.686 0.382 Timestral

@@ -83,3 +83,33 @@ cb.ax.set_yticklabels(["0.125", "0.25", "0.5", "1", "2"], fontsize=6); cb.outlin
 cb.set_label("Rel. MAE (log scale)", fontsize=6.5)
 fig.tight_layout(); fig.savefig(out / "fig_heatmap.pdf", bbox_inches="tight"); plt.close(fig)
 print("heatmap:", M.shape)
+
+# ---------------------------------------------------------------- accuracy vs parameter count
+pf = out / "params.dat"          # model params(M) hist cov label: Rel. MAE on 16-19 Oct, every model on the same races
+if pf.exists():
+    d = pd.read_csv(pf, sep=" ")
+    fig, ax = plt.subplots(figsize=(5.4, 3.3))
+    for _, r in d.iterrows():
+        if np.isfinite(r["cov"]):
+            ax.plot([r.params, r.params], [r["hist"], r["cov"]], color="#C9D6E8", lw=1.2, zorder=1)
+    ax.scatter(d.params, d["hist"], s=26, facecolor="white", edgecolor="#8A8F98", lw=1.2, zorder=3, label="history only")
+    c = d.dropna(subset=["cov"])
+    ax.scatter(c.params, c["cov"], s=28, color="#2E6DB4", zorder=4, label="with covariates")
+    # small models: label next to the point; the crowded 90-350M group: a label column on the right with leaders
+    for _, r in d[d.params < 90].iterrows():
+        ax.annotate(f"{r.label.replace('~', ' ')} ({r.params:.1f}M)" if r.params < 10 else f"{r.label.replace('~', ' ')} ({r.params:.0f}M)",
+                    (r.params, r["hist"]), xytext=(5, 0), textcoords="offset points",
+                    fontsize=5.8, color="#4A4F58", va="center")
+    big = d[d.params >= 90].sort_values("hist", ascending=False).reset_index(drop=True)
+    ys = np.linspace(0.875, 0.615, len(big))
+    for (_, r), y in zip(big.iterrows(), ys):
+        ax.plot([r.params, 560], [r["hist"], y], color="#C3C7CE", lw=0.4, zorder=2)
+        ax.text(590, y, f"{r.label.replace('~', ' ')} ({r.params:.0f}M)", fontsize=5.8, color="#4A4F58", va="center")
+    ax.axhline(1.0, color="#555", lw=0.6, ls="--"); ax.text(2.6, 1.0, "seasonal naive", fontsize=5.8, va="bottom", color="#555")
+    ax.set_xscale("log"); ax.set_xlim(2.2, 1700); ax.set_ylim(0.3, 1.05)
+    ax.set_xlabel("parameters (millions, log scale)"); ax.set_ylabel("Rel. MAE, 16–19 October")
+    ax.grid(True, which="major", color="#E6E8EC", lw=0.5); ax.set_axisbelow(True)
+    for sp in ("top", "right"): ax.spines[sp].set_visible(False)
+    ax.legend(frameon=False, fontsize=6.5, loc="lower left")
+    fig.tight_layout(); fig.savefig(out / "fig_params.pdf", bbox_inches="tight"); plt.close(fig)
+    print("params:", len(d))
