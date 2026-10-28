@@ -686,9 +686,12 @@
     const lines = [...new Set([...(m && ser.models[m] ? [m] : []), ...best])];
     const tso = MODELS.filter((x) => FAM[x] === "tso" && ser.models[x]);
     const k = sc.findIndex((r) => r.model === m), what = `${zoneLabel(S.x.zone)} ${(TARGET_LABEL[S.x.target] || S.x.target).toLowerCase()}`;
-    const head = m && k >= 0 ? `<b class="sc-m">${esc(m)}</b> #${k + 1} of ${sc.length} on ${esc(what)}`
+    const head = m && k >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${k + 1} of ${sc.length}`
       : m ? `<b class="sc-m">${esc(m)}</b> on ${esc(what)}` : `${esc(what[0].toUpperCase() + what.slice(1))}: forecasts vs actual`;
-    const sub = `Delivery ${esc(xDelivery())} · forecasts locked before the 12:00 day-ahead gate` + (m && k >= 0 ? ` · MAE ${fmt(sc[k].mae, 0)} ${esc(unit)}` : sc.length ? ` · best MAE ${fmt(sc[0].mae, 0)} ${esc(unit)}` : " · actuals not in yet");
+    // target, zone and the one delivery day in large chips, as on the leaderboard card
+    const scope = [TARGET_LABEL[S.x.target] || S.x.target, zoneLabel(S.x.zone), xDelivery()];
+    const sub = `<span class="sc-scope">${scope.map((x) => `<b>${esc(x)}</b>`).join("")}</span>locked before the 12:00 gate`
+      + (m && k >= 0 ? ` · MAE ${fmt(sc[k].mae, 0)} ${esc(unit)}` : sc.length ? ` · best MAE ${fmt(sc[0].mae, 0)} ${esc(unit)}` : " · actuals not in yet");
     el.innerHTML = `<div class="sc">
       <div class="sc-head"><div class="lockup"><span class="product">EnergyBench</span><span class="by">by <b>Foretec</b></span></div>
         <span class="sc-tag"><i></i>Live day-ahead forecasting benchmark</span></div>
