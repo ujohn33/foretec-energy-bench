@@ -549,12 +549,14 @@
     const lo = Math.min(...st.map((x) => x.score)), hi = Math.max(...st.map((x) => x.score));
     const w = (v) => Math.round(8 + (92 * (v - lo)) / Math.max(1, hi - lo));
     const up = new Date(D.generated_utc.replace("Z", ":00Z")).toLocaleDateString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", year: "numeric" });
-    const head = mi >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${mi + 1} of ${n}` : esc(viewTitle());
+    const head = mi >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${mi + 1} of ${n}` : "Day-ahead forecasting leaderboard";
+    // the view in large chips, so a rank is never read without its target and zone
+    const scope = [S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target, S.zone === "all" ? "All zones" : zoneLabel(S.zone)];
     el.innerHTML = `<div class="sc">
       <div class="sc-head"><div class="lockup"><span class="product">EnergyBench</span><span class="by">by <b>Foretec</b></span></div>
         <span class="sc-tag"><i></i>Live day-ahead forecasting benchmark</span></div>
       <h1 class="sc-title">${head}</h1>
-      <p class="sc-sub">${mi >= 0 ? esc(viewTitle()) + " · " : ""}Elo over ${esc(ratedText())} · forecasts locked before the 12:00 day-ahead gate, scored against the grid operators</p>
+      <p class="sc-sub"><span class="sc-scope">${scope.map((x) => `<b>${esc(x)}</b>`).join("")}</span>Elo over ${esc(ratedText())} · locked before the 12:00 gate, scored against the grid operators</p>
       <table class="sc-tab"><thead><tr><th>#</th><th>Model</th><th>Elo</th><th class="r">Rel. MAE</th></tr></thead><tbody>${rows.map((r) => r == null
         ? `<tr class="gap"><td colspan="4">…</td></tr>`
         : `<tr class="${r[0].model === m ? "hl" : ""}"><td class="pos"><span class="${r[1] <= 3 ? "m" + r[1] : ""}">${r[1]}</span></td><td class="model"><i style="background:${color(r[0].model)}"></i>${esc(r[0].model)}</td>
