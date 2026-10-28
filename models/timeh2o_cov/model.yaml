@@ -6,4 +6,4 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: timeh2o
 script: forecaster.py
-live: false   # backtested; ~680 s per live run (cross-variate attention over the covariates), held until the run budget allows
+live: false   # backtest only: about 680 s per live run; timeh2o_cov_fast (no test-time averaging, about 80 s) runs live

@@ -6,4 +6,3 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: timeh2o
 script: forecaster.py
-live: false   # until its backtest has run
