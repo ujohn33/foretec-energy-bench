@@ -5,7 +5,9 @@ are gated on Hugging Face under H2O.ai's non-commercial model licence: the serve
 account that accepted it. It returns the benchmark's nine quantile levels directly; the point forecast is the median.
 Package defaults are kept (flip-equivariant averaging, patch ensemble). With covariates=True the compact covariate set
 (NWP ensemble means/spreads, ENTSO-E load forecast where a target gets it, fuel; fl_cov.compact_features) goes in as
-future covariates over the history and the delivery day, which TimeH2O reads natively.
+future covariates over the history and the delivery day, which TimeH2O reads natively. With fast=True the package's
+test-time averaging is switched off (flip_equivariant: also forecasting the negated series; patch_ensemble: averaging
+over patch sizes), which cuts the cost several-fold, for a model that has to fit in the live run.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from fl_io import read_request, write_output
 REPO, REVISION = "h2oai/timeh2o-v1", "1310be782553943a4c520d2810a98ce8f56b2709"
 
 
-def run(covariates: bool = False) -> None:
+def run(covariates: bool = False, fast: bool = False) -> None:
     from h2ofm import TimeH2O
     req, series = read_request()
     model = TimeH2O.from_pretrained(REPO, revision=REVISION, device="cpu")
@@ -31,6 +33,8 @@ def run(covariates: bool = False) -> None:
         if covariates:
             _, _, cp, cf, _ = series_frames(req, cov, inp, key)
             kw["future_covariates"] = np.concatenate([cp, cf]).T.astype(np.float64)    # (C, T + H)
+        if fast:
+            kw.update(flip_equivariant=False, patch_ensemble=False)
         f = model.forecast(np.asarray(y, dtype=np.float64), h, quantile_levels=req["quantiles"], **kw)
         q = np.asarray(f.quantiles, dtype=float)                                        # (H, 9)
         results[key] = nonneg(key, np.asarray(f.point, dtype=float), np.sort(q, axis=1))
