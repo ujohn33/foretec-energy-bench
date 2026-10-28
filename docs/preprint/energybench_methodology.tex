@@ -186,6 +186,10 @@ References & statistical baselines & optional benchmark models & baselines; the 
 
 \section{The benchmark}
 
+This section defines the benchmark as it runs: the forecasting task, the daily timeline and what a model may know at
+the cut-off, where the actuals come from, the covariates frozen for every entry, the field of entries, and how
+forecasts are scored, ranked and valued.
+
 \subsection{Task}
 
 For each zone $z \in \{\text{BE}, \text{NL}, \text{FR}, \text{DE-LU}, \text{DK1}, \text{DK2}\}$ and target $y \in
@@ -479,6 +483,11 @@ the benchmark. On the site, backtest and live results are always shown apart; th
 
 \section{Results: the first twenty-four live days}
 \label{sec:results}
+
+The results below are those of the live record only, scored on the forecasts as they were locked before each gate.
+After the coverage of the record, they give the standings, the value of the covariates for foundation models, the
+role of model size, and the comparison with purpose-built models, with the full field over its last six days and with
+the grid operators' own forecasts.
 
 \subsection{Coverage}
 
