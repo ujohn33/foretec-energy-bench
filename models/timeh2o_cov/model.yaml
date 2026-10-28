@@ -1,9 +1,8 @@
 name: timeh2o_cov
 author: H2O.ai
-description: "TimeH2O-v1 zero-shot with its native future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost) over the history and the delivery day."
+description: "TimeH2O-v1 zero-shot with its native future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost) over the history and the delivery day. Run without the package's test-time averaging (flip-equivariant forecasting of the negated series, patch-size ensemble), which would take about 680 s per live run instead of about 80 s for 1-2% better accuracy in the backtest."
 family: timeh2o
 inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: timeh2o
 script: forecaster.py
-live: false   # backtest only: about 680 s per live run; timeh2o_cov_fast (no test-time averaging, about 80 s) runs live

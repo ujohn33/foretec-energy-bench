@@ -1,8 +1,0 @@
-name: timeh2o_cov_fast
-author: H2O.ai
-description: "TimeH2O-v1 with its native future covariates, as timeh2o_cov but without the package's test-time averaging (flip-equivariant forecasting of the negated series and the patch-size ensemble), so it fits in the live run."
-family: timeh2o
-inputs: [history, nwp, load_forecast, fuel]
-runner: subprocess
-env: timeh2o
-script: forecaster.py
