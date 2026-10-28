@@ -6,4 +6,3 @@ inputs: [history]
 runner: subprocess
 env: timeh2o
 script: forecaster.py
-live: false   # until the gated weights are reachable and its backtest has run

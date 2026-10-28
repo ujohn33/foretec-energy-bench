@@ -6,4 +6,4 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: timeh2o
 script: forecaster.py
-live: false   # until the gated weights are reachable and its backtest has run
+live: false   # backtested; ~680 s per live run (cross-variate attention over the covariates), held until the run budget allows
