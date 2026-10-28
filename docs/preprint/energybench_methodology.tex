@@ -32,11 +32,14 @@
 \newcommand{\m}[1]{\texttt{#1}}
 
 \title{\textbf{Energy Bench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
-\author{Evgenii Genov\\[2pt]
-\small EVERGi, Mobility, Logistics and Automotive Technology Research Centre (MOBI)\\
+\author{Evgenii Genov$^{1}$ \qquad Ander Martinez Alonso$^{2}$ \qquad Christoph Bergmeir$^{3}$\\[4pt]
+\small $^{1}$EVERGi, Mobility, Logistics and Automotive Technology Research Centre (MOBI),\\
 \small Vrije Universiteit Brussel, Pleinlaan 2, 1050 Brussels, Belgium\\
-\small\href{mailto:evgenii.genov@vub.be}{evgenii.genov@vub.be}}
-\date{\small Methodology preprint, 27 October 2026\\
+\small $^{2}$Vrije Universiteit Brussel, Pleinlaan 2, 1050 Brussels, Belgium\\
+\small $^{3}$Department of Computer Science and Artificial Intelligence, University of Granada, Granada, Spain\\[4pt]
+\small\href{mailto:evgenii.genov@vub.be}{evgenii.genov@vub.be}, \href{mailto:Ander.Martinez.Alonso@vub.be}{Ander.Martinez.Alonso@vub.be},
+\href{mailto:bergmeir@ugr.es}{bergmeir@ugr.es}}
+\date{\small Methodology preprint, 28 October 2026\\
 \href{https://energybench.foretec.co}{energybench.foretec.co} \quad\textperiodcentered\quad
 \href{https://github.com/ujohn33/foretec-energy-bench}{github.com/ujohn33/foretec-energy-bench}}
 
@@ -47,26 +50,22 @@
 
 \begin{abstract}
 \noindent
-Comparisons of energy forecasting models usually rest on backtests, and backtests are easy to get subtly wrong: the
-information that was available when a forecast would have been sold is replaced by whatever is convenient to download
-later. Energy Bench removes the question by running every entry live. Each day at 11:30 CET/CEST, thirty minutes
-before the single day-ahead coupling (SDAC) gate closes, every model forecasts the next delivery day's day-ahead price,
-wind generation, solar generation and total load on the 15-minute market grid for six bidding zones (BE, NL, FR,
-DE-LU, DK1, DK2). Unlike existing live benchmarks, Energy Bench runs every model itself, on one information set that it
-freezes at the cut-off and publishes, including the runs of three numerical weather prediction (NWP) models, so
-foundation models can be compared with and without the same weather covariates under a real market deadline. Actuals
-come from the transmission system operators' (TSOs') publications with recorded provenance and a revision check.
-Models are compared on errors pooled per series relative to a seasonal-naive baseline and ranked by a Bradley--Terry
-rating on the Elo scale with a day-bootstrap interval; a second view values wind and solar forecasts as the revenue of
-a 100\,MW asset settled at imbalance prices. The field spans baselines, linear and gradient-boosted models on the frozen
-weather, eighteen time-series foundation models from ten families (ten of them also run with covariates), ensembles,
-and the TSOs' own forecasts as references. Over the first twenty-four live days, covariates roughly halve the error of
-foundation models: on matched races, the seven models that accept covariates natively cut their error by 45--50\% (by
-58--69\% on wind and 58--63\% on solar), and the five with the full record beat, zero-shot, a LightGBM model trained on
-the same covariate table. Model size, from 3M to 331M parameters, matters far less, and median ensembles of the
-covariate models lead the standings. The grid operators' own forecasts remain the bar: the best entries are level with
-their pre-gate forecasts on wind but behind on solar and load, and behind their final forecasts, published after the
-gate. A model enters the benchmark by pull request.
+Comparisons of energy forecasting models usually rest on backtests, which are easy to get subtly wrong: the information
+available when a forecast would have been sold is replaced by whatever is convenient to download later. Energy Bench
+runs every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
+every model forecasts the next day's price, wind and solar generation and load on the 15-minute grid for six bidding
+zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike other live benchmarks, Energy Bench runs the models itself, on one
+information set that it freezes at the cut-off and publishes, including three numerical weather prediction models, so
+foundation models are compared with and without the same weather covariates under a real market deadline. Errors are
+pooled per series against a seasonal-naive baseline, and models are ranked by a Bradley--Terry rating on the Elo scale
+with a day-bootstrap interval. The field spans baselines, linear and gradient-boosted models on the frozen weather,
+eighteen time-series foundation models from ten families, ensembles, and the grid operators' own forecasts. Over the
+first twenty-four live days, covariates roughly halve the error of foundation models: on matched races the seven that
+accept covariates natively cut their error by 45--50\% (58--69\% on wind, 58--63\% on solar), and zero-shot they beat a
+LightGBM model trained on the same covariates. Model size, from 3M to 331M parameters, matters far less, and median
+ensembles of the covariate models lead the standings. The grid operators' forecasts remain the bar: level with the
+best entries on wind before the gate, ahead on solar and load, and ahead on both after it. A model enters the
+benchmark by pull request.
 \end{abstract}
 
 \section{Introduction}
