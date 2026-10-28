@@ -40,6 +40,8 @@
 \href{https://energybench.foretec.co}{energybench.foretec.co} \quad\textperiodcentered\quad
 \href{https://github.com/ujohn33/foretec-energy-bench}{github.com/ujohn33/foretec-energy-bench}}
 
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\floatpagefraction}{0.75}
 \begin{document}
 \maketitle
 
@@ -318,47 +320,69 @@ per run, for all series). A model whose environment is missing is skipped and lo
 runs any new model over a fixed backtest window (14 September -- 1 October 2026, shown on the site as a separate
 record and not used in this paper). The field on 27 October (Table~\ref{tab:field}) has 42 active entries.
 
-\begin{table}[t]
-\centering\small
-\caption{The field, 27 October 2026. Covariate inputs are the frozen table of Section~\ref{sec:cov}.}
+\begin{table}[!tp]
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{threeparttable}
+\caption{The field, 27 October 2026 (42 active entries). Parameter counts are those of the checkpoints the benchmark
+loads. Covariates: \emph{native}, the model's own known-future covariate input; \emph{ridge}, an in-context ridge
+regression on the covariates whose residual the model forecasts; \emph{full}, the whole covariate table.}
 \label{tab:field}
-\begin{tabularx}{\linewidth}{@{}p{3.1cm}X@{}}
+\begin{tabularx}{\linewidth}{@{}l r l Y@{}}
 \toprule
-Group & Entries \\
+Entry & Params & Covariates & Developer, set-up \\
 \midrule
-Baselines & \m{naive\_weekly} (same quarter-hour one week earlier; the reference of all relative errors),
-\m{naive\_daily} (one day earlier), \m{climatology} (same local time of day within $\pm14$ calendar days, 2023 to
-August 2026), \m{lin\_lags} and \m{lgbm\_lags} (ridge and LightGBM on lagged values of the series itself, two years of
-training up to the end of the previous month, retrained monthly). \\
-Covariate models & Ridge and LightGBM on the covariates and calendar, trained on the 28-day context
-(\m{lin\_cov}, \m{lgbm\_cov}) or on two years (\m{lin\_cov\_2y}; \m{lgbm\_prod}, recency-weighted with a 120-day
-half-life, retrained daily for price and load and monthly for wind and solar, solar trained on its capacity factor).
-They take the full covariate table: every NWP model's columns, the ensemble statistics and differences, the calendar
-and, for price, yesterday's price. \\
-Foundation models, history only & Chronos-2 (120M parameters) and Chronos-Bolt base (205M)~\cite{chronos},
-TimesFM 2.5 (231M) and 3.0 (331M)~\cite{timesfm}, Moirai~2 small (11M)~\cite{moirai}, TiRex (35M) and TiRex-2
-(95M)~\cite{tirex}, Toto (151M), Sundial (128M), TTM r2 (3.4M), Tabby (147M) and Tabby-Pretrain (146M), Timestral
-(Mistral AI, 209M), the t0 alpha (102M), beta and gamma (256M each) releases of The Forecasting Company, and Toto~2
-(313M and 1B, from 25 October); all zero-shot. Sizes are counted from the checkpoints the benchmark loads. \\
-Foundation models with covariates & \m{chronos2\_cov}, \m{timesfm3\_cov}, \m{t0\_alpha/beta/gamma\_cov} and
-\m{tirex2\_cov} and \m{timestral\_cov} through their native known-future covariates; \m{timesfm25\_cov},
-\m{tabby\_cov} and \m{tabby\_pretrain\_cov} through an in-context ridge regression (the foundation model forecasts
-what the covariates do not explain; the Tabby variants forecast load without covariates). All take a compact subset:
-three or four ensemble means and spreads per target, and for price the load forecast, fuel cost and the renewable
-drivers of the coupled zones. Moirai~2 and Toto with covariates were retired after the
-trial runs: covariates made Moirai~2 worse, and Toto gained too little for its run time and memory. \\
-Ensembles & Quarter-hourly medians of fixed members, point and each quantile separately: \m{ens\_fm}, the newest
-history-only model of the five families that also have a native-covariate variant; \m{ens\_fm\_cov}, their five
-covariate variants; \m{ens\_hybrid}, those five plus \m{lgbm\_prod}. Members are fixed by rule, not by score. Live
-from 20 October. \\
-References & \m{tso\_cutoff}: the TSOs' forecasts as published before the gate (Elia's 11:00 day-ahead wind and solar
-forecast for BE; NED's national wind, solar and load forecast for NL, fetched at the cut-off; the ENTSO-E day-ahead
-load forecast elsewhere);
-live only, since a pre-gate vintage cannot be verified after the fact; ranked like any entry. \m{tso\_final}: the
-final day-ahead wind and solar forecasts, published after the gate (Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and DK
-wind, NED in the evening for NL); shown, never ranked. \\
+\multicolumn{4}{@{}l}{\emph{Baselines}} \\
+\m{naive\_weekly} & & & same quarter-hour one week earlier; the reference of all relative errors \\
+\m{naive\_daily} & & & same quarter-hour one day earlier \\
+\m{climatology} & & & same local time of day within $\pm14$ days, 2023 to August 2026 \\
+\m{lin\_lags}, \m{lgbm\_lags} & & & ridge and LightGBM on the series' own lags; two years, retrained monthly \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Models trained on the covariates}\tnote{a}} \\
+\m{lin\_cov}, \m{lgbm\_cov} & & full & ridge and LightGBM on the 28-day context \\
+\m{lin\_cov\_2y} & & full & ridge on two years \\
+\m{lgbm\_prod} & & full & LightGBM on two years, 120-day recency half-life, solar on its capacity factor\tnote{b} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Foundation models, zero-shot}\tnote{c}} \\
+Chronos-2~\cite{chronos} & 120M & native & Amazon \\
+Chronos-Bolt base~\cite{chronos} & 205M & & Amazon \\
+TimesFM 2.5~\cite{timesfm} & 231M & ridge & Google \\
+TimesFM 3.0~\cite{timesfm} & 331M & native & Google \\
+Moirai 2 small~\cite{moirai} & 11M & \tnote{d} & Salesforce \\
+TiRex~\cite{tirex} & 35M & & NX-AI \\
+TiRex-2~\cite{tirex} & 95M & native & NX-AI; about 38M active in univariate mode \\
+Toto & 151M & \tnote{d} & Datadog \\
+Toto 2 & 313M, 1B & & Datadog; live from 25 October \\
+Sundial & 128M & & Tsinghua University \\
+TTM r2 & 3.4M & & IBM \\
+Tabby, Tabby-Pretrain & 147M, 146M & ridge & Huawei Noah's Ark Lab; load forecast without covariates \\
+Timestral & 209M & native & Mistral AI \\
+t0-alpha, t0-beta, t0-gamma & 102M, 256M, 256M & native & The Forecasting Company \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Ensembles: quarter-hourly median of fixed members, point and each quantile; live from 20 October}} \\
+\m{ens\_fm} & & & the newest history-only model of the five native-covariate families \\
+\m{ens\_fm\_cov} & & native & their five covariate variants \\
+\m{ens\_hybrid} & & native & those five and \m{lgbm\_prod} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{References: the grid operators' forecasts}} \\
+\m{tso\_cutoff} & & & as published before the gate; ranked; live only\tnote{e} \\
+\m{tso\_final} & & & final day-ahead wind and solar, published after the gate; never ranked\tnote{f} \\
 \bottomrule
 \end{tabularx}
+\begin{tablenotes}\footnotesize
+\item[a] \emph{Full}: every NWP model's columns, the ensemble statistics and differences, the calendar and, for price,
+yesterday's price. The foundation models take a compact subset instead: three or four ensemble means and spreads per
+target, and for price the load forecast, fuel cost and the renewable drivers of the coupled zones.
+\item[b] Retrained daily for price and load, monthly for wind and solar.
+\item[c] Every foundation model runs on the series' own history; those with a covariate entry run a second time with
+the frozen covariates (e.g.\ \m{chronos2} and \m{chronos2\_cov}).
+\item[d] Covariate variants retired after trial runs: covariates made Moirai~2 worse, and Toto gained too little for
+its run time and memory.
+\item[e] Elia's 11:00 day-ahead wind and solar forecast for BE; NED's national wind, solar and load forecast for NL,
+fetched at the cut-off; the ENTSO-E day-ahead load forecast elsewhere.
+\item[f] Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and Danish wind, NED in the evening for NL.
+\end{tablenotes}
+\end{threeparttable}
 \end{table}
 
 No TSO in France or Germany publishes a day-ahead wind or solar forecast before the gate (RTE at 16:15, the German
