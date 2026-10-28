@@ -714,7 +714,7 @@ body.card-mode > *:not(#share-card){display:none !important}
 .sc-tag i{width:9px; height:9px; border-radius:50%; background:#D7263D}
 .sc-title{font-family:var(--brand); font-style:italic; font-weight:800; font-size:2.35rem; letter-spacing:-.03em; margin:16px 0 8px}
 .sc-sub{display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; margin:0 0 12px; font-size:1.02rem; color:#4E6578}
-.sc-scope{display:inline-flex; gap:8px} .sc-scope b{background:#0B1F3A; color:#fff; font-size:1.3rem; font-weight:700; padding:3px 14px; border-radius:6px}
+.sc-scope{display:inline-flex; gap:8px} .sc-scope b{background:#3F6C8B; color:#fff; font-size:1.3rem; font-weight:700; padding:3px 14px; border-radius:6px}
 .sc-tab{width:100%; border-collapse:collapse; font-size:1.12rem}
 .sc-tab th{text-align:left; font-size:.82rem; font-weight:600; color:#4E6578; padding:4px 10px; border-bottom:1.5px solid #C6D9E0; background:none; text-transform:none; letter-spacing:0}
 .sc-tab td{padding:6px 10px; border-bottom:1px solid #DCE9EF} .sc-tab .r{text-align:right; font-variant-numeric:tabular-nums}
