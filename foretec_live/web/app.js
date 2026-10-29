@@ -905,7 +905,7 @@
     bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
     value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
-    heat: () => ["Average rank", "Each cell is the model's average rank on that issue day across the selected series (1 = best); darker is better. The last column averages over all days."],
+    heat: () => ["Average rank", "Each cell is the model's average rank on that issue day across the selected series (1 = best); darker is better. The last column averages over the days shown."],
   };
   let tipAnchor = null, tipTimer = null, lastPointer = "mouse";
   function showTip(el) {
@@ -1070,7 +1070,16 @@
   }
 
   // the issue days the time charts show: the Period filter's phase only (All shows both)
-  const phaseDays = () => (S.phase === "all" ? DAYS : DAYS.filter((x) => x.phase === S.phase));
+  // the issue days of the selected rating window ("Rated over"): every leaderboard panel shows the same days as the standings
+  const phaseDays = () => periodDays(DAYS, S.phase);
+  // day columns run oldest to newest, left to right; the scroller opens at the newest end and stays pinned there on a
+  // re-render unless the reader has scrolled back
+  function pinRight(el, render) {
+    const w = el.closest(".tablewrap");
+    const atEnd = !w || !w.dataset.pinned || w.scrollLeft + w.clientWidth >= w.scrollWidth - 4;
+    render();
+    if (w && w.scrollWidth) { w.dataset.pinned = "1"; if (atEnd) w.scrollLeft = w.scrollWidth; }
+  }
   const SMOOTH_DAYS = 7, SMOOTH_MIN = 3, EMPHASIS = 3;
 
   // focus helpers shared by the time charts: lines drawn in full (the leaders, plus models clicked in the legend) are
@@ -1152,11 +1161,11 @@
     });
     chartLegend($("l-perf"), models, rest, isLead, isFull);
 
-    // running Elo over the live days only (the backtest is a separate exercise): the Bradley-Terry fit on the live
-    // races up to each issue day. A model's line starts once it has raced on MIN_ELO_DAYS live days, so its first
-    // day or two do not swing it to extremes.
+    // running Elo over the rating window (live days, or the backtest): the Bradley-Terry fit on the window's races up
+    // to each issue day, so its last point is the standings' score. A model's line starts once it has raced on
+    // MIN_ELO_DAYS days of the window, so its first day or two do not swing it to extremes.
     const MIN_ELO_DAYS = 3;
-    const liveDays = DAYS.filter((x) => x.phase === (S.phase === "backtest" ? "backtest" : "live"));
+    const liveDays = days;
     const running = liveDays.map((_, i) => eloScores(liveDays.slice(0, i + 1)));
     const race = models.map((m) => {
       let n = 0;
@@ -1174,7 +1183,7 @@
   }
 
   function renderHeatmap() {
-    const days = phaseDays().slice().reverse();   // most recent day first, like the run tracker
+    const days = phaseDays();
     const st = standings(DAYS, S.phase).filter((x) => shown(x.model));
     const t = $("heatmap");
     if (!days.length) { t.innerHTML = ""; return; }
@@ -1193,7 +1202,7 @@
       }).join("");
       return `<tr><td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>${cells}<td class="avg">${fmt(s.avgRank, 1)}</td></tr>`;
     }).join("");
-    t.innerHTML = head + "<tbody>" + body + "</tbody>";
+    pinRight(t, () => { t.innerHTML = head + "<tbody>" + body + "</tbody>"; });
   }
 
   function renderModels() {
@@ -1465,9 +1474,11 @@
     if (!$("tracker")) return;
     const T = D.tracker;
     if (!T || !T.days.length) { $("tracker").innerHTML = `<tbody><tr><td class="empty">No runs yet.</td></tr></tbody>`; return; }
-    // live runs only (the backtest has no gate to meet), the latest issue day first
-    const hasLive = T.days.some((d) => d.phase === "live");
-    const days = T.days.filter((d) => d.phase === (hasLive ? "live" : "backtest")).slice(-21).reverse();
+    // the runs of the rating window: the live runs of the last 7 or 30 days or since launch, or the backtest
+    const phase = S.phase === "backtest" || !T.days.some((d) => d.phase === "live") ? "backtest" : "live";
+    let days = T.days.filter((d) => d.phase === phase);
+    const n = WINDOWS[S.win];
+    if (n && days.length) { const from = addDays(days[days.length - 1].d, 1 - n); days = days.filter((d) => d.d >= from); }
     const models = MODELS.filter((m) => inEns(m) && days.some((d) => T.cells[d.d] && T.cells[d.d][m]));
     const head = `<thead><tr><th>Model</th>${days.map((d) => {
       const b = d.phase !== "live" ? "" : d.on_time === false ? `<small class="late">late ${localTime(d.finished)}</small>` : d.on_time ? `<small class="ok">✓ ${localTime(d.finished)}</small>` : "<small>–</small>";
@@ -1492,7 +1503,7 @@
         codes.map((x, i) => `<i class="${x ? SER[x].k : "na"}" title="${keys[i].replace("_", " ")}: ${x ? SER[x].label : "not forecast by this model"}"></i>`).join("") + "</button>";
     };
     const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>${days.map((d) => `<td>${cell(T.cells[d.d] && T.cells[d.d][m], d, m) || ""}</td>`).join("")}</tr>`).join("");
-    $("tracker").innerHTML = head + `<tbody>${body}</tbody>`;
+    pinRight($("tracker"), () => { $("tracker").innerHTML = head + `<tbody>${body}</tbody>`; });
     $("tracker").onclick = (e) => { const b = e.target.closest("button.trk"); if (!b) return; S.trkSel = { d: b.dataset.d, m: b.dataset.m }; renderTracker(); };
     $("l-tracker").innerHTML = [["ok", "✓", "forecast and scored"], ["wait", "…", "forecast, scoring not due"],
       ["miss", "!", "due, actuals missing"], ["late", "⏱", "after the gate"], ["err", "✕", "failed or skipped"]]
