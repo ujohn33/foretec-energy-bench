@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: waiting list for the bidding competition (POST /api/waitlist, behind Caddy)
+Description=Foretec EnergyBench: waiting list for the bidding competition (POST /api/waitlist, behind Caddy)
 After=network.target
 
 [Service]

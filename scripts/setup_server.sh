@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up Foretec Energy Bench on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
+# Set up Foretec EnergyBench on a fresh Ubuntu 24.04 server. Run as root from the unzipped repo:
 #   sudo bash scripts/setup_server.sh            # core models only
 #   sudo bash scripts/setup_server.sh --foundation  # also the foundation-model envs (~5 GB, see install_model_envs.sh)
 #   sudo bash scripts/setup_server.sh --web      # also serve site/ with Caddy (plain HTTP on :80)

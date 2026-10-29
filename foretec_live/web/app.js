@@ -1,4 +1,4 @@
-/* Foretec Energy Bench leaderboard. Reads data/summary.json and data/days/<issue_date>.json. */
+/* Foretec EnergyBench leaderboard. Reads data/summary.json and data/days/<issue_date>.json. */
 (() => {
   "use strict";
 

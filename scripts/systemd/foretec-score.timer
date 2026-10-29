@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: scoring runs (wind/solar of yesterday at 07:00, prices after the auction)
+Description=Foretec EnergyBench: scoring runs (wind/solar of yesterday at 07:00, prices after the auction)
 
 [Timer]
 # 07:00: wind/solar of yesterday, if the whole day is published; day-ahead results are out ~12:45-13:00;

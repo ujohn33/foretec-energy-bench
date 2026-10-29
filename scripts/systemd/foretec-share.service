@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: share links and their preview images (GET /s/..., behind Caddy)
+Description=Foretec EnergyBench: share links and their preview images (GET /s/..., behind Caddy)
 After=network.target
 
 [Service]

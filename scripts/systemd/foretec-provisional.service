@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: metered-so-far wind/solar for the explorer (provisional, never scored)
+Description=Foretec EnergyBench: metered-so-far wind/solar for the explorer (provisional, never scored)
 Wants=network-online.target
 After=network-online.target
 

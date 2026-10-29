@@ -139,7 +139,7 @@ def _snapshot(st: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, generated: str
 <section id="snapshot" class="wrap snapshot">
 <details>
 <summary>Plain-text summary of the live standings (updated {html.escape(generated)})</summary>
-<p>Foretec Energy Bench is an open, live benchmark for day-ahead electricity forecasting. Every day at
+<p>Foretec EnergyBench is an open, live benchmark for day-ahead electricity forecasting. Every day at
 {html.escape(cfg['issue_time'])} {html.escape(cfg['timezone'])} time, before the {html.escape(cfg.get('gate', '12:00'))} day-ahead
 auction gate, every model forecasts each quarter-hour of the next delivery day for price, wind, solar and load in
 {html.escape(zones)} ({len(cfg['zones']) * len(cfg['targets'])} series), from one frozen set of public inputs
@@ -166,7 +166,7 @@ def _head(page: str, title: str, cfg, jsonld: list[dict] | None) -> str:
         f'<meta property="og:url" content="{SITE_URL}/{path}">',
         f'<meta property="og:image" content="{SITE_URL}/og-card.png">',
         '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">',
-        '<meta property="og:image:alt" content="Foretec Energy Bench: the live day-ahead forecasting benchmark">',
+        '<meta property="og:image:alt" content="Foretec EnergyBench: the live day-ahead forecasting benchmark">',
         '<meta name="twitter:card" content="summary_large_image">',
         f'<link rel="license" href="{LICENSE[1]}">',
         '<link rel="alternate" type="text/markdown" href="llms.txt" title="Overview for AI agents">',
@@ -182,7 +182,7 @@ def _dataset(cfg, s: pd.DataFrame, generated: str) -> list[dict]:
     return [
         {"@context": "https://schema.org", "@type": "WebSite", "name": "EnergyBench", "alternateName": ["Energy Bench", "Foretec Energy Bench"], "url": SITE_URL + "/", "publisher": org},
         {"@context": "https://schema.org", "@type": "Dataset",
-         "name": "EnergyBench (Foretec Energy Bench): live day-ahead electricity forecasting benchmark", "alternateName": ["Energy Bench", "Foretec Energy Bench"],
+         "name": "EnergyBench: live day-ahead electricity forecasting benchmark", "alternateName": ["Energy Bench", "Foretec Energy Bench"],
          "description": ("Daily day-ahead forecasts of electricity price, wind, solar and load for " + ", ".join(zones) +
                          ", made by foundation models, gradient boosting and baselines before the 12:00 day-ahead auction gate "
                          "from one frozen set of public inputs (history, NWP weather forecasts, load forecast, fuel prices), "
@@ -205,7 +205,7 @@ def _dataset(cfg, s: pd.DataFrame, generated: str) -> list[dict]:
 def _llms(st: pd.DataFrame, bt: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, generated: str) -> str:
     live = s[s["phase"] == "live"]
     zones = ", ".join(v.get("label", z) for z, v in cfg["zones"].items())
-    lines = ["# Foretec Energy Bench", "",
+    lines = ["# Foretec EnergyBench", "",
              "> An open, live benchmark for day-ahead electricity forecasting. Every day at "
              f"{cfg['issue_time']} ({cfg['timezone']}), before the {cfg.get('gate', '12:00')} day-ahead auction gate, every model "
              "forecasts each quarter-hour of the next delivery day for price, wind, solar and load in "

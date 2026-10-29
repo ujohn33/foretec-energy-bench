@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: morning training (after the 07:00 scoring, before the 11:30 run)
+Description=Foretec EnergyBench: morning training (after the 07:00 scoring, before the 11:30 run)
 
 [Timer]
 OnCalendar=*-*-* 07:20:00 Europe/Brussels

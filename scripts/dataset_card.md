@@ -1,6 +1,6 @@
 ---
 license: cc-by-4.0
-pretty_name: Foretec Energy Bench
+pretty_name: Foretec EnergyBench
 language:
 - en
 task_categories:
@@ -38,7 +38,7 @@ configs:
     path: actuals/actuals.parquet
 ---
 
-# Foretec Energy Bench
+# Foretec EnergyBench
 
 An open, live benchmark for day-ahead electricity forecasting. Every day at 11:30 CET/CEST, before the 12:00
 SDAC day-ahead auction gate, every model forecasts each quarter-hour of the next delivery day for **price, wind,
@@ -98,7 +98,7 @@ licences (for example Tabby, CC BY-NC 4.0); check them before reusing those mode
 ```bibtex
 @misc{{genov2026energybench,
   author       = {{Genov, Evgenii}},
-  title        = {{Foretec Energy Bench: a live, gate-aligned benchmark of day-ahead forecasts for European power markets}},
+  title        = {{Foretec EnergyBench: a live, gate-aligned benchmark of day-ahead forecasts for European power markets}},
   year         = {{2026}},
   doi          = {{10.57967/hf/11052}},
   publisher    = {{Hugging Face}},

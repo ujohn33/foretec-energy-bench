@@ -53,7 +53,7 @@ def main(argv: list[str]) -> int:
     if not key or not to:
         print("RESEND_API_KEY and REPORT_TO must be set in /etc/foretec-waitlist.env", file=sys.stderr)
         return 1
-    msg = {"from": os.environ.get("REPORT_FROM") or "Energy Bench <onboarding@resend.dev>", "to": [to],
+    msg = {"from": os.environ.get("REPORT_FROM") or "EnergyBench <onboarding@resend.dev>", "to": [to],
            "subject": subject, "text": body}
     req = urllib.request.Request("https://api.resend.com/emails", data=json.dumps(msg).encode(), method="POST",
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",

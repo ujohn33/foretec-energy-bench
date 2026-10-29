@@ -1,4 +1,4 @@
-# Foretec Energy Bench
+# Foretec EnergyBench
 
 [![Dataset DOI](https://img.shields.io/badge/dataset%20DOI-10.57967%2Fhf%2F11052-blue)](https://doi.org/10.57967/hf/11052)
 

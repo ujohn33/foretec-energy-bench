@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: relegation check (models that cost much and are clearly beaten stop running live)
+Description=Foretec EnergyBench: relegation check (models that cost much and are clearly beaten stop running live)
 Wants=network-online.target
 After=network-online.target
 

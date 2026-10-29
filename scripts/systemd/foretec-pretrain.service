@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: morning training of models too slow to train inside the live run
+Description=Foretec EnergyBench: morning training of models too slow to train inside the live run
 Wants=network-online.target
 After=network-online.target
 

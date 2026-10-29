@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: weekly relegation check (after Monday's 14:45 scoring)
+Description=Foretec EnergyBench: weekly relegation check (after Monday's 14:45 scoring)
 
 [Timer]
 OnCalendar=Mon *-*-* 15:15:00 Europe/Brussels

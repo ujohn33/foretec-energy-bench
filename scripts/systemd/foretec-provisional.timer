@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: hourly provisional actuals
+Description=Foretec EnergyBench: hourly provisional actuals
 
 [Timer]
 OnCalendar=*-*-* *:10:00 Europe/Brussels

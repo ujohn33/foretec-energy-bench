@@ -1,5 +1,5 @@
 [Unit]
-Description=Foretec Energy Bench: email report of the competition waiting list
+Description=Foretec EnergyBench: email report of the competition waiting list
 After=network-online.target
 Wants=network-online.target
 
