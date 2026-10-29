@@ -114,7 +114,28 @@
   // model's score is the same under All, With and Without (zone and target choose which races count); only the
   // ensembles checkbox changes the field
   function raceRows(metric = S.metric) {
-    return ROWS.filter((r) => !REF.has(r.model) && inEns(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+    const rows = ROWS.filter((r) => !REF.has(r.model) && inEns(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+    const part = partialModels(rows);
+    return part.size ? rows.filter((r) => !part.has(r.phase + "\t" + r.model)) : rows;
+  }
+  // All targets rates every model over the same targets: a model with no scored race in the rating window on a target
+  // it does forecast (new on the leaderboard, its wind, solar and load actuals not in yet) would be rated on its other
+  // targets alone, so it leaves that phase's races until it has. A target the model never forecasts (the grid operators
+  // publish no price) does not count against it. Keys are "phase\tmodel".
+  function partialModels(rows) {
+    const out = new Set();
+    if (S.target !== "all") return out;
+    const forecasts = {};
+    for (const r of ROWS) if (S.zone === "all" || r.zone === S.zone) (forecasts[r.model] ||= new Set()).add(r.target);
+    for (const phase of new Set(rows.map((r) => r.phase))) {
+      let sel = rows.filter((r) => r.phase === phase);
+      const n = WINDOWS[S.win];
+      if (n) { const from = addDays(sel.reduce((a, r) => (r.issue_date > a ? r.issue_date : a), ""), 1 - n); sel = sel.filter((r) => r.issue_date >= from); }
+      const inWindow = new Set(sel.map((r) => r.target)), got = {};
+      for (const r of sel) (got[r.model] ||= new Set()).add(r.target);
+      for (const m in got) if ([...forecasts[m]].some((t) => inWindow.has(t) && !got[m].has(t))) out.add(phase + "\t" + m);
+    }
+    return out;
   }
   function phaseOf(d) { return (D.days && D.days[d]) || (ROWS.find((r) => r.issue_date === d) || {}).phase || "backtest"; }
 
@@ -862,7 +883,7 @@
     pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
     pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. A failed run is left out of the race.`],
     ci: () => ["95% interval", "How much the Elo score would move if the set of issue days had been different: the 2.5th to 97.5th percentile of 200 refits, each on the period's issue days drawn at random with replacement (a bootstrap over issue days; whole days, because all races of a day share the same weather). Overlapping intervals mean the order of two models is not settled yet. Sorting uses the lower end."],
-    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or a fifth of the most any model has, is provisional and listed after the ranked ones.`],
+    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or a fifth of the most any model has, is provisional and listed after the ranked ones. Under All targets, a model with no scored race yet on one of the targets it forecasts is left out until it has one.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
