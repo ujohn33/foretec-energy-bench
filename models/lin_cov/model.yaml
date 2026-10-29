@@ -1,6 +1,6 @@
 name: lin_cov
 author: Foretec
-description: "Linear regression (ridge, penalty by cross-validation) on exactly the lgbm_cov inputs: the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast (price only) and calendar; for price also wind/solar in all three zones, fuel cost and yesterday's price. Trained on the 28-day window like lgbm_cov; intervals from the residuals of the last 7 days per hour of day."
+description: "Linear regression (ridge, penalty by cross-validation) on exactly the lgbm_cov inputs: the NWP ensemble (ICON-EU, GFS, IFS at capacity-weighted centroids, ensemble mean/spread/disagreement), ENTSO-E load forecast (price only) and calendar; for price also wind/solar in every zone, fuel cost and yesterday's price. Trained on the 28-day window like lgbm_cov; intervals from the residuals of the last 7 days per hour of day."
 family: nwp
 inputs: [history, nwp, load_forecast, fuel, calendar]
 runner: subprocess

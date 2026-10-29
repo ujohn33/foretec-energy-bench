@@ -96,12 +96,12 @@ def describe(p: dict) -> tuple[str, str]:
         what = f"{k['labels'].get(p['z'], p['z'])} {tl.get(p['t'], p['t'])}, {d.day} {d.strftime('%b %Y')}"
         title = f"{p['m']} on {what}" if p.get("m") else f"{what}: day-ahead forecasts vs actual"
         return title, ("Every model's day-ahead forecast, locked before the 12:00 gate, against what actually happened. "
-                       "Foretec EnergyBench, the live open benchmark for energy forecasts.")
+                       "EnergyBench by Foretec, the live open benchmark for energy forecasts.")
     zone = "all zones" if p["z"] == "all" else k["labels"].get(p["z"], p["z"])
     tl = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
     target = "All targets" if p["t"] == "all" else tl.get(p["t"], p["t"])
     view = f"{target} · {zone} · {RATED[p['r']]}"
-    title = f"How {p['m']} ranks: {view}" if p.get("m") else f"{view} · Foretec EnergyBench"
+    title = f"How {p['m']} ranks: {view}" if p.get("m") else f"{view} · EnergyBench by Foretec"
     desc = ("A live, open benchmark of day-ahead energy forecasts: every model forecasts from the data public at 11:30, "
             "locked before the 12:00 gate, and is scored against the grid operators.")
     return title, desc
@@ -186,7 +186,7 @@ class Handler(BaseHTTPRequestHandler):
         e = lambda s: html.escape(s, quote=True)  # noqa: E731
         body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>{e(title)}</title><meta name="description" content="{e(desc)}">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Foretec EnergyBench">
+<meta property="og:type" content="website"><meta property="og:site_name" content="EnergyBench by Foretec">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{e(SITE + '/s/' + token)}"><meta property="og:image" content="{e(img)}">
 <meta property="og:image:width" content="2400"><meta property="og:image:height" content="1254">

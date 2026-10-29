@@ -1,4 +1,4 @@
-/* Foretec EnergyBench leaderboard. Reads data/summary.json and data/days/<issue_date>.json. */
+/* EnergyBench by Foretec leaderboard. Reads data/summary.json and data/days/<issue_date>.json. */
 (() => {
   "use strict";
 
@@ -78,10 +78,31 @@
     ens_fm_cov: "Median of five foundation models with covariates.",
     ens_hybrid: "Median of the five covariate foundation models and lgbm_prod.",
   };
+  // a model's description, cut to its first two sentences for a tooltip (the full text is in the Methodology)
+  const shortDesc = (d) => { const t = String(d || "").match(/^(.*?[.!?])(\s|$)(.*?[.!?])?(\s|$)/); const x = t ? t[1] + (t[3] && (t[1] + t[3]).length < 260 ? " " + t[3] : "") : String(d || ""); return x.length > 300 ? x.slice(0, 297) + "…" : x; };
   const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "")
     + (ENS.has(m) ? `<span class="ens-tag" data-tip="ens:${esc(m)}" tabindex="0">ens</span>` : "");
   // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
   const isBench = (m) => FAM[m] === "baseline" || FAM[m] === "tso";
+  // what kind of model it is, as a small tag in the standings and the models table (ensembles have their own tag)
+  let META = {};   // model -> its model.yaml entry (author, description)
+  const KIND = {
+    fm: ["FM", "Foundation model", "A pretrained time-series foundation model, run zero-shot: no training on these series."],
+    own: ["Foretec", "Foretec model", "Trained by Foretec on the benchmark's own inputs (weather forecasts, load forecast, fuel cost)."],
+    base: ["baseline", "Baseline", "A simple reference every model should beat: a seasonal naive, a climatology or a regression on the series' own history."],
+    tso: ["TSO", "Grid operator's forecast", "The grid operators' own day-ahead forecast, the yardstick a trader would otherwise use."],
+  };
+  const kindOf = (m) => (ENS.has(m) ? null : FAM[m] === "baseline" ? "base" : FAM[m] === "tso" ? "tso" : FAM[m] === "nwp" ? "own" : "fm");
+  const kindTag = (m) => { const k = kindOf(m); return k ? `<span class="kind-tag k-${k}" data-tip="kind:${k}" tabindex="0">${KIND[k][0]}</span>` : ""; };
+  // who built each foundation model family (model.yaml's author is who entered it: often Foretec running it)
+  const MAKER = { chronos: "Amazon", timesfm: "Google", tirex: "NX-AI", toto: "Datadog", moirai: "Salesforce", sundial: "Tsinghua University",
+    ttm: "IBM", t0: "The Forecasting Company", tabby: "Huawei Noah's Ark Lab", timeh2o: "H2O.ai", timestral: "Mistral AI" };
+  function modelTip(m) {
+    const x = META[m], maker = MAKER[FAM[m]] || x.author;
+    return [`${m} · by ${maker}`, shortDesc(x.description) + (x.author !== maker ? ` Entered by ${x.author}.` : "")];
+  }
+  // the name with who made it and what it is on hover
+  const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(m)}</span>` + nm(m).slice(esc(m).length) + kindTag(m);
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
   // they also leave the races, so every other model's score is what it would be without them
   let ENS = new Set();
@@ -870,7 +891,9 @@
   function showTip(el) {
     const key = el && el.dataset.tip, cav = key && key.startsWith("caveat:") && key.slice(7);
     const em = key && key.startsWith("ens:") && key.slice(4), ed = em && ENS_SHORT[em];
-    const tip = $("tip"), g = el && (GLOSS[key] || (cav && CAVEAT[cav] ? () => [`${cav} *`, CAVEAT[cav]] : null) || (ed ? () => [`${em} · ensemble`, ed] : null));
+    const mm = key && key.startsWith("model:") && META[key.slice(6)], kk = key && key.startsWith("kind:") && KIND[key.slice(5)];
+    const tip = $("tip"), g = el && (GLOSS[key] || (cav && CAVEAT[cav] ? () => [`${cav} *`, CAVEAT[cav]] : null) || (ed ? () => [`${em} · ensemble`, ed] : null)
+      || (mm ? () => modelTip(mm.name) : null) || (kk ? () => [kk[1], kk[2]] : null));
     if (!tip || !g || !D) return;
     const [title, body] = g();
     tip.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
@@ -990,9 +1013,9 @@
     t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${sortTh("relw", "Rel. WIS", "relw")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("wis", "WIS" + unit, "wis") + sortTh("winkler", "Winkler 80%" + unit, "winkler") + sortTh("cover", "Coverage 80%", "cover") : ""}
       ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
-      sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}${s.model === S.hl ? " hl" : ""}">
+      sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}${s.model === S.hl ? " hl" : ""}${isBench(s.model) ? " base" : ""}">
         <td class="pos" ${!s.provisional && s.fpos !== s.pos ? `title="${s.fpos}${["th", "st", "nd", "rd"][(s.fpos % 100 - 20) % 10] || ["th", "st", "nd", "rd"][s.fpos % 100] || "th"} in the whole field"` : ""}>${s.provisional ? `<span data-tip="races">prov.</span>` : medal ? `<span>${s.pos}</span>` : s.pos}</td>
-        <td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>
+        <td class="model"><i style="background:${color(s.model)}"></i>${nmTip(s.model)}</td>
         <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
         ${det ? `<td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>` : ""}${dmOn ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td><td class="r v">${fmt(s.relw, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.wis, 1)}</td><td class="r v">${fmt(s.winkler, 1)}</td><td class="r v">${pctCell(s.cover)}</td>
@@ -1018,7 +1041,7 @@
       const only = S.target === "all" ? " (wind and solar only)" : "";
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
-        return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>
+        return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nmTip(m)}</td>
           <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
           <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${mine.length}</td></tr>`;
@@ -1033,7 +1056,7 @@
   // focus helpers shared by the time charts: lines drawn in full (the leaders, plus models clicked in the legend) are
   // bold and labelled, the rest faint and unlabelled; the tooltip lists only the full lines and counts the others
   function styleFocus(ds, m, isFull, faintA = 0.3) {
-    Object.assign(ds, { pointRadius: 0, tension: 0.25 });
+    Object.assign(ds, { pointRadius: 0, tension: 0.25 }, isBench(m) ? { borderDash: [5, 4] } : {});
     if (isFull) return Object.assign(ds, { borderWidth: 3, pointHoverRadius: 4, order: 0 });
     const faint = alpha(color(m), faintA);
     return Object.assign(ds, { borderWidth: 1.1, pointHoverRadius: 0, endLabel: null, borderColor: faint, segment: { ...ds.segment, borderColor: () => faint }, order: 1 });
@@ -1048,7 +1071,7 @@
   /** legend: a faint model toggles in `pins` (drawn in full or not); a leading one is hidden or shown */
   function focusLegend(el, models, lead, pins, isFull, rerender, extra = "") {
     el.innerHTML = extra + models.map((m) => `<button type="button" data-m="${esc(m)}" class="${isFull(m) ? "" : "faint"}" aria-pressed="${!S.hidden.has(m)}"
-      title="${lead(m) ? "click to hide or show" : pins.has(m) ? "click to fade" : "click to highlight"}"><i style="border-top-color:${color(m)}"></i>${nm(m)}</button>`).join("");
+      title="${lead(m) ? "click to hide or show" : pins.has(m) ? "click to fade" : "click to highlight"}"><i style="border-top-color:${color(m)}${isBench(m) ? ";border-top-style:dashed" : ""}"></i>${nm(m)}</button>`).join("");
     el.onclick = (e) => {
       const b = e.target.closest("button[data-m]"); if (!b) return;
       const m = b.dataset.m;
@@ -1058,14 +1081,29 @@
     };
   }
 
+  const CHART_TOP = 10;
+  // the charts' legend: the drawn models, then "+N more" opens the others (one click draws a model)
+  function chartLegend(el, models, rest, isLead, isFull) {
+    focusLegend(el, S.chartsMore ? models.concat(rest) : models, isLead, S.pin, isFull, renderCharts);
+    if (rest.length) el.insertAdjacentHTML("beforeend", `<button type="button" class="more-models" aria-expanded="${!!S.chartsMore}">${S.chartsMore ? "Fewer" : `+ ${rest.length} more`}</button>`);
+    const pick = el.onclick;
+    el.onclick = (e) => { if (e.target.closest(".more-models")) { S.chartsMore = !S.chartsMore; renderCharts(); } else pick(e); };
+  }
+
   function renderCharts() {
     const days = phaseDays();
     const labels = days.map((x) => shortDate(x.d));
     const band = bandRange(days);
     const md = metricDef();
     const rank = S.view === "rank";
-    const models = MODELS.filter((m) => shown(m) && days.some((x) => x.pts[m] != null));
+    const field = MODELS.filter((m) => shown(m) && days.some((x) => x.pts[m] != null));
     const phaseNote = (i) => (S.phase !== "all" ? "" : days[i] && days[i].phase === "backtest" ? " · backtest" : " · live");
+    // drawn: the CHART_TOP best of the standings, the baselines and the grid operators (dashed), and models clicked in
+    // the legend; the others are listed under "+N more" and drawn once clicked
+    const ranked = standings(DAYS, S.phase).filter((x) => shown(x.model) && !x.provisional).map((x) => x.model);
+    const topN = new Set(ranked.slice(0, CHART_TOP));
+    const models = field.filter((m) => topN.has(m) || isBench(m) || S.pin.has(m));
+    const rest = field.filter((m) => !models.includes(m));
 
     // trailing 7-issue-day mean of the daily value (from 3 days on), so day-to-day noise does not hide the trend;
     // the podium's top three (and models clicked in the legend) are drawn in full, the rest faint
@@ -1092,7 +1130,7 @@
         return focusTooltip(o, models, isFull);
       })(),
     });
-    focusLegend($("l-perf"), models, isLead, S.pin, isFull, renderCharts);
+    chartLegend($("l-perf"), models, rest, isLead, isFull);
 
     // running Elo over the live days only (the backtest is a separate exercise): the Bradley-Terry fit on the live
     // races up to each issue day. A model's line starts once it has raced on MIN_ELO_DAYS live days, so its first
@@ -1112,7 +1150,7 @@
         tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
       }), models, isFull),
     });
-    focusLegend($("l-race"), models, isLead, S.pin, isFull, renderCharts);
+    chartLegend($("l-race"), models, rest, isLead, isFull);
   }
 
   function renderHeatmap() {
@@ -1142,7 +1180,7 @@
     if (!$("models-table")) return;
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
-      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${nm(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}${m.caveat ? `<br><small>* ${esc(m.caveat)}</small>` : ""}</td>
+      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${nm(m.name)}${kindTag(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}${m.caveat ? `<br><small>* ${esc(m.caveat)}</small>` : ""}</td>
         <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false || m.relegated ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : m.relegated ? `<span class="tag bt">Relegated ${esc(m.relegated)}</span><br><small>${esc(m.relegated_reason || "")}</small>` : m.reference ? '<span class="tag bt">Reference, not ranked</span>' : m.live_only ? '<span class="tag live">Live only</span>' : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
@@ -1439,6 +1477,7 @@
     $("l-tracker").innerHTML = [["ok", "✓", "forecast and scored"], ["wait", "…", "forecast, scoring not due"],
       ["miss", "!", "due, actuals missing"], ["late", "⏱", "after the gate"], ["err", "✕", "failed or skipped"]]
       .map(([k, i, l]) => `<span style="display:flex;align-items:center;gap:7px"><span class="trk ${k}" style="display:inline-grid;place-items:center;cursor:default">${i}</span>${l}</span>`).join("") +
+      `<span style="display:flex;align-items:center;gap:7px"><span class="trk-na">·</span>not forecast by this model for the selection</span>` +
       (keys.length > 1 ? `<span style="display:flex;align-items:center;gap:7px"><span class="trk grid key" style="--c:${ts.length};cursor:default">${keys.map(() => "<i class=\"wait\"></i>").join("")}</span>one square per series: rows ${esc(zs.join(", "))}, columns ${esc(ts.map((t) => TARGET_LABEL[t] || t).join(", "))}</span>` : "");
     const det = $("trk-detail");
     if (!S.trkSel) { det.hidden = true; return; }
@@ -1985,6 +2024,7 @@
     ROWS = D.scores.map((a) => Object.fromEntries(cols.map((c, i) => [c, a[i]])));
     MODELS = D.models.map((m) => m.name);
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
+    META = Object.fromEntries(D.models.map((m) => [m.name, m]));
     USES_COV = Object.fromEntries(D.models.map((m) => [m.name, (m.inputs || []).some((k) => COVARIATE_INPUTS.includes(k))]));
     REF = new Set(D.models.filter((m) => m.reference).map((m) => m.name));
     ENS = new Set(D.models.filter((m) => m.ensemble).map((m) => m.name));
@@ -2013,7 +2053,7 @@
 
     if ($("updated")) {
       const up = new Date(D.generated_utc.replace("Z", ":00Z"));
-      $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });   // "29 Oct, 07:13 CET"
     }
     if (PAGE === "leaderboard") {
       S.hl = applyLinkFilters();
