@@ -26,6 +26,7 @@ HOST, PORT = "127.0.0.1", int(os.environ.get("SHARE_PORT", "8092"))
 SITE = os.environ.get("SHARE_SITE", "https://energybench.foretec.co")
 SUMMARY = Path(os.environ.get("SHARE_SUMMARY", "/srv/foretec/foretec-live/site/data/summary.json"))
 CACHE = Path(os.environ.get("STATE_DIRECTORY", "/var/lib/foretec-share"))
+DISPLAY = {"tso_cutoff": "TSO_cutoff", "tso_final": "TSO_final"}   # as the site shows them (app.js DISPLAY)
 RATED = {"d7": "the last 7 days", "d30": "the last 30 days", "all": "all live days", "bt": "the backtest"}
 COV, AGG = {"all", "with", "without"}, {"mean", "median", "gmean"}
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -94,14 +95,14 @@ def describe(p: dict) -> tuple[str, str]:
         d = date.fromisoformat(p["d"]) + timedelta(days=1)
         tl = {"price": "day-ahead price", "wind": "wind", "solar": "solar", "load": "load"}
         what = f"{k['labels'].get(p['z'], p['z'])} {tl.get(p['t'], p['t'])}, {d.day} {d.strftime('%b %Y')}"
-        title = f"{p['m']} on {what}" if p.get("m") else f"{what}: day-ahead forecasts vs actual"
+        title = f"{DISPLAY.get(p['m'], p['m'])} on {what}" if p.get("m") else f"{what}: day-ahead forecasts vs actual"
         return title, ("Every model's day-ahead forecast, locked before the 12:00 gate, against what actually happened. "
                        "EnergyBench by Foretec, the live open benchmark for energy forecasts.")
     zone = "all zones" if p["z"] == "all" else k["labels"].get(p["z"], p["z"])
     tl = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
     target = "All targets" if p["t"] == "all" else tl.get(p["t"], p["t"])
     view = f"{target} · {zone} · {RATED[p['r']]}"
-    title = f"How {p['m']} ranks: {view}" if p.get("m") else f"{view} · EnergyBench by Foretec"
+    title = f"How {DISPLAY.get(p['m'], p['m'])} ranks: {view}" if p.get("m") else f"{view} · EnergyBench by Foretec"
     desc = ("A live, open benchmark of day-ahead energy forecasts: every model forecasts from the data public at 11:30, "
             "locked before the 12:00 gate, and is scored against the grid operators.")
     return title, desc

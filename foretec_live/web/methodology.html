@@ -149,10 +149,10 @@
           <p>Every model re-run on past issue days (from 14 Sep 2026) with the data as it was public at their cut-off: the same history rules and the archived weather runs. One difference: the load forecast is today's published version, which may include later revisions. The Forecast Explorer shows live runs only.</p></div>
         <div class="qa"><h3>What happens when a run fails?</h3>
           <p>The model sits out that race; a failure is never counted as a loss, but the run tracker shows it. Models with fewer than 12 races, or a fifth of the most any model has, are provisional and listed after the ranked ones.</p></div>
-        <div class="qa"><h3>What are tso_cutoff and tso_final?</h3>
+        <div class="qa"><h3>What are TSO_cutoff and TSO_final?</h3>
           <ul>
-            <li><b>tso_cutoff</b>, ranked: the grid operators' own forecasts as they stood before the gate. BE wind and solar: Elia's 11:00 forecast; NL: NED.nl's forecast fetched at the cut-off; load in every zone: the TSO's day-ahead load forecast. FR, DE-LU, DK1 and DK2 wind and solar have none, because their TSOs publish only at 16:15 or 18:00, after the gate.</li>
-            <li><b>tso_final</b>, a reference, never ranked: the final day-ahead wind and solar forecasts published after the gate (Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and DK, NED in the evening for NL).</li>
+            <li><b>TSO_cutoff</b>, ranked: the grid operators' own forecasts as they stood before the gate. BE wind and solar: Elia's 11:00 forecast; NL: NED.nl's forecast fetched at the cut-off; load in every zone: the TSO's day-ahead load forecast. FR, DE-LU, DK1 and DK2 wind and solar have none, because their TSOs publish only at 16:15 or 18:00, after the gate.</li>
+            <li><b>TSO_final</b>, a reference, never ranked: the final day-ahead wind and solar forecasts published after the gate (Elia 18:00, RTE 16:15, ENTSO-E for DE-LU and DK, NED in the evening for NL).</li>
           </ul></div>
         <div class="qa" id="ensembles"><h3>What are the ensembles?</h3>
           <p>Three entries, marked <span class="ens-tag">ens</span>, that combine other models' forecasts of the same issue day: per quarter-hour, the median of the members' point forecasts and, separately, of each quantile (then sorted).</p>

@@ -78,7 +78,10 @@
     ens_fm_cov: "Median of five foundation models with covariates.",
     ens_hybrid: "Median of the five covariate foundation models and lgbm_prod.",
   };
-  const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "")
+  // names shown differently from the model's id (the id stays in the data, the files and links)
+  const DISPLAY = { tso_cutoff: "TSO_cutoff", tso_final: "TSO_final" };
+  const dn = (m) => DISPLAY[m] || m;
+  const nm = (m) => esc(dn(m)) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "")
     + (ENS.has(m) ? `<span class="ens-tag" data-tip="ens:${esc(m)}" tabindex="0">ens</span>` : "");
   // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
   const isBench = (m) => FAM[m] === "baseline" || FAM[m] === "tso";
@@ -95,9 +98,9 @@
   // who built each foundation model family (model.yaml's author is who entered it: often Foretec running it)
   const MAKER = { chronos: "Amazon", timesfm: "Google", tirex: "NX-AI", toto: "Datadog", moirai: "Salesforce", sundial: "Tsinghua University",
     ttm: "IBM", t0: "The Forecasting Company", tabby: "Huawei Noah's Ark Lab", timeh2o: "H2O.ai", timestral: "Mistral AI" };
-  const modelTip = (m) => [m, FAM[m] === "tso" ? "grid operator forecast" : `by ${MAKER[FAM[m]] || META[m].author}`];
+  const modelTip = (m) => [dn(m), FAM[m] === "tso" ? "grid operator forecast" : `by ${MAKER[FAM[m]] || META[m].author}`];
   // the name with who made it on hover (the description is in the Methodology's models table)
-  const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(m)}</span>` + nm(m).slice(esc(m).length) + kindTag(m);
+  const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(dn(m))}</span>` + nm(m).slice(esc(dn(m)).length) + kindTag(m);
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
   // they also leave the races, so every other model's score is what it would be without them
   let ENS = new Set();
@@ -565,7 +568,7 @@
     const lo = Math.min(...st.map((x) => x.score)), hi = Math.max(...st.map((x) => x.score));
     const w = (v) => Math.round(8 + (92 * (v - lo)) / Math.max(1, hi - lo));
     const up = new Date(D.generated_utc.replace("Z", ":00Z")).toLocaleDateString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", year: "numeric" });
-    const head = mi >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${mi + 1} of ${n}` : "Day-ahead forecasting leaderboard";
+    const head = mi >= 0 ? `<b class="sc-m">${esc(dn(m))}</b> ranks #${mi + 1} of ${n}` : "Day-ahead forecasting leaderboard";
     // the view in large chips, so a rank is never read without its target and zone
     const scope = [S.target === "all" ? "All targets" : TARGET_LABEL[S.target] || S.target, S.zone === "all" ? "All zones" : zoneLabel(S.zone)];
     el.innerHTML = `<div class="sc">
@@ -575,7 +578,7 @@
       <p class="sc-sub"><span class="sc-scope">${scope.map((x) => `<b>${esc(x)}</b>`).join("")}</span>Elo over ${esc(ratedText())} · locked before the 12:00 gate, scored against the grid operators</p>
       <table class="sc-tab"><thead><tr><th>#</th><th>Model</th><th>Elo</th><th class="r">Rel. MAE</th></tr></thead><tbody>${rows.map((r) => r == null
         ? `<tr class="gap"><td colspan="4">…</td></tr>`
-        : `<tr class="${r[0].model === m ? "hl" : ""}"><td class="pos"><span class="${r[1] <= 3 ? "m" + r[1] : ""}">${r[1]}</span></td><td class="model"><i style="background:${color(r[0].model)}"></i>${esc(r[0].model)}</td>
+        : `<tr class="${r[0].model === m ? "hl" : ""}"><td class="pos"><span class="${r[1] <= 3 ? "m" + r[1] : ""}">${r[1]}</span></td><td class="model"><i style="background:${color(r[0].model)}"></i>${esc(dn(r[0].model))}</td>
             <td class="elo"><em><span style="width:${w(r[0].score)}%;background:${color(r[0].model)}"></span></em><b>${fmt(r[0].score, 0)}</b></td><td class="r">${fmt(r[0].rel, 3)}</td></tr>`).join("")}</tbody></table>
       <div class="sc-foot"><span>energybench.foretec.co</span><span>${n} models · updated ${esc(up)}</span></div></div>`;
     el.hidden = false;
@@ -656,12 +659,12 @@
     const windowText = () => (S.phase === "backtest" ? "in the backtest" : { d7: "over the last 7 days", d30: "over the last 30 days", all: "since launch" }[S.win]);
     return {
       title: "Share this ranking", none: "None, the top of the ranking",
-      models: () => rankedShown().map((x, i) => ({ k: x.model, label: `#${i + 1}  ${x.model}` })),
+      models: () => rankedShown().map((x, i) => ({ k: x.model, label: `#${i + 1}  ${dn(x.model)}` })),
       initial: () => S.hl || "",
       query: (m) => shareQuery(m),
       caption: (m) => {
         const st = rankedShown(), mi = st.findIndex((x) => x.model === m);
-        return (mi >= 0 ? `${m} ranks #${mi + 1} of ${st.length} on ${what()} ${windowText()}.` : `Who forecasts ${what()} best? The live leaderboard ${windowText()}.`) + " " + PITCH;
+        return (mi >= 0 ? `${dn(m)} ranks #${mi + 1} of ${st.length} on ${what()} ${windowText()}.` : `Who forecasts ${what()} best? The live leaderboard ${windowText()}.`) + " " + PITCH;
       },
       file: (m) => `energybench-${S.zone}-${S.target}${m ? "-" + m : ""}.png`,
     };
@@ -674,13 +677,13 @@
     const what = () => `${S.x.zone} ${targetWord(S.x.target)}`, unit = () => D.config.targets[S.x.target].unit;
     return {
       title: "Share this day", none: "None, the day's best",
-      models: () => [...document.querySelectorAll("#l-day button[data-m]")].map((b) => b.dataset.m).filter((m) => !REF.has(m)).map((m) => ({ k: m, label: m })),
+      models: () => [...document.querySelectorAll("#l-day button[data-m]")].map((b) => b.dataset.m).filter((m) => !REF.has(m)).map((m) => ({ k: m, label: dn(m) })),
       initial: () => S.x.hl || [...S.xPin][0] || "",
       query: (m) => { const q = new URLSearchParams({ p: "x", d: S.x.day, z: S.x.zone, t: S.x.target }); if (m) q.set("m", m); return q; },
       caption: (m) => {
         const sc = xScored(), k = sc.findIndex((r) => r.model === m), d = xDelivery();
-        if (m && k >= 0) return `${m} on ${what()} for ${d}: #${k + 1} of ${sc.length} models, MAE ${fmt(sc[k].mae, 0)} ${unit()}. ${PITCH}`;
-        if (m) return `${m}'s forecast of ${what()} for ${d}, locked before the 12:00 gate. ${PITCH}`;
+        if (m && k >= 0) return `${dn(m)} on ${what()} for ${d}: #${k + 1} of ${sc.length} models, MAE ${fmt(sc[k].mae, 0)} ${unit()}. ${PITCH}`;
+        if (m) return `${dn(m)}'s forecast of ${what()} for ${d}, locked before the 12:00 gate. ${PITCH}`;
         if (sc.length) return `Best day-ahead forecast of ${what()} for ${d}: ${sc[0].model}, MAE ${fmt(sc[0].mae, 0)} ${unit()}, out of ${sc.length} models. ${PITCH}`;
         return `Day-ahead forecasts of ${what()} for ${d}, waiting for reality. ${PITCH}`;
       },
@@ -702,8 +705,8 @@
     const lines = [...new Set([...(m && ser.models[m] ? [m] : []), ...best])];
     const tso = MODELS.filter((x) => FAM[x] === "tso" && ser.models[x]);
     const k = sc.findIndex((r) => r.model === m), what = `${zoneLabel(S.x.zone)} ${(TARGET_LABEL[S.x.target] || S.x.target).toLowerCase()}`;
-    const head = m && k >= 0 ? `<b class="sc-m">${esc(m)}</b> ranks #${k + 1} of ${sc.length}`
-      : m ? `<b class="sc-m">${esc(m)}</b> on ${esc(what)}` : `${esc(what[0].toUpperCase() + what.slice(1))}: forecasts vs actual`;
+    const head = m && k >= 0 ? `<b class="sc-m">${esc(dn(m))}</b> ranks #${k + 1} of ${sc.length}`
+      : m ? `<b class="sc-m">${esc(dn(m))}</b> on ${esc(what)}` : `${esc(what[0].toUpperCase() + what.slice(1))}: forecasts vs actual`;
     // target, zone and the one delivery day in large chips, as on the leaderboard card
     const scope = [TARGET_LABEL[S.x.target] || S.x.target, zoneLabel(S.x.zone), xDelivery()];
     const sub = `<span class="sc-scope">${scope.map((x) => `<b>${esc(x)}</b>`).join("")}</span>locked before the 12:00 gate`
@@ -717,7 +720,7 @@
     el.hidden = false;
     const t0 = new Date(day.t0), tf = new Intl.DateTimeFormat("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" });
     const labels = Array.from({ length: day.n }, (_, i) => tf.format(new Date(t0.getTime() + i * 900e3)));
-    const lab = (x) => (maeOf[x] != null ? `${x} · ${fmt(maeOf[x], 0)}` : x);
+    const lab = (x) => (maeOf[x] != null ? `${dn(x)} · ${fmt(maeOf[x], 0)}` : dn(x));
     const datasets = [];
     if (ser.actual) datasets.push({ label: "Actual", data: ser.actual, borderColor: "#0B1F3A", borderWidth: 3.2, pointRadius: 0, tension: 0, endLabel: "Actual", endColor: "#0B1F3A", order: -2 });
     lines.forEach((x) => datasets.push({ label: x, data: ser.models[x].p, borderColor: color(x), borderWidth: x === m ? 3.4 : 2, pointRadius: 0, tension: 0,
@@ -841,7 +844,7 @@
     const isBt = (i) => days[i] && days[i].phase === "backtest";
     const c = color(m), g = btColor(m);
     return {
-      label: m, data, hidden: S.hidden.has(m), endLabel: CAVEAT[m] ? m + "*" : m, endColor: c,
+      label: m, data, hidden: S.hidden.has(m), endLabel: CAVEAT[m] ? dn(m) + "*" : dn(m), endColor: c,
       borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0, spanGaps: true,
       pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 2, pointBorderColor: css("--surface"),
       pointBackgroundColor: data.map((_, i) => (isBt(i) ? g : c)),
@@ -1119,7 +1122,7 @@
         const o = baseOptions({
           band, yTitle: (rank ? "Average rank" : md.label + unitSuffix()) + `, ${SMOOTH_DAYS}-day average`,
           itemSort: (a, b) => a.raw - b.raw,
-          tooltip: { title: (it) => `${SMOOTH_DAYS} issue days to ${days[it[0].dataIndex].d}${phaseNote(it[0].dataIndex)}`, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, rank ? 2 : md.d)}` },
+          tooltip: { title: (it) => `${SMOOTH_DAYS} issue days to ${days[it[0].dataIndex].d}${phaseNote(it[0].dataIndex)}`, label: (c) => ` ${dn(c.dataset.label)}: ${fmt(c.raw, rank ? 2 : md.d)}` },
         });
         if (rank) { o.scales.y.reverse = true; o.scales.y.min = 1; o.scales.y.ticks.stepSize = 1; }
         return focusTooltip(o, models, isFull);
@@ -1142,7 +1145,7 @@
       type: "line", data: { labels: liveDays.map((x) => shortDate(x.d)), datasets: race },
       options: focusTooltip(baseOptions({
         band: bandRange(liveDays), yTitle: `Elo (running, ${S.phase === "backtest" ? "backtest" : "live"} days)`, itemSort: (a, b) => b.raw - a.raw,
-        tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${c.dataset.label}: ${fmt(c.raw, 0)}` },
+        tooltip: { title: (it) => liveDays[it[0].dataIndex].d, label: (c) => ` ${dn(c.dataset.label)}: ${fmt(c.raw, 0)}` },
       }), models, isFull),
     });
     chartLegend($("l-race"), models, rest, isLead, isFull);
@@ -1164,7 +1167,7 @@
         const bg = lerp(css(bt ? "--heat-bt-lo" : "--heat-live-lo"), css(bt ? "--heat-bt-hi" : "--heat-live-hi"), w);
         const dark = matchMedia("(prefers-color-scheme: dark)").matches;
         const fg = (dark ? w < 0.55 : w > 0.55) ? "#FFFFFF" : "#0B1F3A";
-        return `<td class="cell" style="background:${bg};color:${fg}" title="${esc(s.model)} · ${x.d} (${x.phase}): avg rank ${fmt(r, 2)} of ${x.n}">${fmt(r, 1)}</td>`;
+        return `<td class="cell" style="background:${bg};color:${fg}" title="${esc(dn(s.model))} · ${x.d} (${x.phase}): avg rank ${fmt(r, 2)} of ${x.n}">${fmt(r, 1)}</td>`;
       }).join("");
       return `<tr><td class="model"><i style="background:${color(s.model)}"></i>${nm(s.model)}</td>${cells}<td class="avg">${fmt(s.avgRank, 1)}</td></tr>`;
     }).join("");
@@ -1454,16 +1457,16 @@
       if (!c) return null;
       const codes = keys.map((k) => serCode(c, d, k));
       const sel = S.trkSel && S.trkSel.d === d.d && S.trkSel.m === m;
-      if (!codes.some(Boolean)) return `<span class="trk-na" title="${esc(m)} does not forecast this selection">·</span>`;
+      if (!codes.some(Boolean)) return `<span class="trk-na" title="${esc(dn(m))} does not forecast this selection">·</span>`;
       if (keys.length === 1) {
         const st = SER[codes[0]];
-        return `<button type="button" class="trk ${st.k}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(m)} · ${keys[0].replace("_", " ")} · ${d.d}: ${esc(st.label)}">${st.icon}</button>`;
+        return `<button type="button" class="trk ${st.k}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(dn(m))} · ${keys[0].replace("_", " ")} · ${d.d}: ${esc(st.label)}">${st.icon}</button>`;
       }
       // several series: one small square per series, zones in rows and targets in columns
       const counts = {};
       codes.forEach((x) => { if (x) counts[SER[x].label] = (counts[SER[x].label] || 0) + 1; });
       const tip = Object.entries(counts).map(([l, n]) => `${n} ${l}`).join(", ");
-      return `<button type="button" class="trk grid" style="--c:${ts.length}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(m)} · ${d.d}: ${esc(tip)}">` +
+      return `<button type="button" class="trk grid" style="--c:${ts.length}" data-d="${d.d}" data-m="${esc(m)}" aria-pressed="${sel}" title="${esc(dn(m))} · ${d.d}: ${esc(tip)}">` +
         codes.map((x, i) => `<i class="${x ? SER[x].k : "na"}" title="${keys[i].replace("_", " ")}: ${x ? SER[x].label : "not forecast by this model"}"></i>`).join("") + "</button>";
     };
     const body = models.map((m) => `<tr><td class="model"><i style="background:${color(m)}"></i>${nm(m)}</td>${days.map((d) => `<td>${cell(T.cells[d.d] && T.cells[d.d][m], d, m) || ""}</td>`).join("")}</tr>`).join("");
@@ -1480,7 +1483,7 @@
     if (!d || !c) { det.hidden = true; return; }
     const st = cellStatus(c, d);
     det.hidden = false;
-    det.innerHTML = `<h4>${esc(S.trkSel.m)} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase === "live" ? "Live" : "Backtest"}</span></h4>
+    det.innerHTML = `<h4>${esc(dn(S.trkSel.m))} · issue ${d.d} → delivery ${addDays(d.d, 1)} <span class="tag ${d.phase === "live" ? "live" : "bt"}">${d.phase === "live" ? "Live" : "Backtest"}</span></h4>
       <p>${st.icon} ${esc(st.label)}.</p>
       <p class="mono">${d.started ? `run ${localTime(d.started)}–${localTime(d.finished)}` : `finished ${localTime(d.finished)}`} CET/CEST${d.phase === "live" ? ` · gate ${esc(D.config.gate)} · ${d.on_time ? "on time" : "LATE"}` : ""} ·
         forecasts ${c.ok}/${d.n_series} ok${c.err ? `, ${c.err} failed` : ""}${c.skip ? `, ${c.skip} skipped` : ""} · scored ${c.scored} of ${c.due} due · model time ${c.sec} s</p>
@@ -1537,7 +1540,7 @@
     // the band: by default the best-ranked model that publishes quantiles
     const bandModels = cands.filter((m) => top.has(m) && ser.models[m].lo);
     if (S.x.band !== "" && !bandModels.includes(S.x.band)) S.x.band = bandModels[0] || "";
-    options($("x-band"), [{ k: "", label: "No band" }, ...bandModels.map((m) => ({ k: m, label: `${m} 10–90%` }))], S.x.band);
+    options($("x-band"), [{ k: "", label: "No band" }, ...bandModels.map((m) => ({ k: m, label: `${dn(m)} 10–90%` }))], S.x.band);
 
     const t0 = new Date(day.t0);
     const tf = new Intl.DateTimeFormat("en-GB", { timeZone: D.config.timezone, hour: "2-digit", minute: "2-digit" });
@@ -1562,13 +1565,13 @@
       const c = color(m), tso = isTso(m), f = full(m);
       datasets.push({ label: m, data: ser.models[m].p, hidden: S.hidden.has(m) || !drawn(m), borderColor: f ? c : alpha(c, faintA), backgroundColor: c,
         borderWidth: f ? 2.2 : 1, borderDash: tso ? [6, 4] : undefined, pointRadius: 0, pointHoverRadius: f ? 4 : 0, tension: 0, order: f ? 0 : 1,
-        endLabel: !f ? null : REF.has(m) ? `${m} (ref)` : CAVEAT[m] ? m + "*" : m, endColor: c });
+        endLabel: !f ? null : REF.has(m) ? `${dn(m)} (ref)` : CAVEAT[m] ? dn(m) + "*" : dn(m), endColor: c });
     }
     const o = baseOptions({
       yTitle: `${TARGET_LABEL[S.x.target]} (${unit})`,
       // the actual first, then the forecasts from the highest value to the lowest
       itemSort: (a, b) => (b.dataset.label.startsWith("Actual") - a.dataset.label.startsWith("Actual")) || ((b.raw ?? -Infinity) - (a.raw ?? -Infinity)),
-      tooltip: { label: (c) => (c.dataset.label.startsWith("_") ? null : ` ${c.dataset.label}: ${fmt(c.raw, 1)} ${unit}`) },
+      tooltip: { label: (c) => (c.dataset.label.startsWith("_") ? null : ` ${dn(c.dataset.label)}: ${fmt(c.raw, 1)} ${unit}`) },
     });
     // the tooltip lists the actual and the lines drawn in full; the faint ones are counted
     const nFaint = models.filter((m) => !full(m) && !S.hidden.has(m)).length;
@@ -1741,7 +1744,7 @@
       renderValue();
     });
     const ms = MODELS.filter((m) => inEns(m) && res[m] && res[m].quant);
-    options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${m} (ref)` : m })), S.v.model);
+    options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${dn(m)} (ref)` : dn(m) })), S.v.model);
   }
   // explainer diagram: one stylised day of a 100 MW asset. The forecast band (p10-p90), the percentile sold day-ahead
   // (it follows the slider), the actual output, and the gaps that are settled at the imbalance price.
@@ -1895,8 +1898,8 @@
     const tso = Object.keys(res).filter((x) => FAM[x] === "tso" && res[x].point != null);
     const xy = (curve) => VAL.percentiles.map((p, i) => ({ x: p, y: curve[i] == null ? null : 100 * curve[i] }));
     const datasets = [
-      { label: m, data: xy(r.curve), borderColor: color(m), backgroundColor: color(m), borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, order: -1 },
-      { label: `${m} point forecast`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * r.point })), borderColor: color(m), borderWidth: 1.6, borderDash: [2, 3], pointRadius: 0, pointHoverRadius: 0 },
+      { label: dn(m), data: xy(r.curve), borderColor: color(m), backgroundColor: color(m), borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, order: -1 },
+      { label: `${dn(m)} point forecast`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * r.point })), borderColor: color(m), borderWidth: 1.6, borderDash: [2, 3], pointRadius: 0, pointHoverRadius: 0 },
       ...others.map((x) => ({ label: x, data: xy(res[x].curve), borderColor: alpha(color(x), 0.75), backgroundColor: color(x), borderWidth: 1.3, pointRadius: 0, pointHoverRadius: 3, tension: 0.25 })),
       ...tso.map((x) => ({ label: `${x} (point forecast)`, data: VAL.percentiles.map((p) => ({ x: p, y: 100 * res[x].point })), borderColor: alpha(css("--ink2").startsWith("#") ? css("--ink2") : "#4E6578", 0.55), borderWidth: 1.2, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0 })),
     ];
@@ -1910,7 +1913,7 @@
     o.plugins.vCursor = {
       p: S.v.p, color: color(m), y: at(m) == null ? null : 100 * at(m),
       flats: [
-        { y: r.point == null ? null : 100 * r.point, text: `${m} point forecast ${pct(r.point)}`, color: color(m) },
+        { y: r.point == null ? null : 100 * r.point, text: `${dn(m)} point forecast ${pct(r.point)}`, color: color(m) },
         ...tso.map((x) => ({ y: 100 * res[x].point, text: `${x} ${pct(res[x].point)}`, color: css("--ink2") })),
       ],
       best: r.bestP != null ? { p: r.bestP, y: 100 * r.best } : null,
