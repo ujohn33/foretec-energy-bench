@@ -75,8 +75,8 @@ def _series(rows: list[dict], tcol: str, vcol: str = "value") -> pd.Series:
     df = pd.DataFrame(rows)
     idx = pd.to_datetime(df[tcol], utc=True).dt.tz_localize(None)
     vals = df[vcol]
-    if vals.dtype == object:   # Elia ods209 publishes measured_upscaled as text with a comma decimal
-        vals = vals.astype(str).str.replace(",", ".", regex=False)
+    if not pd.api.types.is_numeric_dtype(vals):   # Elia ods209 publishes measured_upscaled as text with a comma
+        vals = vals.astype(str).str.replace(",", ".", regex=False)   # decimal; pandas 3 types it `str`, not object
     s = pd.Series(pd.to_numeric(vals, errors="coerce").to_numpy(), index=pd.DatetimeIndex(idx)).dropna()
     return to_15min(s[~s.index.duplicated(keep="last")])
 
