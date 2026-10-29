@@ -78,19 +78,6 @@
     ens_fm_cov: "Median of five foundation models with covariates.",
     ens_hybrid: "Median of the five covariate foundation models and lgbm_prod.",
   };
-  // a model's description for its tooltip: the first sentence without asides, at most about one line (the full
-  // text is in the Methodology's models table)
-  const shortDesc = (d) => {
-    let s = String(d || "").replace(/^Reference, not ranked: /, "");
-    for (let t = ""; t !== s;) { t = s; s = s.replace(/\s*\([^()]*\)/g, ""); }   // drop parentheticals, innermost first
-    const first = (s.match(/^.*?[.!?](?=\s|$)/) || [s])[0];
-    let x = first;
-    if (first.length > 110) {
-      const cut = first.slice(0, 110), at = Math.max(cut.lastIndexOf(";"), cut.lastIndexOf(","), cut.lastIndexOf(":"));
-      x = (at > 50 ? cut.slice(0, at) : cut.slice(0, cut.lastIndexOf(" "))).replace(/[,;:\s]+$/, "") + "…";
-    }
-    return x.charAt(0).toUpperCase() + x.slice(1);
-  };
   const nm = (m) => esc(m) + (CAVEAT[m] ? `<sup class="caveat" data-tip="caveat:${esc(m)}" tabindex="0">*</sup>` : "")
     + (ENS.has(m) ? `<span class="ens-tag" data-tip="ens:${esc(m)}" tabindex="0">ens</span>` : "");
   // benchmarks (baselines and the grid operators' forecasts) stay in the field under every covariate filter
@@ -108,11 +95,8 @@
   // who built each foundation model family (model.yaml's author is who entered it: often Foretec running it)
   const MAKER = { chronos: "Amazon", timesfm: "Google", tirex: "NX-AI", toto: "Datadog", moirai: "Salesforce", sundial: "Tsinghua University",
     ttm: "IBM", t0: "The Forecasting Company", tabby: "Huawei Noah's Ark Lab", timeh2o: "H2O.ai", timestral: "Mistral AI" };
-  function modelTip(m) {
-    const x = META[m], maker = MAKER[FAM[m]] || x.author;
-    return [`${m} · by ${maker}`, shortDesc(x.description)];
-  }
-  // the name with who made it and what it is on hover
+  const modelTip = (m) => [m, `by ${MAKER[FAM[m]] || META[m].author}`];
+  // the name with who made it on hover (the description is in the Methodology's models table)
   const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(m)}</span>` + nm(m).slice(esc(m).length) + kindTag(m);
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
   // they also leave the races, so every other model's score is what it would be without them
