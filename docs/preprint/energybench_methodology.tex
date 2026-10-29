@@ -1,4 +1,4 @@
-% Energy Bench: methodology preprint.
+% EnergyBench: methodology preprint.
 % Build: latexmk -pdf energybench_methodology.tex. Table rows and elo_live.dat are generated from the scores by
 % scripts/research/preprint_results.py (numbers as of 15 Oct 2026).
 \documentclass[11pt,a4paper]{article}
@@ -31,7 +31,7 @@
 \definecolor{histc}{HTML}{8A8F98}
 \newcommand{\m}[1]{\texttt{#1}}
 
-\title{\textbf{Energy Bench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
+\title{\textbf{EnergyBench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
 \author{Evgenii Genov$^{1}$ \qquad Ander Martinez Alonso$^{1}$ \qquad Christoph Bergmeir$^{2}$\\[4pt]
 \small $^{1}$EVERGi Research Group, Flanders Alliance for Climate Technology (FACT),\\
 \small Vrije Universiteit Brussel, Pleinlaan 2, 1050 Brussels, Belgium\\
@@ -50,10 +50,10 @@
 \begin{abstract}
 \noindent
 Comparisons of energy forecasting models usually rest on backtests, which are easy to get subtly wrong: the information
-available when a forecast would have been sold is replaced by whatever is convenient to download later. Energy Bench
+available when a forecast would have been sold is replaced by whatever is convenient to download later. EnergyBench
 runs every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
 every model forecasts the next day's price, wind and solar generation and load on the 15-minute grid for six bidding
-zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike other live benchmarks, Energy Bench runs the models itself, on one
+zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike other live benchmarks, EnergyBench runs the models itself, on one
 information set that it freezes at the cut-off and publishes, including three numerical weather prediction models, so
 foundation models are compared with and without the same weather covariates under a real market deadline. Errors are
 pooled per series against a seasonal-naive baseline, and models are ranked by a Bradley--Terry rating on the Elo scale
@@ -92,7 +92,7 @@ accumulates one day at a time in public. The price is patience: a live record is
 on any given day. The design below takes that noise seriously rather than hiding it: errors are pooled before they
 are normalised, ranks come with intervals, and only live forecasts are reported.
 
-Energy Bench went live on 2~October 2026 with three zones (BE, NL, FR) and three targets; total load was added on
+EnergyBench went live on 2~October 2026 with three zones (BE, NL, FR) and three targets; total load was added on
 6~October and three zones (DE-LU, DK1, DK2) on 15~October.
 The code and the configuration file that define the benchmark are versioned in a public repository. This paper
 describes that configuration as of 27~October 2026 and the results to date.
@@ -120,7 +120,7 @@ benefit is an empirical question that a univariate benchmark cannot answer, and 
 user needs answered first.
 
 \paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome exists, and each
-leaves open a question that Energy Bench is built to answer.
+leaves open a question that EnergyBench is built to answer.
 
 TS-Arena~\cite{tsarena} implements a forecast pre-registration protocol for time-series foundation models: a round
 hands out each series' history up to its last published value and closes registration before the next value is
@@ -150,7 +150,7 @@ Germany-Luxembourg (day-ahead prices extend to thirteen further zones). In indus
 platform~\cite{predico} scores live renewable forecasts submitted to Elia and 50Hertz against a real gate, for
 enrolled forecasters and without publishing their inputs.
 
-\paragraph{Positioning.} Energy Bench takes Energy-Arena's operational framing (the day-ahead gate defines the task)
+\paragraph{Positioning.} EnergyBench takes Energy-Arena's operational framing (the day-ahead gate defines the task)
 and TS-Arena's pre-registration logic (only a forecast made before the outcome exists is free of leakage), and closes
 the gaps between them by running every model itself. Each day it fetches one information set at the gate-aligned
 cut-off, freezes and publishes it, and gives it to every entry: the information set is enforced rather than declared,
@@ -166,7 +166,7 @@ Table~\ref{tab:compare} summarises the differences.
 \label{tab:compare}
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.7cm}YYY@{}}
 \toprule
-& TS-Arena~\cite{tsarena} & Energy-Arena~\cite{energyarena} & Energy Bench (this paper) \\
+& TS-Arena~\cite{tsarena} & Energy-Arena~\cite{energyarena} & EnergyBench (this paper) \\
 \midrule
 Task timing & from each series' last published value; no market gate & submission before the 12:00 day-ahead gate, whole next day & 11:30 cut-off, locked before the 12:00 gate, whole next day \\
 Zones and targets & 14 challenges (SMARD, Gridstatus, Fingrid) & wind, solar, load: AT, DE-LU; price: 15 zones & price, wind, solar, load in each of BE, NL, FR, DE-LU, DK1, DK2 \\
@@ -424,7 +424,7 @@ mean, as does the climatology. The standings are
 built on MAE and so reward the median; Rel.\ RMSE is shown next to it so that mean-oriented entries are not judged on
 the other functional only, and bias is reported separately because neither accuracy measure distinguishes a systematic offset
 from noise. \emph{Which benchmark is in the denominator.} Every scale-free error embeds a benchmark~\cite{hyndmankoehler}.
-Energy Bench names it: the same quarter-hour one week earlier, a seasonal naive forecast that respects the daily and
+EnergyBench names it: the same quarter-hour one week earlier, a seasonal naive forecast that respects the daily and
 weekly cycles of price and load and needs no fitting, evaluated on the same test days as the model rather than
 in-sample, which is possible because every series has 96 scored values per day~\cite{davydenko}. For wind and solar it
 is a weak benchmark, and relative errors well below one are expected there; the benchmark is a common unit, not a
@@ -882,8 +882,8 @@ informative as its entries.
 
 \section{Conclusion}
 
-A live, gated benchmark is the kind whose results cannot be improved by a more careful choice of backtest. Energy
-Bench runs one daily for the European day-ahead market, on quarter-hours, from frozen public data with recorded
+A live, gated benchmark is the kind whose results cannot be improved by a more careful choice of backtest. EnergyBench
+ runs one daily for the European day-ahead market, on quarter-hours, from frozen public data with recorded
 provenance, with ranking statistics that state their uncertainty and a value view that connects accuracy to revenue.
 After twenty-four live days in six zones the main finding is clear: the weather the forecaster could know at the
 cut-off matters more than the model that uses it. The same foundation model forecasts with about half the error once
