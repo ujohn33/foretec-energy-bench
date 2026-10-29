@@ -95,7 +95,7 @@
   // who built each foundation model family (model.yaml's author is who entered it: often Foretec running it)
   const MAKER = { chronos: "Amazon", timesfm: "Google", tirex: "NX-AI", toto: "Datadog", moirai: "Salesforce", sundial: "Tsinghua University",
     ttm: "IBM", t0: "The Forecasting Company", tabby: "Huawei Noah's Ark Lab", timeh2o: "H2O.ai", timestral: "Mistral AI" };
-  const modelTip = (m) => [m, `by ${MAKER[FAM[m]] || META[m].author}`];
+  const modelTip = (m) => [m, FAM[m] === "tso" ? "grid operator forecast" : `by ${MAKER[FAM[m]] || META[m].author}`];
   // the name with who made it on hover (the description is in the Methodology's models table)
   const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(m)}</span>` + nm(m).slice(esc(m).length) + kindTag(m);
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
