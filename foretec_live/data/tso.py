@@ -3,7 +3,12 @@
 Elia (BE), opendata.elia.be (Opendatasoft):
   wind   ods031 (historical, `measured`) + ods086 (near real-time, `realtime`): the sum of the disjoint parts
          Federal offshore + Flanders/Wallonia onshore, each on the Elia grid and on distribution grids.
-  solar  ods032 + ods087, region "Belgium".
+  solar  region "Belgium": ods032 (historical, to 25 Oct 2026), then ods209 (historical) + ods210 (near real-time) from
+         26 Oct 2026, which split each region by grid connection (DSO, TSO, Total): the Total rows. ods087 (the old
+         near-real-time set) is discontinued and answers 400. ods209 has no `measured`: its column is
+         `measured_upscaled`, published as TEXT with a comma decimal ("5252,070"); ods210 keeps only today onward.
+         A dataset that fails is skipped (logged) so the others still deliver; without this, ods209's 400 made the
+         whole source fail and the hourly ENTSO-E fallback drew BE solar as a staircase (24-29 Oct 2026).
   Elia also publishes its own day-ahead forecast as it stood at 11:00 on D-1 (`dayahead11hforecast`), before
   the 12:00 gate (`dayahead_11h`), and the 18:00 version (`dayaheadforecast`, `dayahead_18h`). The 18:00 one is
   what Elia sends to ENTSO-E, but ENTSO-E gets hourly values; Elia Open Data has it at 15 minutes (hourly means
@@ -69,7 +74,10 @@ def _series(rows: list[dict], tcol: str, vcol: str = "value") -> pd.Series:
         return pd.Series(dtype=float)
     df = pd.DataFrame(rows)
     idx = pd.to_datetime(df[tcol], utc=True).dt.tz_localize(None)
-    s = pd.Series(pd.to_numeric(df[vcol], errors="coerce").to_numpy(), index=pd.DatetimeIndex(idx)).dropna()
+    vals = df[vcol]
+    if vals.dtype == object:   # Elia ods209 publishes measured_upscaled as text with a comma decimal
+        vals = vals.astype(str).str.replace(",", ".", regex=False)
+    s = pd.Series(pd.to_numeric(vals, errors="coerce").to_numpy(), index=pd.DatetimeIndex(idx)).dropna()
     return to_15min(s[~s.index.duplicated(keep="last")])
 
 
@@ -79,8 +87,10 @@ def _when(col: str, start: pd.Timestamp, end: pd.Timestamp) -> str:
 
 class EliaSource(Source):
     name = "elia"
-    WIND = (("ods031", "measured"), ("ods086", "realtime"))   # historical first, near real-time fills the recent end
-    SOLAR = (("ods032", "measured"), ("ods087", "realtime"))
+    # (dataset, actual column, extra filter): historical first, near real-time fills the recent end
+    WIND = (("ods031", "measured", ""), ("ods086", "realtime", ""))
+    SOLAR = (("ods032", "measured", ""), ("ods209", "measured_upscaled", "gridconnectiontype = 'Total'"),
+             ("ods210", "measured", "gridconnectiontype = 'Total'"))
 
     def fetch(self, zone, target, start, end):
         if zone != "BE" or target not in ("wind", "solar"):
@@ -91,29 +101,38 @@ class EliaSource(Source):
         """Elia's day-ahead forecast for Belgium as published at 11:00 on D-1, MW (a fixed snapshot, so it
         can be fetched later without look-ahead)."""
         parts = self.WIND if target == "wind" else self.SOLAR
-        return self._collect(target, [(ds, "dayahead11hforecast") for ds, _ in parts], start, end)
+        return self._collect(target, [(ds, "dayahead11hforecast", extra) for ds, _, extra in parts], start, end)
 
     def dayahead_18h(self, target, start, end) -> pd.Series:
         """Elia's day-ahead forecast for Belgium as published at 18:00 on D-1 (after the gate), MW, 15 minutes."""
         parts = self.WIND if target == "wind" else self.SOLAR
-        return self._collect(target, [(ds, "dayaheadforecast") for ds, _ in parts], start, end)
+        return self._collect(target, [(ds, "dayaheadforecast", extra) for ds, _, extra in parts], start, end)
 
     def _collect(self, target, datasets, start, end) -> pd.Series:
         retries = 2 if self.cfg.get("_fallback") else 4
         out = pd.Series(dtype=float)
-        for dataset, col in datasets:
-            if target == "wind":
-                params = {"select": f"datetime, sum({col}) as value, count({col}) as n", "group_by": "datetime",
-                          "where": _when("datetime", start, end) + f" and {col} is not null"}
-                rows = _export(ELIA, dataset, params, retries)
-                parts = max((r["n"] for r in rows), default=0)
-                rows = [r for r in rows if r["n"] == parts]          # a quarter-hour counts only with every part reported
-            else:
-                params = {"select": f"datetime, {col} as value",
-                          "where": _when("datetime", start, end) + f" and region = 'Belgium' and {col} is not null"}
-                rows = _export(ELIA, dataset, params, retries)
+        failed = []
+        for dataset, col, extra in datasets:
+            extra = f" and {extra}" if extra else ""
+            try:
+                if target == "wind":
+                    params = {"select": f"datetime, sum({col}) as value, count({col}) as n", "group_by": "datetime",
+                              "where": _when("datetime", start, end) + f" and {col} is not null{extra}"}
+                    rows = _export(ELIA, dataset, params, retries)
+                    parts = max((r["n"] for r in rows), default=0)
+                    rows = [r for r in rows if r["n"] == parts]      # a quarter-hour counts only with every part reported
+                else:
+                    params = {"select": f"datetime, {col} as value",
+                              "where": _when("datetime", start, end) + f" and region = 'Belgium' and {col} is not null{extra}"}
+                    rows = _export(ELIA, dataset, params, retries)
+            except requests.RequestException as e:   # one dataset down (or renamed) must not take the others with it
+                log.warning("elia %s %s skipped: %s", dataset, target, e)
+                failed.append(e)
+                continue
             s = _series(rows, "datetime")
             out = out.combine_first(s) if not out.empty else s
+        if out.empty and failed:
+            raise failed[-1]
         return out[(out.index >= start) & (out.index < end)] if not out.empty else out
 
 
