@@ -34,6 +34,7 @@ import pandas as pd
 import requests
 
 from .config import paths
+from .data.entsoe import drop_closing_zero
 from .timeutil import FREQ, as_date, delivery_index, issue_timestamp
 
 log = logging.getLogger(__name__)
@@ -241,7 +242,7 @@ def _parse_entsoe(xml: str) -> pd.Series:
         vals = np.full(n, np.nan)
         for pt in period.iter("Point"):
             vals[int(pt.find("position").text) - 1] = float(pt.find("quantity").text)
-        parts.append(pd.Series(vals, index=pd.date_range(start, periods=n, freq=res)).ffill())
+        parts.append(drop_closing_zero(pd.Series(vals, index=pd.date_range(start, periods=n, freq=res)).ffill()))
     if not parts:
         return pd.Series(dtype=float)
     s = pd.concat(parts).sort_index()

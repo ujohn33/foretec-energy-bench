@@ -233,7 +233,7 @@ def _tracker(cfg) -> dict:
                                             "s": {}, "why": {}})
             key = f"{r.get('zone', '')}_{r.get('target', '')}"
             # per series: S scored, M due but actuals missing, W forecast but not due, F failed, K skipped, V voided
-            why_void = phase == "live" and voided(day, r.get("zone"), r.get("target"), cfg)
+            why_void = phase == "live" and voided(day, r.get("zone"), r.get("target"), cfg, r["model"])
             if r["status"] == "ok" and why_void:
                 c["ok"] += 1
                 c["void"] += 1

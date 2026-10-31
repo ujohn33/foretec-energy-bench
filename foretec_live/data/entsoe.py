@@ -90,6 +90,14 @@ def _on_grid(s: pd.Series, res: pd.Timedelta) -> pd.Series:
     return out
 
 
+def drop_closing_zero(s: pd.Series) -> pd.Series:
+    """A zone's total load is never 0. Energinet ends its A65 forecast about a day after the request with one zero
+    point after a part-filled last hour (0.8 of its neighbours, Oct 2026), and an A03 curve repeats that zero to the end
+    of the period. Those hours are not published: the zeros and the step before them become missing."""
+    zero = s.eq(0)
+    return s.mask(zero | zero.shift(-1, fill_value=False))
+
+
 def fill_night_zeros(s: pd.Series, start, end) -> pd.Series:
     """Some TSOs leave solar's night-time zeros out of A75 instead of reporting 0 (Energinet for DK, 2026).
     A run of missing quarter-hours is filled with 0 when the published values next to it are near zero (at most
@@ -171,7 +179,7 @@ class EntsoeSource(Source):
         elif kind in ("load", "loadfc"):   # A65 total load: actual (A16) or day-ahead forecast (A01)
             xml = self._get({"documentType": "A65", "processType": "A16" if kind == "load" else "A01",
                              "outBiddingZone_Domain": eic, **period})
-            parts = [] if "No matching data" in xml else parse_timeseries(xml)
+            parts = [] if "No matching data" in xml else [(m, drop_closing_zero(s)) for m, s in parse_timeseries(xml)]
         else:
             xml = self._get({"documentType": "A75", "processType": "A16", "in_Domain": eic, "psrType": psr, **period})
             parts = [] if "No matching data" in xml else parse_timeseries(xml)

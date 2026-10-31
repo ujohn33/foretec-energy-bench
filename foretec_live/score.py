@@ -26,10 +26,12 @@ def _now(cfg, now=None) -> pd.Timestamp:
     return now.tz_localize(cfg["timezone"]) if now.tzinfo is None else now.tz_convert(cfg["timezone"])
 
 
-def voided(issue_date, zone, target, cfg) -> str | None:
-    """Why a live forecast is never scored (config void_live: issue days `from` (optional) through `through`), or None."""
+def voided(issue_date, zone, target, cfg, model=None) -> str | None:
+    """Why a live forecast is never scored (config void_live: issue days `from` (optional) through `through`, for every
+    model or, with `models`, only those), or None."""
     for v in cfg.get("void_live") or []:
-        if f"{zone}_{target}" in v["series"] and str(v.get("from", "")) <= str(issue_date) <= str(v["through"]):
+        if (f"{zone}_{target}" in v["series"] and str(v.get("from", "")) <= str(issue_date) <= str(v["through"])
+                and ("models" not in v or model in v["models"])):
             return v.get("reason", "voided")
     return None
 
@@ -281,8 +283,8 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
         for (zone, target), grp in fc_all.groupby(["zone", "target"]):
             todo = [m for m in grp["model"].unique() if (issue_date, m, zone, target) not in done
                     and (m not in specs or specs[m].applies(zone, target))]
-            if results_subdir == "results" and voided(issue_date, zone, target, cfg):
-                todo = []
+            if results_subdir == "results":
+                todo = [m for m in todo if not voided(issue_date, zone, target, cfg, m)]
             if not todo or not scorable(issue_date, target, cfg, now):
                 continue
             y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now))

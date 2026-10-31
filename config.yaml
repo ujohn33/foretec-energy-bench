@@ -65,6 +65,12 @@ void_live:
   - {series: [NL_load], through: 2026-10-11, reason: "made from ENTSO-E's net NL load before the switch to NED's gross load"}
   # issues 15-16 Oct were scored on ENTSO-E's DK wind before the switch and stay so (actuals_locked_through)
   - {series: [DK1_wind, DK2_wind], from: 2026-10-17, through: 2026-10-18, reason: "made from ENTSO-E's DK wind history before the switch to Energinet's real-time production"}
+  # Energinet's A65 forecast ended at 11:00 on D when the run read it (a closing zero, read as zero load to the end of D).
+  # What came later was published after the gate, so these days cannot be repaired; drop_closing_zero stops new ones
+  - {series: [DK1_load], models: [tso_cutoff], from: 2026-10-15, through: 2026-10-18, reason: "Energinet's forecast did not cover the whole of D before the gate"}
+  - {series: [DK1_load], models: [tso_cutoff], from: 2026-10-22, through: 2026-10-22, reason: "Energinet's forecast did not cover the whole of D before the gate"}
+  - {series: [DK2_load], models: [tso_cutoff], from: 2026-10-28, through: 2026-10-28, reason: "Energinet's forecast did not cover the whole of D before the gate"}
+  - {series: [DK1_load, DK2_load], models: [tso_cutoff], from: 2026-10-30, through: 2026-10-31, reason: "Energinet's forecast did not cover the whole of D before the gate"}
 # (energycharts | entsoe | synthetic for tests)
 
 zones:

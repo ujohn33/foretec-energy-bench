@@ -570,6 +570,32 @@ def test_void_live_window(cfg):
     assert not voided("2026-10-17", "DK1", "solar", cfg)
 
 
+def test_void_live_one_model(cfg):
+    """void_live with `models`: only those models' forecasts are voided, the rest of the race stands."""
+    from foretec_live.score import voided
+    cfg["void_live"] = [{"series": ["DK1_load"], "models": ["tso_cutoff"], "through": "2026-10-18", "reason": "w"}]
+    assert voided("2026-10-18", "DK1", "load", cfg, "tso_cutoff") == "w"
+    assert not voided("2026-10-18", "DK1", "load", cfg, "chronos2") and not voided("2026-10-18", "DK1", "load", cfg)
+
+
+def test_load_forecast_closing_zero_is_missing(cfg, monkeypatch):
+    """Energinet's A65 forecast: an A03 curve ending in one zero point after a part-filled hour, with the period running
+    on to the end of D. Neither the zeros nor that hour are a forecast, for tso_cutoff or for the load_fc covariate."""
+    from foretec_live.covariates import _parse_entsoe
+    from foretec_live.data.entsoe import EntsoeSource
+    points = "".join(f"<Point><position>{p}</position><quantity>{q}</quantity></Point>" for p, q in enumerate([3000, 3100, 2500, 0], 1))
+    xml = ('<GL_MarketDocument xmlns="urn:x"><TimeSeries><curveType>A03</curveType>'
+           '<Period><timeInterval><start>2026-10-15T22:00Z</start><end>2026-10-16T22:00Z</end></timeInterval>'
+           f'<resolution>PT60M</resolution>{points}</Period></TimeSeries></GL_MarketDocument>')
+    monkeypatch.setenv("ENTSOE_TOKEN", "x")
+    src = EntsoeSource({k: v for k, v in cfg.items() if k != "_root"})
+    monkeypatch.setattr(src, "_get", lambda params: xml)
+    for s in (src.tso_forecast("BE", "load", pd.Timestamp("2026-10-15 22:00"), pd.Timestamp("2026-10-16 22:00")),
+              _parse_entsoe(xml)):
+        s = s.dropna()
+        assert (s > 0).all() and s.max() == 3100 and s.index[-1] == pd.Timestamp("2026-10-15 23:45")
+
+
 def test_energinet_wind_quarter_hours(cfg, monkeypatch):
     """Energinet DK wind: onshore + offshore, 5-minute values averaged to quarter-hours (2 of 3 needed), one area only."""
     from foretec_live.data import tso
