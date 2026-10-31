@@ -1,7 +1,9 @@
 """The TSO's own day-ahead wind/solar forecast as it stood before the gate. Live only (model.yaml): what was
 published before the gate cannot be verified after the fact, so this entry is never backtested.
 
-BE: Elia's day-ahead forecast published at 11:00 on D-1 (Elia Open Data, `dayahead11hforecast`).
+BE: Elia's day-ahead forecast published at 11:00 on D-1 (Elia Open Data, `dayahead11hforecast`). On the solar dataset
+    that replaced ods087 on 26 Oct 2026 (ods210) the field can still be empty at the run, so a live run then takes
+    Elia's most recent forecast, read at the run and so before the gate.
 NL: the NED.nl national wind (onshore + offshore) and solar forecast (Nationaal Energie Dashboard, backed by TenneT),
     fetched at the run, matching the NL actuals (NED's national estimate). NED overwrites its forecast as delivery
     approaches, so it is used only in a live run before the gate.
@@ -51,6 +53,8 @@ for key in series:
     else:
         sources = {"BE": [("Elia 11:00", lambda: elia.dayahead_11h(target, idx[0], end))],
                    "NL": [("NED.nl", ned)]}.get(zone, [])
+    if live and zone == "BE" and target != "load":   # overwritten by Elia: before the gate only, like ENTSO-E below
+        sources.append(("Elia most recent", lambda: elia.most_recent(target, idx[0], end)))
     if live and target != "load":   # after the gate ENTSO-E holds the 18:00 version, which would be look-ahead
         sources.append(("ENTSO-E A69", lambda: EntsoeSource(cfg).tso_forecast(zone, target, idx[0], end)))
     tried = []

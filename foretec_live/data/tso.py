@@ -103,6 +103,12 @@ class EliaSource(Source):
         parts = self.WIND if target == "wind" else self.SOLAR
         return self._collect(target, [(ds, "dayahead11hforecast", extra) for ds, _, extra in parts], start, end)
 
+    def most_recent(self, target, start, end) -> pd.Series:
+        """Elia's latest forecast for Belgium as it stands now, MW, 15 minutes. Elia overwrites it, so it is a forecast
+        made before the gate only if this is called before the gate."""
+        parts = self.WIND if target == "wind" else self.SOLAR
+        return self._collect(target, [(ds, "mostrecentforecast", extra) for ds, _, extra in parts], start, end)
+
     def dayahead_18h(self, target, start, end) -> pd.Series:
         """Elia's day-ahead forecast for Belgium as published at 18:00 on D-1 (after the gate), MW, 15 minutes."""
         parts = self.WIND if target == "wind" else self.SOLAR

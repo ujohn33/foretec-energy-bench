@@ -237,6 +237,30 @@ def test_capacity_scaling_per_zone(cfg, tmp_path):
     assert scale_kind(cfg, spec, "FR_price") is None
 
 
+def test_elia_most_recent_reads_the_total_rows(cfg, monkeypatch):
+    """Elia's latest forecast: Total rows of the solar datasets, summed parts for wind, and a dead dataset is skipped."""
+    from foretec_live.data import tso
+
+    seen = []
+
+    def fake(base, dataset, params, retries):
+        seen.append((dataset, params["select"], params["where"]))
+        if dataset == "ods032":
+            raise tso.requests.RequestException("400")
+        return [{"datetime": "2026-11-01T12:00:00+00:00", "value": 2000.0, "n": 5}]
+
+    monkeypatch.setattr(tso, "_export", fake)
+    src = tso.EliaSource({**cfg, "_fallback": True})
+    a, b = pd.Timestamp("2026-11-01 11:00"), pd.Timestamp("2026-11-01 13:00")
+    solar = src.most_recent("solar", a, b)
+    assert solar.loc[pd.Timestamp("2026-11-01 12:00")] == 2000.0
+    assert all("mostrecentforecast" in sel for _, sel, _ in seen)
+    assert [w for d, _, w in seen if d == "ods210"][0].count("gridconnectiontype = 'Total'") == 1
+    seen.clear()
+    assert src.most_recent("wind", a, b).loc[pd.Timestamp("2026-11-01 12:00")] == 2000.0
+    assert {d for d, _, _ in seen} == {"ods031", "ods086"}
+
+
 def test_fuel_quote_counts_only_after_its_date(cfg, monkeypatch):
     """A quote dated X may be X's close: it must not be usable at the 11:30 cut-off on day X."""
     from foretec_live.covariates import fuel_quotes
