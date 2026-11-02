@@ -398,11 +398,9 @@ def _model_body(i: dict, r, st: pd.DataFrame, targets: dict, per: pd.DataFrame, 
     ranked = pd.notna(r["rank"])
     who = facts.get("maker") or ("Grid operators" if i["family"] == "tso" else "Foretec")
     tag = " · ".join(x for x in (kind, who, facts.get("released")) if x)
-    gain = (f"{1 - rel:.0%}", "less error than repeating last week") if rel < 1 else (f"+{rel - 1:.0%}", "error against repeating last week")
-    if m == cfg["baseline"]:
-        gain = ("1.0", "the baseline every model is measured against")
-    numbers = [(f"#{int(r['rank'])}", f"of {field} ranked models"), gain, (f"{r['elo']:.0f}", "Elo rating"), (str(days_live), "days run live")] if ranked \
-        else [gain, (str(days_live), "days run live")]
+    numbers = [(str(days_live), "days run live")]
+    if ranked:
+        numbers = [(f"#{int(r['rank'])}", f"of {field} ranked models"), (f"{r['elo']:.0f}", "Elo rating"), *numbers]
     big = "".join(f"<div><b>{e(a)}</b><span>{e(b)}</span></div>" for a, b in numbers)
 
     strips = "".join(
