@@ -447,6 +447,9 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 /* standings: intro and status under the title */
 .sec-head .intro{margin:8px 0 0; max-width:72ch; font-size:.95rem; color:var(--ink2); line-height:1.5}
 .sec-head .meta{margin:4px 0 0; font-size:.78rem}
+#standings .sec-head .intro{overflow:hidden; max-height:10rem; transition:max-height .25s ease, margin-top .25s ease, opacity .2s ease}
+#standings .sec-head.scrolled .intro{max-height:0; margin-top:0; opacity:0}
+body[data-page="leaderboard"]{overflow-anchor:none}
 .sec-head .meta a{color:inherit; text-decoration:underline; text-underline-offset:.15em; text-decoration-color:var(--rule)}
 .sec-head .meta a:hover{color:var(--ink)}
 /* standings: the top three marked in the table (the podium cards are gone), Elo bar with its 95% interval */

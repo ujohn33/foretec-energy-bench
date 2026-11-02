@@ -548,6 +548,14 @@
     addEventListener("scroll", place, { passive: true });
     addEventListener("resize", place, { passive: true });
     place();
+    // the leaderboard's intro folds on the first scroll and comes back at the very top of the page; scroll anchoring is
+    // off there (style.css), or the fold would pull the page back to the top and reopen it
+    const head = document.querySelector("#standings .sec-head");
+    if (head) {
+      const foldIntro = () => { if (scrollY > 24) head.classList.add("scrolled"); else if (scrollY <= 0) head.classList.remove("scrolled"); };
+      addEventListener("scroll", foldIntro, { passive: true });
+      foldIntro();
+    }
   }
 
   // ---------- share: a link to this view and a LinkedIn-ready image of its ranking ----------
