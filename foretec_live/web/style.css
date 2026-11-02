@@ -447,8 +447,11 @@ td.dm{white-space:nowrap} td.dm.tie{color:var(--blue-ink); font-weight:600} td.d
 /* standings: intro and status under the title */
 .sec-head .intro{margin:8px 0 0; max-width:72ch; font-size:.95rem; color:var(--ink2); line-height:1.5}
 .sec-head .meta{margin:4px 0 0; font-size:.78rem}
-#standings .sec-head .intro{overflow:hidden; max-height:10rem; transition:max-height .25s ease, margin-top .25s ease, opacity .2s ease}
-#standings .sec-head.scrolled .intro{max-height:0; margin-top:0; opacity:0}
+/* the leaderboard intro: a grid row so it slides over its real height; the rule on each state times the move into it (back slower) */
+.intro-fold{display:grid; grid-template-rows:1fr; transition:grid-template-rows 1.2s cubic-bezier(.4,0,.2,1)}
+.intro-fold .intro{min-height:0; overflow:hidden; transition:margin-top 1.2s cubic-bezier(.4,0,.2,1), opacity 1.2s ease}
+.sec-head.scrolled .intro-fold{grid-template-rows:0fr; transition-duration:.65s}
+.sec-head.scrolled .intro-fold .intro{margin-top:0; opacity:0; transition-duration:.65s}
 body[data-page="leaderboard"]{overflow-anchor:none}
 .sec-head .meta a{color:inherit; text-decoration:underline; text-underline-offset:.15em; text-decoration-color:var(--rule)}
 .sec-head .meta a:hover{color:var(--ink)}
