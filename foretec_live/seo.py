@@ -420,7 +420,7 @@ def _model_body(info: dict, r, st: pd.DataFrame, by_target: dict, per: pd.DataFr
 {related}
 <section class="mp-sec"><h2>Check it yourself</h2>
 <p>{e(run)}
-<a href="../../?m={e(m)}">See it on the leaderboard</a>, <a href="../../explorer.html">compare its forecasts with the actuals</a>,
+<a href="../../?z=all&amp;t=all&amp;r=all&amp;c=all&amp;e=0&amp;a=mean&amp;m={e(m)}">See it on the leaderboard</a>, <a href="../../explorer.html">compare its forecasts with the actuals</a>,
 read <a href="../../methodology.html">how scoring works</a>, or open <a href="{REPO}/tree/main/models/{e(m)}" rel="noopener">its configuration</a>.</p></section>"""
     bits = [head + (f": Rel. MAE {rel:.3f} over {r['series']} series" if pd.notna(rel) else ""), "Day-ahead price, wind, solar and load forecasts scored live"]
     return body, ". ".join(bits) + "."
