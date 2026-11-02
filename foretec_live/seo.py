@@ -164,8 +164,8 @@ def _head(page: str, title: str, cfg, jsonld: list[dict] | None) -> str:
     path, _ = PAGES[page]
     tags = [
         f'<meta property="og:url" content="{SITE_URL}/{path}">',
-        f'<meta property="og:image" content="{SITE_URL}/og-card.png">',
-        '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">',
+        f'<meta property="og:image" content="{SITE_URL}/og-card.png?v=2">',
+        '<meta property="og:image:width" content="2400">', '<meta property="og:image:height" content="1260">',
         '<meta property="og:image:alt" content="EnergyBench by Foretec: the live day-ahead forecasting benchmark">',
         '<meta name="twitter:card" content="summary_large_image">',
         f'<link rel="license" href="{LICENSE[1]}">',

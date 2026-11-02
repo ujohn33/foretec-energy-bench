@@ -103,8 +103,8 @@ def describe(p: dict) -> tuple[str, str]:
     target = "All targets" if p["t"] == "all" else tl.get(p["t"], p["t"])
     view = f"{target} · {zone} · {RATED[p['r']]}"
     title = f"How {DISPLAY.get(p['m'], p['m'])} ranks: {view}" if p.get("m") else f"{view} · EnergyBench by Foretec"
-    desc = ("A live, open benchmark of day-ahead energy forecasts: every model forecasts from the data public at 11:30, "
-            "locked before the 12:00 gate, and is scored against the grid operators.")
+    desc = ("A live, open benchmark of day-ahead energy forecasts: every model commits before the 12:00 market deadline "
+            "and is scored on what actually happened.")
     return title, desc
 
 
