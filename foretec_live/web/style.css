@@ -260,12 +260,16 @@ ol.steps p{margin-top:6px; color:var(--ink2); font-size:.95rem; max-width:72ch}
 
 /* ---------- footer (foretec.be) ---------- */
 footer{border-top:1px solid var(--rule); padding:36px 0 60px; color:var(--ink2); font-size:.85rem}
-.foot{display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap}
-.foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:900; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink); text-decoration:none}
-.foot-mark{font-weight:500; color:var(--ink2)}
-.foot-nav{line-height:1.9}
+.foot-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:6px 40px}
+.foot-small{margin-top:14px; font-size:.8rem}
+.foot-mark{font-family:Inter,system-ui,sans-serif; font-weight:500; font-style:italic; letter-spacing:-.032em; font-size:1.2rem; color:var(--ink2); text-decoration:none}
 .foot-mark span{font-weight:600; color:var(--blue-ink)}
 .foot-mark b{font-weight:900; color:var(--ink)}
+.foot-nav{display:flex; flex-wrap:wrap; gap:4px 22px}
+.foot-nav a{color:var(--ink2); text-decoration:none}
+.foot-nav a:hover{color:var(--ink); text-decoration:underline}
+.foot-meta{margin-left:auto}
+@media(max-width:900px){ .foot-meta{margin-left:0} }
 
 /* explanations on hover / focus / tap */
 .tip{display:none; position:fixed; z-index:60; max-width:min(320px, calc(100vw - 16px)); padding:10px 12px 11px; background:var(--ink); color:var(--ground);
@@ -512,7 +516,7 @@ td.empty{padding:22px 16px; color:var(--ink2)}
   .filterbar.m-open .filters .field:last-child{display:none}
   .fsum{padding:11px 0; font-size:.86rem}
   body:not([data-page="methodology"]) :is(.sec-head .intro, .sec-head .meta, .sec-head .lede, .st-notes, .x-meta, #l-tracker, .vx-steps span, .vscale, .more-sum) {display:none}
-  .foot > span{display:none}
+  .foot-nav,.foot-small{display:none}
 }
 /* phones: switches in the filter bar span the width, equal parts, long labels wrap instead of overflowing */
 @media(max-width:600px){
