@@ -100,7 +100,9 @@
     ttm: "IBM", t0: "The Forecasting Company", tabby: "Huawei Noah's Ark Lab", timeh2o: "H2O.ai", timestral: "Mistral AI" };
   const modelTip = (m) => [dn(m), FAM[m] === "tso" ? "grid operator forecast" : `by ${MAKER[FAM[m]] || META[m].author}`];
   // the name with who made it on hover (the description is in the Methodology's models table)
-  const nmTip = (m) => `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(dn(m))}</span>` + nm(m).slice(esc(dn(m)).length) + kindTag(m);
+  const paged = (m, text) => (META[m] && META[m].page ? `<a class="mlink" href="models/${esc(m)}/">${text}</a>` : text);   // the model's own page, where it has one
+  const nmLink = (m) => paged(m, esc(dn(m))) + nm(m).slice(esc(dn(m)).length);
+  const nmTip = (m) => paged(m, `<span class="mname" data-tip="model:${esc(m)}" tabindex="0">${esc(dn(m))}</span>`) + nm(m).slice(esc(dn(m)).length) + kindTag(m);
   // ensembles (medians of other models' forecasts) are in the field only with "Include ensembles" ticked; unticked
   // they also leave the races, so every other model's score is what it would be without them
   let ENS = new Set();
@@ -1217,7 +1219,7 @@
     if (!$("models-table")) return;
     const live = new Set(ROWS.filter((r) => r.phase === "live").map((r) => r.model));
     $("models-table").innerHTML = `<thead><tr><th>Model</th><th>Author</th><th>Description</th><th>Inputs</th><th>Implementation</th><th>Status</th></tr></thead><tbody>` +
-      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${nm(m.name)}${kindTag(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}${m.caveat ? `<br><small>* ${esc(m.caveat)}</small>` : ""}</td>
+      D.models.map((m) => `<tr><td class="model"><i style="background:${color(m.name)}"></i>${nmLink(m.name)}${kindTag(m.name)}</td><td>${esc(m.author)}</td><td class="desc">${esc(m.description)}${m.caveat ? `<br><small>* ${esc(m.caveat)}</small>` : ""}</td>
         <td class="wrap">${inputChips(m.inputs)}</td><td class="kind">${esc(m.kind)}</td><td class="${m.enabled === false || m.relegated ? "wrap" : ""}">${m.enabled === false ? `<span class="tag bt">Retired</span><br><small>${esc(m.retired || "")}</small>` : m.relegated ? `<span class="tag bt">Relegated ${esc(m.relegated)}</span><br><small>${esc(m.relegated_reason || "")}</small>` : m.reference ? '<span class="tag bt">Reference, not ranked</span>' : m.live_only ? '<span class="tag live">Live only</span>' : live.has(m.name) ? '<span class="tag live">Live</span>' : '<span class="tag bt">Backtest only</span>'}</td></tr>`).join("") + "</tbody>";
   }
 
@@ -1654,7 +1656,7 @@
     const COLS = ["mae", "rmse", "bias", "wis", "winkler", "cover", "rel_mae"];
     tb.innerHTML = `<thead><tr><th>Model</th>${xth("mae", "MAE")}${xth("rmse", "RMSE")}${xth("bias", "Bias")}${xth("wis", "WIS")}${xth("winkler", "Winkler 80%")}${xth("cover", "Coverage 80%")}${xth("rel_mae", "Rel. MAE")}</tr></thead><tbody>` +
       models.map((m) => sc.find((r) => r.model === m)).filter(Boolean).sort((a, b) => (a.mae ?? 1e18) - (b.mae ?? 1e18)).map((r) => `<tr class="${bt ? "is-bt" : ""}">
-        <td class="model"><i style="background:${color(r.model)}"></i>${nm(r.model)}</td>
+        <td class="model"><i style="background:${color(r.model)}"></i>${nmLink(r.model)}</td>
         ${COLS.map((k) => `<td class="num ${r[k] != null && dev(k, r[k]) === best(k) ? "best" : ""}">${k === "cover" ? pctCell(r[k]) : fmt(r[k], k === "rel_mae" ? 3 : 1)}</td>`).join("")}
       </tr>`).join("") + `</tbody>`;
   }
@@ -1984,7 +1986,7 @@
         : `<td class="r v" title="point forecast: no quantiles">${pct(q.point)} <small class="po">point</small></td>`;
       const best = q.quant && q.bestP != null ? `<td class="r num">${pct(q.best)} <small>p${q.bestP}</small></td>` : `<td class="r num">–</td>`;
       return `<tr class="${x === m ? "on" : ""}" data-m="${esc(x)}" style="cursor:${q.quant ? "pointer" : "default"}">
-        <td class="r num">${rank}</td><td class="model"><i style="background:${color(x)}"></i>${nm(x)}</td>${share}${best}
+        <td class="r num">${rank}</td><td class="model"><i style="background:${color(x)}"></i>${nmLink(x)}</td>${share}${best}
         <td class="r num">${cx == null ? "–" : "€" + cx.toFixed(2)}</td>${nCell}</tr>`;
     };
     const group = (label) => `<tr class="grp"><td colspan="6">${label}</td></tr>`;

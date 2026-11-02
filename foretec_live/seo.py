@@ -3,15 +3,14 @@
 The pages draw their tables and charts in the browser from data/summary.json, so a crawler that does not run
 JavaScript (most AI agents do not) would see an empty benchmark. This module adds, from the same scores:
 
-  index.html etc.   a plain-HTML summary of the live standings (in <details>), the Open Graph preview image and
-                    schema.org JSON-LD (the benchmark as a Dataset, for Google Dataset Search)
+  index.html etc.   the Open Graph preview image and schema.org JSON-LD (the benchmark as a Dataset, for Google Dataset Search)
   leaderboard.csv   the standings per phase as a flat table
   llms.txt          a Markdown overview for AI agents (llmstxt.org): rules, metrics, current standings, data links
   models/           one static page per model and an index of them, so each model has its own URL to link and to find
   robots.txt        every crawler allowed, AI crawlers named explicitly; sitemap.xml with each page's last update
 
 The standings are computed as the Leaderboard computes them by default (all zones and targets, every live issue
-day, Rel. MAE races, Bradley-Terry Elo, mean across series), so the static summary and the page agree.
+day, Rel. MAE races, Bradley-Terry Elo, mean across series), so llms.txt, the model pages and the page agree.
 """
 from __future__ import annotations
 
@@ -42,15 +41,44 @@ PAGES = {
     "compete.html": ("compete.html", "Bidding Competition"),
 }
 TARGET_LABEL = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
-INPUT_LABEL = {"history": "the series' own history", "nwp": "weather forecasts from three numerical weather prediction models",
-               "load_forecast": "the ENTSO-E load forecast", "fuel": "fuel prices", "calendar": "calendar features"}
+_PLUG = '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8z"/><path d="M12 18v4"/>'
+TARGET_ICON = {"price": '<path d="M18 7a7 7 0 1 0 0 10"/><path d="M4 10h9M4 14h9"/>',
+               "wind": '<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h16a3 3 0 1 1-3 3"/><path d="M3 16h7a2.5 2.5 0 1 1-2.5 2.5"/>',
+               "solar": '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/>',
+               "load": _PLUG}
+INPUTS = {"history": ('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>', "History"),
+          "nwp": ('<circle cx="8" cy="8" r="3"/><path d="M8 2v1.5M2 8h1.5M3.8 3.8l1 1M12.2 3.8l-1 1"/><path d="M8 20h9a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 13.2 3.5 3.5 0 0 0 8 20z"/>', "Weather", "ICON-EU · GFS · IFS"),
+          "load_forecast": (_PLUG, "Load forecast"),
+          "fuel": ('<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 1-3 0-6-3-9 0 4-5 7-5 13 0 4 3 7 7 7z"/>', "Fuel prices"),
+          "calendar": ('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', "Calendar")}
+# maker, released, parameters, licence, source: only what the model's card, paper or announcement states; a *_cov variant shares its base model's
+MODEL_FACTS = {"chronos2": ("Amazon", "Oct 2025", "120M", "Apache-2.0", "https://arxiv.org/abs/2510.15821"),
+               "chronos_bolt": ("Amazon", None, "205M", None, None),
+               "timesfm3": ("Google", "Aug 2026", None, "Non-commercial weights", "https://huggingface.co/google/timesfm-3.0-pytorch"),
+               "timesfm25": ("Google", "Sep 2025", "200M", None, "https://huggingface.co/google/timesfm-2.5-200m-pytorch"),
+               "t0_alpha": ("The Forecasting Company", "Jun 2026", "102M", "Apache-2.0", "https://arxiv.org/abs/2609.24559"),
+               "t0_beta": ("The Forecasting Company", "2026", "256M", None, "https://arxiv.org/abs/2609.24559"),
+               "t0_gamma": ("The Forecasting Company", "Oct 2026", "256M", None, "https://pypi.org/project/tfc-t0/"),
+               "timestral": ("Mistral AI", "Oct 2026", "209M", "Modified MIT", "https://huggingface.co/mistralai/Timestral-209M"),
+               "tirex": ("NX-AI", "May 2025", "35M", None, "https://arxiv.org/abs/2505.23719"),
+               "tirex2": ("NX-AI", "2026", "38M", "Apache-2.0", None),
+               "moirai2": ("Salesforce", "Nov 2025", None, "CC BY-NC", "https://arxiv.org/abs/2511.11698"),
+               "toto": ("Datadog", "May 2025", "151M", "Apache-2.0", None),
+               "toto2": ("Datadog", "2026", "313M", "Apache-2.0", "https://huggingface.co/Datadog/Toto-2.0-313m"),
+               "toto2_1b": ("Datadog", "2026", "1B", "Apache-2.0", "https://huggingface.co/Datadog/Toto-2.0-1B"),
+               "sundial": ("Tsinghua University", None, "128M", "Apache-2.0", None),
+               "tabby": ("Huawei Noah's Ark Lab", "Sep 2026", "147M", "CC BY-NC 4.0", "https://huggingface.co/paris-noah/Tabby"),
+               "tabby_pretrain": ("Huawei Noah's Ark Lab", "Sep 2026", "146M", "CC BY-NC 4.0", "https://huggingface.co/paris-noah/Tabby-Pretrain"),
+               "timeh2o": ("H2O.ai", "Oct 2026", "108M", "Non-commercial", "https://huggingface.co/h2oai/timeh2o-v1"),
+               "ttm_r2": ("IBM", "2024", None, "Apache-2.0", "https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2")}
 # the names people search for; a *_cov variant is the same model with covariates
 MODEL_LABEL = {"chronos2": "Chronos-2", "chronos_bolt": "Chronos-Bolt", "timesfm3": "TimesFM 3", "timesfm25": "TimesFM 2.5", "timestral": "Timestral",
                "t0_alpha": "t0-alpha", "t0_beta": "t0-beta", "t0_gamma": "t0-gamma", "tirex": "TiRex", "tirex2": "TiRex-2", "moirai2": "Moirai 2",
                "tabby": "Tabby", "tabby_pretrain": "Tabby (pretrained)", "toto": "Toto", "toto2": "Toto 2", "toto2_1b": "Toto 2 (1B)", "sundial": "Sundial",
                "timeh2o": "TimeH2O", "ttm_r2": "TinyTimeMixer", "autoarima": "AutoARIMA", "autoets": "AutoETS", "autotheta": "AutoTheta", "autoces": "AutoCES",
                "tbats": "TBATS", "lgbm_prod": "LightGBM (tuned)", "lgbm_cov": "LightGBM with weather", "lgbm_lags": "LightGBM on lags",
-               "naive_daily": "Naive daily", "naive_weekly": "Naive weekly", "climatology": "Climatology", "ens_fm": "Foundation model ensemble",
+               "lgbm_cov_2y": "LightGBM with weather (2 years)", "lin_cov": "Linear regression with weather", "lin_cov_2y": "Linear regression with weather (2 years)",
+               "lin_lags": "Linear regression on lags", "theta_daily": "Theta", "naive_daily": "Naive daily", "naive_weekly": "Naive weekly", "climatology": "Climatology", "ens_fm": "Foundation model ensemble",
                "ens_fm_cov": "Foundation model ensemble with weather", "ens_hybrid": "Hybrid ensemble", "tso_cutoff": "Grid operators' forecast at the cut-off",
                "tso_final": "Grid operators' final forecast"}
 DISPLAY = {"tso_cutoff": "TSO_cutoff", "tso_final": "TSO_final"}   # as app.js
@@ -140,42 +168,6 @@ def _best_by_target(s: pd.DataFrame, cfg, refs: set[str], phase: str = "live", t
 
 def _f(v, d=3):
     return "–" if v is None or (isinstance(v, float) and not math.isfinite(v)) else f"{v:.{d}f}"
-
-
-def _snapshot(st: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, generated: str) -> str:
-    live = s[s["phase"] == "live"]
-    d0, d1, nd = live["issue_date"].min(), live["issue_date"].max(), live["issue_date"].nunique()
-    zones = ", ".join(v.get("label", z) for z, v in cfg["zones"].items())
-    ranked = st[st["rank"].notna()].head(15)
-    rows = "".join(
-        f"<tr><td>{int(r['rank'])}</td><td><a href=\"models/{html.escape(r['model'])}/\">{html.escape(r['model'])}</a></td><td>{r['elo']:.0f}</td><td>{_f(r['rel_mae'])}</td>"
-        f"<td>{r['series']}</td><td>{r['races']}</td></tr>" for _, r in ranked.iterrows())
-    per_target = "".join(
-        f"<li>{TARGET_LABEL.get(t, t)}: " + ", ".join(f"{html.escape(x['model'])} ({x['rel_mae']:.3f})" for x in lst) + "</li>"
-        for t, lst in best.items())
-    return f"""
-<section id="snapshot" class="wrap snapshot">
-<details>
-<summary>Plain-text summary of the live standings (updated {html.escape(generated)})</summary>
-<p>EnergyBench by Foretec is an open, live benchmark for day-ahead electricity forecasting. Every day at
-{html.escape(cfg['issue_time'])} {html.escape(cfg['timezone'])} time, before the {html.escape(cfg.get('gate', '12:00'))} day-ahead
-auction gate, every model forecasts each quarter-hour of the next delivery day for price, wind, solar and load in
-{html.escape(zones)} ({len(cfg['zones']) * len(cfg['targets'])} series), from one frozen set of public inputs
-(the series' history, three numerical weather prediction models, the ENTSO-E load forecast, fuel prices).
-Forecasts are scored against the grid operators' published actuals.</p>
-<p>Live standings over {nd} issue days ({d0} to {d1}), all zones and targets. Elo: a Bradley–Terry rating on
-the Elo scale from head-to-head games, one race per issue day and series, won by the lower error.
-Rel. MAE: the model's absolute errors pooled per series and divided by those of {html.escape(cfg['baseline'])}
-(the same quarter-hour one week earlier) on the same days, then averaged across series; below 1 beats it.</p>
-<table><thead><tr><th>#</th><th>Model</th><th>Elo</th><th>Rel. MAE</th><th>Series</th><th>Races</th></tr></thead>
-<tbody>{rows}</tbody></table>
-<p>Lowest Rel. MAE per target (live, models forecasting every zone):</p><ul>{per_target}</ul>
-<p>Data: <a href="data/summary.json">every score (JSON)</a>, <a href="leaderboard.csv">standings (CSV)</a>,
-<a href="llms.txt">overview for AI agents</a>, <a href="methodology.html">methodology</a>.
-Licence: <a href="{LICENSE[1]}" rel="license">{LICENSE[0]}</a>.</p>
-</details>
-</section>
-"""
 
 
 def _head(page: str, title: str, cfg, jsonld: list[dict] | None) -> str:
@@ -338,111 +330,166 @@ def _link(m: str, pre: str = "../") -> str:
     return f'<a href="{pre}{html.escape(m)}/">{html.escape(DISPLAY.get(m, m))}</a>'
 
 
-def _model_body(info: dict, r, st: pd.DataFrame, by_target: dict, per: pd.DataFrame, bt: pd.DataFrame, cfg, field: int) -> tuple[str, str]:
-    """The page body and its meta description, in words drawn from this model's own scores."""
-    e, m = html.escape, info["name"]
-    label, rel = _label(m), r["rel_mae"]
-    days = f"{r['first_day']} to {r['last_day']}"
-    if pd.notna(r["rank"]):
-        head = f"{DISPLAY.get(m, m)} ranks #{int(r['rank'])} of {field} on the EnergyBench live leaderboard"
-    elif info["ensemble"]:
-        head = f"{m} is an ensemble of models in the field, so it stays out of the default ranking"
-    elif info["reference"]:
-        head = f"{DISPLAY.get(m, m)} is a reference published after the gate, so it is not ranked"
-    else:
-        head = f"{m} has {r['races']} live races so far, too few for a rank"
-    gain = " It is the baseline every other model is measured against." if m == cfg["baseline"] else \
-        f" Its error is {rel:.0%} of a forecast that repeats the same quarter-hour one week earlier." if rel < 1 else \
-        " It does not beat a forecast that repeats the same quarter-hour one week earlier."
-    lede = f"{head}, with a Rel. MAE of {rel:.3f} over {r['series']} series ({days}).{gain}"
-    rows = [("Rank", f"#{int(r['rank'])} of {field}" if pd.notna(r["rank"]) else "Not ranked"),
-            ("Elo", f"{r['elo']:.0f}" if pd.notna(r["elo"]) else "–"), ("Rel. MAE", f"{rel:.3f}"), ("Races", str(r["races"]))]
-    stats = "".join(f"<div><b>{e(v)}</b><span>{e(k)}</span></div>" for k, v in rows)
+def _when(d: str) -> str:
+    x = pd.Timestamp(d)
+    return f"{x.day} {x.strftime('%b %Y')}"
+
+
+def _icon(paths: str) -> str:
+    return f'<svg class="mp-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">{paths}</svg>'
+
+
+def _kind(i: dict) -> str:
+    m, fam = i["name"], i["family"]
+    if fam in ("ensemble", "tso"):
+        return {"ensemble": "Ensemble", "tso": "Grid operator forecast"}[fam]
+    if m.startswith("lgbm"):
+        return "Gradient boosting"
+    if m.startswith("lin_"):
+        return "Linear regression"
+    if fam == "baseline":
+        return "Statistical model" if m.startswith(("auto", "tbats", "theta")) else "Baseline"
+    return "Foundation model"
+
+
+def _facts(m: str) -> dict:
+    """What is known about the model itself. Unknown fields stay out: never a guess in the infobox."""
+    base = m[:-4] if m.endswith("_cov") else m
+    return dict(zip(("maker", "released", "size", "licence", "source"), MODEL_FACTS.get(base, ())))
+
+
+def _trend(days: list[str], me: pd.Series, field: pd.Series) -> str:
+    """7-day running Rel. MAE of the model against the field's median, with the baseline at 1."""
+    W, H, L, R, T, B = 720, 190, 34, 92, 10, 24
+    top = max(1.05, float(np.nanmax(me.values)) * 1.05, float(np.nanmax(field.values)) * 1.05)
+    x = lambda i: L + (W - L - R) * i / max(len(days) - 1, 1)   # noqa: E731
+    y = lambda v: T + (H - T - B) * (1 - v / top)               # noqa: E731
+    line = lambda s: " ".join(f"{x(i):.1f},{y(s.iloc[i]):.1f}" for i in range(len(days)) if pd.notna(s.iloc[i]))   # noqa: E731
+    grid = "".join(f'<line class="g" x1="{L}" x2="{W - R}" y1="{y(v):.1f}" y2="{y(v):.1f}"/><text class="t" x="{L - 7}" y="{y(v) + 4:.1f}" text-anchor="end">{v:g}</text>'
+                   for v in (0, 0.5, 1) if v <= top)
+    last = [i for i in range(len(days)) if pd.notna(me.iloc[i])][-1]
+    lastf = [i for i in range(len(days)) if pd.notna(field.iloc[i])][-1]
+    my, fy = y(me.iloc[last]), y(field.iloc[lastf])
+    if abs(my - fy) < 15:      # the end labels never overlap
+        my, fy = (my - 8, fy + 8) if my <= fy else (my + 8, fy - 8)
+    hit = "".join(f'<circle class="h" cx="{x(i):.1f}" cy="{y(me.iloc[i]):.1f}" r="9"><title>{_when(days[i])}: {me.iloc[i]:.3f}</title></circle>'
+                  for i in range(len(days)) if pd.notna(me.iloc[i]))
+    return (f'<svg class="mp-trend" viewBox="0 0 {W} {H}" role="img" aria-label="Running error over time against the field">{grid}'
+            f'<polyline class="f" points="{line(field)}"/><polyline class="m" points="{line(me)}"/>'
+            f'<circle class="d" cx="{x(last):.1f}" cy="{y(me.iloc[last]):.1f}" r="4.5"/>'
+            f'<text class="l" x="{x(last) + 10:.1f}" y="{my + 4:.1f}">This model</text><text class="t" x="{x(lastf) + 10:.1f}" y="{fy + 4:.1f}">Field median</text>'
+            f'<text class="t" x="{L}" y="{H - 5}">{_when(days[0])}</text><text class="t" x="{W - R}" y="{H - 5}" text-anchor="end">{_when(days[-1])}</text>{hit}</svg>')
+
+
+def _strip(values: list[float], mine: float, name: str) -> str:
+    """Where the model sits in the field for one target: every ranked model a dot, this one marked."""
+    W, H, CAP = 420, 34, 1.25
+    x = lambda v: 8 + (W - 16) * min(v, CAP) / CAP   # noqa: E731
+    dots = "".join(f'<circle class="o" cx="{x(v):.1f}" cy="{H / 2}" r="3.5"/>' for v in values)
+    return (f'<svg class="mp-strip" viewBox="0 0 {W} {H}" role="img" aria-label="{html.escape(name)}: Rel. MAE {mine:.3f} among the field">'
+            f'<line class="g" x1="{x(1):.1f}" x2="{x(1):.1f}" y1="3" y2="{H - 3}"/>{dots}'
+            f'<circle class="m" cx="{x(mine):.1f}" cy="{H / 2}" r="7.5"><title>{html.escape(name)}: {mine:.3f}</title></circle></svg>')
+
+
+def _model_body(i: dict, r, st: pd.DataFrame, targets: dict, per: pd.DataFrame, trend: str, cfg, field: int, days_live: int) -> tuple[str, str]:
+    """The page: big numbers, charts and icons; the words are in the infobox and the meta description."""
+    e, m, rel = html.escape, i["name"], r["rel_mae"]
+    facts, kind = _facts(m), _kind(i)
+    ranked = pd.notna(r["rank"])
+    who = facts.get("maker") or ("Grid operators" if i["family"] == "tso" else "Foretec")
+    tag = " · ".join(x for x in (kind, who, facts.get("released")) if x)
+    gain = (f"{1 - rel:.0%}", "less error than repeating last week") if rel < 1 else (f"+{rel - 1:.0%}", "error against repeating last week")
+    if m == cfg["baseline"]:
+        gain = ("1.0", "the baseline every model is measured against")
+    numbers = [(f"#{int(r['rank'])}", f"of {field} ranked models"), gain, (f"{r['elo']:.0f}", "Elo rating"), (str(days_live), "days run live")] if ranked \
+        else [gain, (str(days_live), "days run live")]
+    big = "".join(f"<div><b>{e(a)}</b><span>{e(b)}</span></div>" for a, b in numbers)
+
+    strips = "".join(
+        f'<div class="mp-row">{_icon(TARGET_ICON[t])}<span class="mp-rl">{e(TARGET_LABEL.get(t, t))}</span>{_strip(x["field"], x["rel_mae"], TARGET_LABEL.get(t, t))}'
+        f'<b class="mp-rk">{"#%d" % x["rank"] if x["rank"] else format(x["rel_mae"], ".2f")}</b></div>' for t, x in targets.items())
 
     mine = per[per["model"] == m]
-    tgts = "".join(f"<tr><th>{TARGET_LABEL.get(t, t)}</th><td>{'#%d of %d' % (x['rank'], x['of']) if x['rank'] else 'Not ranked'}</td><td>{x['rel_mae']:.3f}</td><td>{x['series']}</td></tr>"
-                   for t, x in by_target.items())
-    zones = [z for z in cfg["zones"] if (mine["zone"] == z).any()]
     tg = [t for t in cfg["targets"] if (mine["target"] == t).any()]
-    cell = {(x.zone, x.target): (x.rel, x.place) for x in mine.itertuples()}
+    cell = {(x.zone, x.target): x for x in mine.itertuples()}
+    heads = "".join(f'<div class="mp-hc">{_icon(TARGET_ICON[t])}<span>{e(TARGET_LABEL.get(t, t).replace("Day-ahead ", "").capitalize())}</span></div>' for t in tg)
+    rows = ""
+    for z in cfg["zones"]:
+        if not (mine["zone"] == z).any():
+            continue
+        rows += f'<div class="mp-zone">{e(cfg["zones"][z].get("label", z))}</div>'
+        for t in tg:
+            c = cell.get((z, t))
+            if c is None:
+                rows += '<div class="mp-cell na">–</div>'
+                continue
+            n = per[(per["zone"] == z) & (per["target"] == t)]["place"].max()
+            v = 0.0 if pd.isna(c.place) or not n or n < 2 else 1 - (c.place - 1) / (n - 1)
+            top = f"#{int(c.place)}" if pd.notna(c.place) else "–"
+            rows += f'<div class="mp-cell" title="{e(top)}, Rel. MAE {c.rel:.3f}"><span><i style="--s:{8 + 30 * v:.0f}px"></i></span><b>{e(top)}</b></div>'
+    heat = f'<div class="mp-heat" style="--c:{len(tg)}"><div></div>{heads}{rows}</div>'
 
-    def td(z, t):
-        if (z, t) not in cell:
-            return "<td>–</td>"
-        v, place = cell[(z, t)]
-        return f"<td>{v:.3f}" + (f" <small>#{int(place)}</small>" if pd.notna(place) else "") + "</td>"
-    grid = "".join(f"<tr><th>{e(cfg['zones'][z].get('label', z))}</th>" + "".join(td(z, t) for t in tg) + "</tr>" for z in zones)
-    best = mine.nsmallest(1, "rel").iloc[0] if len(mine) else None
-    worst = mine.nlargest(1, "rel").iloc[0] if len(mine) else None
-    note = "" if best is None or len(mine) < 2 else (
-        f"<p>Closest to the actuals on {e(TARGET_LABEL.get(best['target'], best['target']).lower())} in {e(cfg['zones'][best['zone']].get('label', best['zone']))} "
-        f"({best['rel']:.3f}); furthest on {e(TARGET_LABEL.get(worst['target'], worst['target']).lower())} in {e(cfg['zones'][worst['zone']].get('label', worst['zone']))} ({worst['rel']:.3f}).</p>")
+    zone_rank = "" if mine["place"].isna().all() else (f'<section><h2>Rank by zone</h2>{heat}'
+                                                       '<p class="mp-key">Bigger is a better place among the ranked models in that series.</p></section>')
+    used = set(i["inputs"])
+    inputs = "" if i["family"] == "tso" else '<section><h2>What it sees</h2><div class="mp-inputs">' + "".join(
+        f'<div class="{"on" if k in used else "off"}" title="{"Uses" if k in used else "Does not use"} {e(v[1].lower())}">{_icon(v[0])}<span>{e(v[1])}</span>'
+        + (f"<small>{e(v[2])}</small>" if len(v) > 2 else "") + "</div>" for k, v in INPUTS.items()) + "</div></section>"
 
-    facts = [("Family", info["family"]), ("Inputs", "; ".join(INPUT_LABEL.get(i, i) for i in info["inputs"]))]
-    if info["members"]:
-        facts.append(("Members", None))
-    if info["retired"]:
-        facts.append(("Status", f"Retired: {info['retired']}"))
-    elif info["relegated"]:
-        facts.append(("Status", f"Out of the live run since {info['relegated']}: {info['relegated_reason']}"))
-    if info["caveat"]:
-        facts.append(("Caveat", info["caveat"]))
-    about = "".join(f"<tr><th>{e(k)}</th><td>{e(v) if v is not None else ', '.join(_link(x) for x in info['members'])}</td></tr>" for k, v in facts)
+    box = [("Type", e(kind)), ("Developer", e(who))]
+    box += [(k, e(facts[f])) for k, f in (("Released", "released"), ("Parameters", "size"), ("Licence", "licence")) if facts.get(f)]
+    if facts.get("source"):
+        host = re.sub(r"^https?://(www\.)?", "", facts["source"]).split("/")[0]
+        box.append(("Source", f'<a href="{e(facts["source"])}" rel="noopener">{e(host)}</a>'))
+    box += [("Live since", e(_when(r["first_day"]))), ("Series", str(r["series"]))]
+    if i["members"]:
+        box.append(("Members", ", ".join(_link(x) for x in i["members"])))
+    kin = [x for x in i["kin"] if x != m][:6]
+    if kin:
+        box.append(("Family", ", ".join(_link(x) for x in kin)))
+    if i["retired"] or i["relegated"]:
+        box.append(("Status", "Retired" if i["retired"] else f"Out of the live run since {e(_when(i['relegated']))}"))
+    infobox = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in box)
 
     order = st[st["rank"].notna()].reset_index(drop=True)
-    near = order.index[order["model"] == m]
-    around = order.iloc[max(near[0] - 2, 0):near[0] + 3] if len(near) else order.head(0)
-    around = "".join(f"<tr><td>{int(x['rank'])}</td><td>{_link(x['model'])}</td><td>{x['elo']:.0f}</td><td>{x['rel_mae']:.3f}</td></tr>" for _, x in around.iterrows() if x["model"] != m)
-    kin = [x for x in info["kin"] if x != m]
-    related = ('<section class="mp-sec"><h2>Near it on the leaderboard</h2><div class="panel tablewrap"><table><thead><tr><th>#</th><th>Model</th><th>Elo</th><th>Rel. MAE</th></tr></thead>'
-               f"<tbody>{around}</tbody></table></div></section>") if around else ""
-    if kin:
-        related += f'<section class="mp-sec"><h2>Same family</h2><p>{", ".join(_link(x) for x in kin)}</p></section>'
-    back = bt[bt["model"] == m]
-    backtest = "" if back.empty or pd.isna(back.iloc[0]["rel_mae"]) else (
-        f"<p>On the backtest days, kept apart from the live record, its Rel. MAE is {back.iloc[0]['rel_mae']:.3f}"
-        + (f" and it ranks #{int(back.iloc[0]['rank'])}" if pd.notna(back.iloc[0]["rank"]) else "") + ".</p>")
-    run = ("The grid operators publish this forecast themselves; the benchmark collects it and scores it like any other." if info["family"] == "tso"
-           else "This model no longer runs live; its record stays public." if info["retired"] or info["relegated"]
-           else f"The model runs every day at {cfg['issue_time']}, before the {cfg.get('gate', '12:00')} day-ahead auction gate, on the same frozen inputs as the rest of the field.")
-    body = f"""<h1>{e(label)}</h1>
-<p class="lede">{e(lede)}</p>
-<div class="mp-stats">{stats}</div>
-<section class="mp-sec"><h2>About this model</h2>
-<p>{e(info['description'])}</p>
-<div class="panel tablewrap"><table class="mini"><tbody>{about}</tbody></table></div></section>
-<section class="mp-sec"><h2>Accuracy by target</h2>
-<div class="panel tablewrap"><table><thead><tr><th>Target</th><th>Rank</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{tgts}</tbody></table></div></section>
-<section class="mp-sec"><h2>Accuracy by zone and target</h2>
-<p>Live Rel. MAE, with the place among the ranked models in that series. Below 1 beats the same quarter-hour one week earlier.</p>
-<div class="panel tablewrap"><table><thead><tr><th>Zone</th>{"".join(f"<th>{TARGET_LABEL.get(t, t)}</th>" for t in tg)}</tr></thead><tbody>{grid}</tbody></table></div>
-{note}{backtest}</section>
-{related}
-<section class="mp-sec"><h2>Check it yourself</h2>
-<p>{e(run)}
-<a href="../../?z=all&amp;t=all&amp;r=all&amp;c=all&amp;e=0&amp;a=mean&amp;m={e(m)}">See it on the leaderboard</a>, <a href="../../explorer.html">compare its forecasts with the actuals</a>,
-read <a href="../../methodology.html">how scoring works</a>, or open <a href="{REPO}/tree/main/models/{e(m)}" rel="noopener">its configuration</a>.</p></section>"""
-    bits = [head + (f": Rel. MAE {rel:.3f} over {r['series']} series" if pd.notna(rel) else ""), "Day-ahead price, wind, solar and load forecasts scored live"]
-    return body, ". ".join(bits) + "."
+    at = order.index[order["model"] == m]
+    near = order.iloc[max(at[0] - 1, 0):at[0] + 2] if len(at) else order.head(0)
+    near = "".join(f'<a href="../{e(x["model"])}/"><b>#{int(x["rank"])}</b> {e(DISPLAY.get(x["model"], x["model"]))}</a>' for _, x in near.iterrows() if x["model"] != m)
+    body = f"""<div class="mp-top">
+<div class="mp-main">
+<p class="mp-tag">{e(tag)}</p>
+<h1>{e(_label(m))}</h1>
+<p class="mp-id">{e(DISPLAY.get(m, m))}</p>
+<div class="mp-big">{big}</div>
+<section><h2>Error over time</h2>{trend}<p class="mp-key">Seven-day running error against repeating last week, where 1 is no better than that.</p></section>
+<section><h2>In the field</h2><div class="mp-strips">{strips}</div>
+<p class="mp-key">Each dot is a ranked model; further left is better. The line marks repeating last week.</p></section>
+{zone_rank}
+{inputs}
+</div>
+<aside class="mp-box"><dl>{infobox}</dl>
+<p class="mp-links"><a href="../../?z=all&amp;t=all&amp;r=all&amp;c=all&amp;e=0&amp;a=mean&amp;m={e(m)}">On the leaderboard</a><a href="../../explorer.html">Forecast Explorer</a><a href="{REPO}/tree/main/models/{e(m)}" rel="noopener">Configuration</a></p></aside>
+</div>
+{f'<nav class="mp-near" aria-label="Nearby models">{near}</nav>' if near else ''}"""
+    first = re.split(r"(?<=[.])\s", i["description"], maxsplit=1)[0][:150]
+    lead = f"#{int(r['rank'])} of {field} on EnergyBench" if ranked else "On EnergyBench"
+    return body, f"{_label(m)}: {lead}, Rel. MAE {rel:.3f} on live day-ahead energy forecasts. {first}"
 
 
 def _models_index(st: pd.DataFrame, cfg, info: dict, field: int) -> str:
-    def row(x, cells):
-        return f"<tr>{cells}<td>{_link(x['model'], '')}</td><td>{html.escape(_label(x['model']))}</td><td>{_f(x['rel_mae'])}</td><td>{x['series']}</td></tr>"
-    ranked = "".join(row(x, f"<td>{int(x['rank'])}</td><td>{x['elo']:.0f}</td>") for _, x in st[st["rank"].notna()].iterrows())
-    rest = st[st["rank"].isna() & st["model"].isin(info)]
-    others = "".join(row(x, "") for _, x in rest.iterrows())
-    return f"""<h1>Models in the benchmark</h1>
-<p class="lede">{field} ranked forecasting models, from time-series foundation models to gradient boosting, statistical baselines and the grid operators' own forecasts,
-all scored live on day-ahead electricity price, wind, solar and load in {len(cfg['zones'])} European bidding zones. Each has its own page with its scores per zone and target.</p>
-<section class="mp-sec"><h2>Ranked on live days</h2>
-<div class="panel tablewrap"><table><thead><tr><th>#</th><th>Elo</th><th>Model</th><th>Name</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{ranked}</tbody></table></div></section>
-<section class="mp-sec"><h2>Outside the ranking</h2>
-<p>Ensembles, references published after the gate, and models with too few live races so far.</p>
-<div class="panel tablewrap"><table><thead><tr><th>Model</th><th>Name</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{others}</tbody></table></div></section>"""
+    def row(x):
+        i, rel = info[x["model"]], x["rel_mae"]
+        return (f'<a class="mp-li" href="{html.escape(x["model"])}/"><b>{int(x["rank"]) if pd.notna(x["rank"]) else "–"}</b><span class="n">{html.escape(_label(x["model"]))}</span>'
+                f'<span class="k">{html.escape(_kind(i))}</span><span class="b"><i style="width:{min(rel, 1.25) / 1.25:.1%}"></i></span><span class="v">{_f(rel, 2)}</span></a>')
+    rows = st[st["model"].isin(info)]
+    return f"""<h1>Models</h1>
+<div class="mp-big"><div><b>{field}</b><span>ranked models</span></div><div><b>{len(cfg['targets'])}</b><span>targets</span></div><div><b>{len(cfg['zones'])}</b><span>bidding zones</span></div></div>
+<p class="mp-key">Bars show error against repeating last week: shorter is better.</p>
+<div class="mp-list">{"".join(row(x) for _, x in rows[rows["rank"].notna()].iterrows())}</div>
+<section><h2>Outside the ranking</h2><div class="mp-list">{"".join(row(x) for _, x in rows[rows["rank"].isna()].iterrows())}</div></section>"""
 
 
-def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked: set[str], st: pd.DataFrame, bt: pd.DataFrame, atomic_write) -> list[str]:
+def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked: set[str], st: pd.DataFrame, atomic_write) -> list[str]:
     """models/ and models/<name>/: the page text comes from the same standings as the leaderboard. Returns the paths, for the sitemap."""
     root = (site / "index.html").read_text() if (site / "index.html").exists() else ""
     header = re.search(r'<header class="top">.*?</header>', root, re.S)
@@ -453,8 +500,12 @@ def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked:
     ranked = set(st.loc[st["rank"].notna(), "model"])
     per = _series_scores(s, cfg, ranked)
     tables = {t: standings(s[s["target"] == t], cfg, unranked, "live") for t in cfg["targets"]}
-    live = set(st.loc[st["rel_mae"].notna(), "model"])
-    info = {m["name"]: m for m in models if m["name"] in live}
+    live = s[(s["phase"] == "live") & s["rel_mae"].notna()]
+    daily = live.pivot_table(index="issue_date", columns="model", values="rel_mae", aggfunc="mean").sort_index()
+    running = daily.rolling(7, min_periods=3).mean()
+    median = running[[c for c in running if c in ranked]].median(axis=1)
+    day_list = [str(d) for d in running.index]
+    info = {m["name"]: m for m in models if m["name"] in set(st.loc[st["rel_mae"].notna(), "model"])}
     family = {}
     for m in info.values():
         family.setdefault(m["family"], []).append(m["name"])
@@ -466,18 +517,21 @@ def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked:
     paths = ["models/"]
     for m, i in info.items():
         r = st[st["model"] == m].iloc[0]
-        by_target = {}
+        targets = {}
         for t, x in tables.items():
             row = x[x["model"] == m] if not x.empty else x
             if len(row) and pd.notna(row.iloc[0]["rel_mae"]):
                 y = row.iloc[0]
-                by_target[t] = {"rank": y["rank"] if pd.notna(y["rank"]) else None, "of": int(x["rank"].notna().sum()), "rel_mae": y["rel_mae"], "series": y["series"]}
-        body, desc = _model_body({**i, "kin": family[i["family"]] if i["family"] != "baseline" else []}, r, st, by_target, per, bt, cfg, field)
+                targets[t] = {"rank": y["rank"] if pd.notna(y["rank"]) else None, "rel_mae": y["rel_mae"],
+                              "field": x.loc[x["rank"].notna(), "rel_mae"].dropna().tolist()}
+        trend = _trend(day_list, running[m], median) if running[m].notna().sum() >= 2 else ""
+        body, desc = _model_body({**i, "kin": family[i["family"]] if i["family"] not in ("baseline", "nwp") else []}, r, st, targets, per, trend or "", cfg, field,
+                                 int(daily[m].notna().sum()))
         title = f"{_label(m)}: day-ahead energy forecast accuracy · EnergyBench"
         (out / m).mkdir(exist_ok=True)
         atomic_write(out / m / "index.html", _page("../../", f"models/{m}/", title, desc, body, [("Leaderboard", ""), ("Models", "models/"), (DISPLAY.get(m, m), f"models/{m}/")], chrome))
         paths.append(f"models/{m}/")
-    desc = "Every forecasting model in EnergyBench with its live rank, Elo and Rel. MAE on day-ahead electricity price, wind, solar and load."
+    desc = "Every forecasting model in EnergyBench with its live rank and error on day-ahead electricity price, wind, solar and load."
     atomic_write(out / "index.html", _page("../", "models/", "Energy forecasting models compared · EnergyBench", desc, _models_index(st, cfg, info, field),
                                            [("Leaderboard", ""), ("Models", "models/")], chrome_i))
     return paths
@@ -500,19 +554,16 @@ def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, 
     extra = []
     if models and not st.empty:
         try:      # one bad model must not cost the rest of the export
-            extra = write_models(site, s, cfg, models, refs, st, bt, atomic_write)
+            extra = write_models(site, s, cfg, models, refs, st, atomic_write)
         except Exception:  # noqa: BLE001
             log.exception("model pages failed")
     urls = [f"{SITE_URL}/{p}" for p, _ in PAGES.values()] + [f"{SITE_URL}/{p}" for p in extra] + [f"{SITE_URL}/llms.txt"]
     atomic_write(site / "sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                  + "".join(f"  <url><loc>{u}</loc><lastmod>{day}</lastmod><changefreq>daily</changefreq></url>\n" for u in urls) + "</urlset>\n")
-    snap = _snapshot(st, best, s, cfg, generated) if not st.empty else ""
     for page, (_, title) in PAGES.items():
         f = site / page
         if not f.exists():
             continue
         text = f.read_text()
         text = text.replace("</head>", _head(page, title, cfg, _dataset(cfg, s, generated) if page == "index.html" else None) + "</head>", 1)
-        if page == "index.html" and snap:
-            text = text.replace("</main>", snap + "</main>", 1)
         atomic_write(f, text)

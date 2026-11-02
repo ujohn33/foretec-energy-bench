@@ -367,6 +367,9 @@ def build_site(cfg) -> Path:
                        "kind": f"subprocess · env {r['env']}" if r.get("runner") == "subprocess"
                        else f"ensemble · median of {len(r['members'])}" if r.get("runner") == "ensemble"
                        else (r.get("estimator") or r.get("module", ""))})
+    has_page = set() if s.empty else set(s.loc[(s["phase"] == "live") & s["rel_mae"].notna(), "model"])   # seo.py writes a page for these
+    for m in models:
+        m["page"] = m["name"] in has_page
     summary = {
         "generated_utc": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
         "config": {
