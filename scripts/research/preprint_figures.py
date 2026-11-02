@@ -9,7 +9,6 @@ Writes fig_map.pdf (weather sampling points) and fig_heatmap.pdf (pooled Rel. MA
 import sys
 from pathlib import Path
 
-import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -24,26 +23,31 @@ ZONES = ["BE", "NL", "FR", "DE", "DK1", "DK2"]
 ZLAB = {"DE": "DE-LU"}
 
 # ---------------------------------------------------------------- weather sampling points
-c = pd.read_csv(root / "geo" / "centroids.csv")
-land = gpd.read_file(f"zip://{root / 'geo' / 'raw' / 'ne_10m_land.zip'}")
-fig, ax = plt.subplots(figsize=(6.3, 5.0))
-land.clip((-6, 41, 17, 58.5)).plot(ax=ax, color="#EEF0F3", edgecolor="#B9BEC7", linewidth=0.4)
-COL = {"BE": "#C8102E", "NL": "#E07B00", "FR": "#2E6DB4", "DE": "#3A3A3A", "DK1": "#2A9D8F", "DK2": "#7B5EA7"}
-MARK = {"wind_onshore": "^", "wind_offshore": "v", "solar": "o", "load": "s"}
-for (z, b), g in c.groupby(["zone", "bucket"]):
-    w = g["weight"] / g["weight"].sum()                      # share of the zone's bucket at each point
-    ax.scatter(g.longitude, g.latitude, s=8 + 160 * w, marker=MARK.get(b, "o"), facecolor=COL[z],
-               edgecolor="white", linewidth=0.3, alpha=0.85, zorder=3)
-for z, (x, y) in {"BE": (3.2, 50.15), "NL": (4.3, 53.15), "FR": (1.0, 45.5), "DE": (10.6, 50.0),
-                  "DK1": (8.2, 56.75), "DK2": (12.6, 55.9)}.items():
-    ax.text(x, y, ZLAB.get(z, z), color=COL[z], fontsize=8, fontweight="bold", ha="center", zorder=4)
-ax.set_xlim(-5.5, 16.5); ax.set_ylim(41.5, 58.0); ax.set_aspect(1 / np.cos(np.radians(50)))
-ax.set_xticks([]); ax.set_yticks([])
-for s in ax.spines.values(): s.set_color("#B9BEC7")
-ax.legend(handles=[Line2D([], [], marker=m, ls="", color="#555", markersize=5, label=b.replace("_", " "))
-                   for b, m in MARK.items()], loc="upper left", frameon=False, title="bucket", title_fontsize=7)
-fig.tight_layout(); fig.savefig(out / "fig_map.pdf", bbox_inches="tight"); plt.close(fig)
-print("map:", len(c), "points")
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None   # the map does not change with the results
+if gpd is not None:
+    c = pd.read_csv(root / "geo" / "centroids.csv")
+    land = gpd.read_file(f"zip://{root / 'geo' / 'raw' / 'ne_10m_land.zip'}")
+    fig, ax = plt.subplots(figsize=(6.3, 5.0))
+    land.clip((-6, 41, 17, 58.5)).plot(ax=ax, color="#EEF0F3", edgecolor="#B9BEC7", linewidth=0.4)
+    COL = {"BE": "#C8102E", "NL": "#E07B00", "FR": "#2E6DB4", "DE": "#3A3A3A", "DK1": "#2A9D8F", "DK2": "#7B5EA7"}
+    MARK = {"wind_onshore": "^", "wind_offshore": "v", "solar": "o", "load": "s"}
+    for (z, b), g in c.groupby(["zone", "bucket"]):
+        w = g["weight"] / g["weight"].sum()                      # share of the zone's bucket at each point
+        ax.scatter(g.longitude, g.latitude, s=8 + 160 * w, marker=MARK.get(b, "o"), facecolor=COL[z],
+                   edgecolor="white", linewidth=0.3, alpha=0.85, zorder=3)
+    for z, (x, y) in {"BE": (3.2, 50.15), "NL": (4.3, 53.15), "FR": (1.0, 45.5), "DE": (10.6, 50.0),
+                      "DK1": (8.2, 56.75), "DK2": (12.6, 55.9)}.items():
+        ax.text(x, y, ZLAB.get(z, z), color=COL[z], fontsize=8, fontweight="bold", ha="center", zorder=4)
+    ax.set_xlim(-5.5, 16.5); ax.set_ylim(41.5, 58.0); ax.set_aspect(1 / np.cos(np.radians(50)))
+    ax.set_xticks([]); ax.set_yticks([])
+    for s in ax.spines.values(): s.set_color("#B9BEC7")
+    ax.legend(handles=[Line2D([], [], marker=m, ls="", color="#555", markersize=5, label=b.replace("_", " "))
+                       for b, m in MARK.items()], loc="upper left", frameon=False, title="bucket", title_fontsize=7)
+    fig.tight_layout(); fig.savefig(out / "fig_map.pdf", bbox_inches="tight"); plt.close(fig)
+    print("map:", len(c), "points")
 
 # ---------------------------------------------------------------- Rel. MAE per series
 p = pd.read_csv(res / "perseries.csv")
@@ -85,7 +89,7 @@ fig.tight_layout(); fig.savefig(out / "fig_heatmap.pdf", bbox_inches="tight"); p
 print("heatmap:", M.shape)
 
 # ---------------------------------------------------------------- accuracy vs parameter count
-pf = out / "params.dat"          # model params(M) hist cov label: Rel. MAE on 16-19 Oct, every model on the same races
+pf = out / "params.dat"          # model params(M) hist cov label: Rel. MAE on the same races for every model
 if pf.exists():
     d = pd.read_csv(pf, sep=" ")
     fig, ax = plt.subplots(figsize=(5.4, 3.3))
@@ -101,13 +105,13 @@ if pf.exists():
                     (r.params, r["hist"]), xytext=(5, 0), textcoords="offset points",
                     fontsize=5.8, color="#4A4F58", va="center")
     big = d[d.params >= 90].sort_values("hist", ascending=False).reset_index(drop=True)
-    ys = np.linspace(0.875, 0.615, len(big))
+    ys = np.linspace(0.875, 0.43, len(big))
     for (_, r), y in zip(big.iterrows(), ys):
         ax.plot([r.params, 560], [r["hist"], y], color="#C3C7CE", lw=0.4, zorder=2)
         ax.text(590, y, f"{r.label.replace('~', ' ')} ({r.params:.0f}M)", fontsize=5.8, color="#4A4F58", va="center")
     ax.axhline(1.0, color="#555", lw=0.6, ls="--"); ax.text(2.6, 1.0, "seasonal naive", fontsize=5.8, va="bottom", color="#555")
-    ax.set_xscale("log"); ax.set_xlim(2.2, 1700); ax.set_ylim(0.3, 1.05)
-    ax.set_xlabel("parameters (millions, log scale)"); ax.set_ylabel("Rel. MAE, 16–25 October")
+    ax.set_xscale("log"); ax.set_xlim(2.2, 1700); ax.set_ylim(0.24, 1.05)
+    ax.set_xlabel("parameters (millions, log scale)"); ax.set_ylabel("Rel. MAE, 16–31 October")
     ax.grid(True, which="major", color="#E6E8EC", lw=0.5); ax.set_axisbelow(True)
     for sp in ("top", "right"): ax.spines[sp].set_visible(False)
     ax.legend(frameon=False, fontsize=6.5, loc="lower left")

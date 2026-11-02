@@ -1,5 +1,5 @@
 """Preprint numbers and figure data, live record, all six zones (usage: python preprint_all.py OUTDIR LAST_ISSUE_DATE).
-Run from the benchmark root. Writes standings.json, covpairs.csv, tso_pairs.json, perseries.csv, coverage.csv."""
+Run from the benchmark root. Writes standings.json, covpairs.csv, tso_pairs.json, perseries.csv, coverage.csv, scores_basis.parquet."""
 import glob, json, os, sys
 import numpy as np, pandas as pd, yaml
 
@@ -13,7 +13,11 @@ REF = {"tso_final"}
 s = pd.read_parquet(os.environ.get("SCORES", "results/scores.parquet"))
 s["issue_date"] = s.issue_date.astype(str)
 s = s[(s.issue_date <= last) & ~s.model.isin(hidden)].copy()
+# the paper's record: Danish load has too few scored days to weigh as much as a full series (Section 4.1), and the
+# ensembles count from 20 Oct, the day they first ran live (their earlier rows are computed back)
+s = s[~(s.zone.isin(["DK1", "DK2"]) & (s.target == "load")) & ~(s.model.str.startswith("ens_") & (s.issue_date < "2026-10-20"))].copy()
 s["n"] = s["n"].fillna(96)
+s.to_parquet(f"{out}/scores_basis.parquet", index=False)   # the other preprint scripts read this through SCORES
 K = ["issue_date", "zone", "target"]
 base = s[s.model == "naive_weekly"].set_index(K)[["mae", "rmse"]]
 gm = lambda a: float(np.exp(np.mean(np.log(np.asarray(a, float))))) if len(a) else None
