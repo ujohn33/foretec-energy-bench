@@ -387,7 +387,7 @@ def build_site(cfg) -> Path:
     _atomic_write(site / "data" / "summary.json", json.dumps(summary, separators=(",", ":"), allow_nan=False))
     try:      # what crawlers and AI agents read without JavaScript (seo.py); never fail the site build on it
         from .seo import write_seo
-        write_seo(site, s, cfg, {m["name"] for m in models if m["reference"]}, summary["generated_utc"], _atomic_write)
+        write_seo(site, s, cfg, {m["name"] for m in models if m["reference"]}, summary["generated_utc"], _atomic_write, models)
     except Exception:  # noqa: BLE001
         log.exception("seo export failed")
     try:      # the Forecast Value page: revenue of selling each forecast day-ahead, deviations at the imbalance price

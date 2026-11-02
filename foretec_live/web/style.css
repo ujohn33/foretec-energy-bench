@@ -755,3 +755,14 @@ body.card-mode > *:not(#share-card){display:none !important}
 .w-org[hidden]{display:none}
 .sponsor-note{margin:12px 0 0; font-size:.9rem; color:var(--ink2)} .sponsor-note a{color:var(--blue-ink)}
 .jrow .w-org{grid-column:1/-1}
+
+/* model pages (seo.py): static, no JavaScript */
+.mp{padding-top:28px; padding-bottom:56px}
+.mp-crumbs{font-size:.86rem; color:var(--ink2); margin-bottom:18px} .mp-crumbs a{color:var(--ink2)}
+.mp h1{margin-bottom:14px} .mp .lede{max-width:70ch}
+.mp-stats{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:24px 0 8px}
+.mp-stats div{background:var(--surface); border:1px solid var(--rule); border-radius:3px; padding:14px 16px}
+.mp-stats b{display:block; font-size:1.35rem; font-variant-numeric:lining-nums} .mp-stats span{font-size:.84rem; color:var(--ink2)}
+section.mp-sec{padding:28px 0 0; border-top:0} .mp-sec h2{margin-bottom:12px} .mp-sec p{max-width:70ch}
+.mp-sec .panel{padding:4px 16px} .mp-sec small{color:var(--ink2)} .mp-sec .panel + p{margin-top:14px}
+@media (max-width:560px){.mp-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -7,6 +7,7 @@ JavaScript (most AI agents do not) would see an empty benchmark. This module add
                     schema.org JSON-LD (the benchmark as a Dataset, for Google Dataset Search)
   leaderboard.csv   the standings per phase as a flat table
   llms.txt          a Markdown overview for AI agents (llmstxt.org): rules, metrics, current standings, data links
+  models/           one static page per model and an index of them, so each model has its own URL to link and to find
   robots.txt        every crawler allowed, AI crawlers named explicitly; sitemap.xml with each page's last update
 
 The standings are computed as the Leaderboard computes them by default (all zones and targets, every live issue
@@ -16,11 +17,16 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 import math
+import re
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+log = logging.getLogger(__name__)
 
 SITE_URL = "https://energybench.foretec.co"
 LICENSE = ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/")
@@ -36,6 +42,18 @@ PAGES = {
     "compete.html": ("compete.html", "Bidding Competition"),
 }
 TARGET_LABEL = {"price": "Day-ahead price", "wind": "Wind", "solar": "Solar", "load": "Load"}
+INPUT_LABEL = {"history": "the series' own history", "nwp": "weather forecasts from three numerical weather prediction models",
+               "load_forecast": "the ENTSO-E load forecast", "fuel": "fuel prices", "calendar": "calendar features"}
+# the names people search for; a *_cov variant is the same model with covariates
+MODEL_LABEL = {"chronos2": "Chronos-2", "chronos_bolt": "Chronos-Bolt", "timesfm3": "TimesFM 3", "timesfm25": "TimesFM 2.5", "timestral": "Timestral",
+               "t0_alpha": "t0-alpha", "t0_beta": "t0-beta", "t0_gamma": "t0-gamma", "tirex": "TiRex", "tirex2": "TiRex-2", "moirai2": "Moirai 2",
+               "tabby": "Tabby", "tabby_pretrain": "Tabby (pretrained)", "toto": "Toto", "toto2": "Toto 2", "toto2_1b": "Toto 2 (1B)", "sundial": "Sundial",
+               "timeh2o": "TimeH2O", "ttm_r2": "TinyTimeMixer", "autoarima": "AutoARIMA", "autoets": "AutoETS", "autotheta": "AutoTheta", "autoces": "AutoCES",
+               "tbats": "TBATS", "lgbm_prod": "LightGBM (tuned)", "lgbm_cov": "LightGBM with weather", "lgbm_lags": "LightGBM on lags",
+               "naive_daily": "Naive daily", "naive_weekly": "Naive weekly", "climatology": "Climatology", "ens_fm": "Foundation model ensemble",
+               "ens_fm_cov": "Foundation model ensemble with weather", "ens_hybrid": "Hybrid ensemble", "tso_cutoff": "Grid operators' forecast at the cut-off",
+               "tso_final": "Grid operators' final forecast"}
+DISPLAY = {"tso_cutoff": "TSO_cutoff", "tso_final": "TSO_final"}   # as app.js
 AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "anthropic-ai",
                "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot", "Bingbot"]
 
@@ -130,7 +148,7 @@ def _snapshot(st: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, generated: str
     zones = ", ".join(v.get("label", z) for z, v in cfg["zones"].items())
     ranked = st[st["rank"].notna()].head(15)
     rows = "".join(
-        f"<tr><td>{int(r['rank'])}</td><td>{html.escape(r['model'])}</td><td>{r['elo']:.0f}</td><td>{_f(r['rel_mae'])}</td>"
+        f"<tr><td>{int(r['rank'])}</td><td><a href=\"models/{html.escape(r['model'])}/\">{html.escape(r['model'])}</a></td><td>{r['elo']:.0f}</td><td>{_f(r['rel_mae'])}</td>"
         f"<td>{r['series']}</td><td>{r['races']}</td></tr>" for _, r in ranked.iterrows())
     per_target = "".join(
         f"<li>{TARGET_LABEL.get(t, t)}: " + ", ".join(f"{html.escape(x['model'])} ({x['rel_mae']:.3f})" for x in lst) + "</li>"
@@ -239,6 +257,7 @@ def _llms(st: pd.DataFrame, bt: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, 
               f"- [Leaderboard]({SITE_URL}/): standings by Elo, Rel. MAE and other metrics, filterable by zone, target and period",
               f"- [Forecast Explorer]({SITE_URL}/explorer.html): every model's forecast against the actual, per issue day and series, with the frozen inputs",
               f"- [Forecast Value]({SITE_URL}/value.html): revenue of a virtual 100 MW wind or solar asset selling each forecast day-ahead",
+              f"- [Models]({SITE_URL}/models/): one page per model with its ranks, its score per zone and target, and its inputs",
               f"- [Methodology]({SITE_URL}/methodology.html): task, data sources, scoring and ranking in full", "",
               "## Data", "",
               f"- [Standings (CSV)]({SITE_URL}/leaderboard.csv): live and backtest, one row per model",
@@ -248,7 +267,224 @@ def _llms(st: pd.DataFrame, bt: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, 
     return "\n".join(lines)
 
 
-def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, atomic_write) -> None:
+def _label(m: str) -> str:
+    base = m[:-4] if m.endswith("_cov") and m not in MODEL_LABEL else m
+    label = MODEL_LABEL.get(base, DISPLAY.get(m, m))
+    return f"{label} with weather inputs" if base != m and base in MODEL_LABEL else label
+
+
+def _series_scores(s: pd.DataFrame, cfg, ranked: set[str]) -> pd.DataFrame:
+    """Live Rel. MAE per model and series, pooled as in standings(), with the place among the ranked models."""
+    s = s[(s["phase"] == "live") & s["rel_mae"].notna()]
+    keys = ["issue_date", "zone", "target"]
+    g = s.join(s[s["model"] == cfg["baseline"]].set_index(keys)["mae"].rename("mae_b"), on=keys).dropna(subset=["mae_b"])
+    n = g["n"].fillna(96)
+    per = g.assign(ae=n * g["mae"], bae=n * g["mae_b"]).groupby(["model", "zone", "target"])[["ae", "bae"]].sum()
+    per = per[per["bae"] > 0].assign(rel=lambda x: x["ae"] / x["bae"]).reset_index()
+    per["place"] = per[per["model"].isin(ranked)].groupby(["zone", "target"])["rel"].rank(method="min")
+    return per
+
+
+def _up(fragment: str, pre: str) -> str:
+    """Header and footer of the root pages, with their relative links rewritten for a page deeper in the site."""
+    return re.sub(r'href="(?![a-z]+:|#)(?:\./)?([^"]*)"', lambda x: f'href="{pre}{x[1]}"', fragment)
+
+
+def _page(pre: str, path: str, title: str, desc: str, body: str, crumbs: list[tuple[str, str]], chrome: tuple[str, str]) -> str:
+    e = html.escape
+    url = f"{SITE_URL}/{path}"
+    trail = {"@context": "https://schema.org", "@type": "BreadcrumbList",
+             "itemListElement": [{"@type": "ListItem", "position": i + 1, "name": n, "item": f"{SITE_URL}/{u}"} for i, (n, u) in enumerate(crumbs)]}
+    fonts = ("https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400..700;1,400&family=Source+Code+Pro:wght@400"
+             "&family=Inter:ital,wght@0,600..800;1,500..900&display=swap")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(title)}</title>
+<meta name="description" content="{e(desc)}">
+<meta name="theme-color" content="#E6F0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1F3A" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="EnergyBench by Foretec">
+<meta property="og:title" content="{e(title)}">
+<meta property="og:description" content="{e(desc)}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{SITE_URL}/og-card.png?v=2">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="{pre}favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{fonts}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&text=LIVE&display=swap">
+<link rel="stylesheet" href="{pre}style.css">
+<script type="application/ld+json">{json.dumps(trail, ensure_ascii=False).replace("</", "<\\/")}</script>
+</head>
+<body>
+{chrome[0]}
+<main class="wrap mp">
+<nav class="mp-crumbs" aria-label="Breadcrumb">{" / ".join(f'<a href="{pre}{e(u)}">{e(n)}</a>' for n, u in crumbs[:-1])} / <span>{e(crumbs[-1][0])}</span></nav>
+{body}
+</main>
+{chrome[1]}
+</body>
+</html>
+"""
+
+
+def _link(m: str, pre: str = "../") -> str:
+    return f'<a href="{pre}{html.escape(m)}/">{html.escape(DISPLAY.get(m, m))}</a>'
+
+
+def _model_body(info: dict, r, st: pd.DataFrame, by_target: dict, per: pd.DataFrame, bt: pd.DataFrame, cfg, field: int) -> tuple[str, str]:
+    """The page body and its meta description, in words drawn from this model's own scores."""
+    e, m = html.escape, info["name"]
+    label, rel = _label(m), r["rel_mae"]
+    days = f"{r['first_day']} to {r['last_day']}"
+    if pd.notna(r["rank"]):
+        head = f"{DISPLAY.get(m, m)} ranks #{int(r['rank'])} of {field} on the EnergyBench live leaderboard"
+    elif info["ensemble"]:
+        head = f"{m} is an ensemble of models in the field, so it stays out of the default ranking"
+    elif info["reference"]:
+        head = f"{DISPLAY.get(m, m)} is a reference published after the gate, so it is not ranked"
+    else:
+        head = f"{m} has {r['races']} live races so far, too few for a rank"
+    gain = " It is the baseline every other model is measured against." if m == cfg["baseline"] else \
+        f" Its error is {rel:.0%} of a forecast that repeats the same quarter-hour one week earlier." if rel < 1 else \
+        " It does not beat a forecast that repeats the same quarter-hour one week earlier."
+    lede = f"{head}, with a Rel. MAE of {rel:.3f} over {r['series']} series ({days}).{gain}"
+    rows = [("Rank", f"#{int(r['rank'])} of {field}" if pd.notna(r["rank"]) else "Not ranked"),
+            ("Elo", f"{r['elo']:.0f}" if pd.notna(r["elo"]) else "–"), ("Rel. MAE", f"{rel:.3f}"), ("Races", str(r["races"]))]
+    stats = "".join(f"<div><b>{e(v)}</b><span>{e(k)}</span></div>" for k, v in rows)
+
+    mine = per[per["model"] == m]
+    tgts = "".join(f"<tr><th>{TARGET_LABEL.get(t, t)}</th><td>{'#%d of %d' % (x['rank'], x['of']) if x['rank'] else 'Not ranked'}</td><td>{x['rel_mae']:.3f}</td><td>{x['series']}</td></tr>"
+                   for t, x in by_target.items())
+    zones = [z for z in cfg["zones"] if (mine["zone"] == z).any()]
+    tg = [t for t in cfg["targets"] if (mine["target"] == t).any()]
+    cell = {(x.zone, x.target): (x.rel, x.place) for x in mine.itertuples()}
+
+    def td(z, t):
+        if (z, t) not in cell:
+            return "<td>–</td>"
+        v, place = cell[(z, t)]
+        return f"<td>{v:.3f}" + (f" <small>#{int(place)}</small>" if pd.notna(place) else "") + "</td>"
+    grid = "".join(f"<tr><th>{e(cfg['zones'][z].get('label', z))}</th>" + "".join(td(z, t) for t in tg) + "</tr>" for z in zones)
+    best = mine.nsmallest(1, "rel").iloc[0] if len(mine) else None
+    worst = mine.nlargest(1, "rel").iloc[0] if len(mine) else None
+    note = "" if best is None or len(mine) < 2 else (
+        f"<p>Closest to the actuals on {e(TARGET_LABEL.get(best['target'], best['target']).lower())} in {e(cfg['zones'][best['zone']].get('label', best['zone']))} "
+        f"({best['rel']:.3f}); furthest on {e(TARGET_LABEL.get(worst['target'], worst['target']).lower())} in {e(cfg['zones'][worst['zone']].get('label', worst['zone']))} ({worst['rel']:.3f}).</p>")
+
+    facts = [("Family", info["family"]), ("Inputs", "; ".join(INPUT_LABEL.get(i, i) for i in info["inputs"]))]
+    if info["members"]:
+        facts.append(("Members", None))
+    if info["retired"]:
+        facts.append(("Status", f"Retired: {info['retired']}"))
+    elif info["relegated"]:
+        facts.append(("Status", f"Out of the live run since {info['relegated']}: {info['relegated_reason']}"))
+    if info["caveat"]:
+        facts.append(("Caveat", info["caveat"]))
+    about = "".join(f"<tr><th>{e(k)}</th><td>{e(v) if v is not None else ', '.join(_link(x) for x in info['members'])}</td></tr>" for k, v in facts)
+
+    order = st[st["rank"].notna()].reset_index(drop=True)
+    near = order.index[order["model"] == m]
+    around = order.iloc[max(near[0] - 2, 0):near[0] + 3] if len(near) else order.head(0)
+    around = "".join(f"<tr><td>{int(x['rank'])}</td><td>{_link(x['model'])}</td><td>{x['elo']:.0f}</td><td>{x['rel_mae']:.3f}</td></tr>" for _, x in around.iterrows() if x["model"] != m)
+    kin = [x for x in info["kin"] if x != m]
+    related = ('<section class="mp-sec"><h2>Near it on the leaderboard</h2><div class="panel tablewrap"><table><thead><tr><th>#</th><th>Model</th><th>Elo</th><th>Rel. MAE</th></tr></thead>'
+               f"<tbody>{around}</tbody></table></div></section>") if around else ""
+    if kin:
+        related += f'<section class="mp-sec"><h2>Same family</h2><p>{", ".join(_link(x) for x in kin)}</p></section>'
+    back = bt[bt["model"] == m]
+    backtest = "" if back.empty or pd.isna(back.iloc[0]["rel_mae"]) else (
+        f"<p>On the backtest days, kept apart from the live record, its Rel. MAE is {back.iloc[0]['rel_mae']:.3f}"
+        + (f" and it ranks #{int(back.iloc[0]['rank'])}" if pd.notna(back.iloc[0]["rank"]) else "") + ".</p>")
+    run = ("The grid operators publish this forecast themselves; the benchmark collects it and scores it like any other." if info["family"] == "tso"
+           else "This model no longer runs live; its record stays public." if info["retired"] or info["relegated"]
+           else f"The model runs every day at {cfg['issue_time']}, before the {cfg.get('gate', '12:00')} day-ahead auction gate, on the same frozen inputs as the rest of the field.")
+    body = f"""<h1>{e(label)}</h1>
+<p class="lede">{e(lede)}</p>
+<div class="mp-stats">{stats}</div>
+<section class="mp-sec"><h2>About this model</h2>
+<p>{e(info['description'])}</p>
+<div class="panel tablewrap"><table class="mini"><tbody>{about}</tbody></table></div></section>
+<section class="mp-sec"><h2>Accuracy by target</h2>
+<div class="panel tablewrap"><table><thead><tr><th>Target</th><th>Rank</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{tgts}</tbody></table></div></section>
+<section class="mp-sec"><h2>Accuracy by zone and target</h2>
+<p>Live Rel. MAE, with the place among the ranked models in that series. Below 1 beats the same quarter-hour one week earlier.</p>
+<div class="panel tablewrap"><table><thead><tr><th>Zone</th>{"".join(f"<th>{TARGET_LABEL.get(t, t)}</th>" for t in tg)}</tr></thead><tbody>{grid}</tbody></table></div>
+{note}{backtest}</section>
+{related}
+<section class="mp-sec"><h2>Check it yourself</h2>
+<p>{e(run)}
+<a href="../../?m={e(m)}">See it on the leaderboard</a>, <a href="../../explorer.html">compare its forecasts with the actuals</a>,
+read <a href="../../methodology.html">how scoring works</a>, or open <a href="{REPO}/tree/main/models/{e(m)}" rel="noopener">its configuration</a>.</p></section>"""
+    bits = [head + (f": Rel. MAE {rel:.3f} over {r['series']} series" if pd.notna(rel) else ""), "Day-ahead price, wind, solar and load forecasts scored live"]
+    return body, ". ".join(bits) + "."
+
+
+def _models_index(st: pd.DataFrame, cfg, info: dict, field: int) -> str:
+    def row(x, cells):
+        return f"<tr>{cells}<td>{_link(x['model'], '')}</td><td>{html.escape(_label(x['model']))}</td><td>{_f(x['rel_mae'])}</td><td>{x['series']}</td></tr>"
+    ranked = "".join(row(x, f"<td>{int(x['rank'])}</td><td>{x['elo']:.0f}</td>") for _, x in st[st["rank"].notna()].iterrows())
+    rest = st[st["rank"].isna() & st["model"].isin(info)]
+    others = "".join(row(x, "") for _, x in rest.iterrows())
+    return f"""<h1>Models in the benchmark</h1>
+<p class="lede">{field} ranked forecasting models, from time-series foundation models to gradient boosting, statistical baselines and the grid operators' own forecasts,
+all scored live on day-ahead electricity price, wind, solar and load in {len(cfg['zones'])} European bidding zones. Each has its own page with its scores per zone and target.</p>
+<section class="mp-sec"><h2>Ranked on live days</h2>
+<div class="panel tablewrap"><table><thead><tr><th>#</th><th>Elo</th><th>Model</th><th>Name</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{ranked}</tbody></table></div></section>
+<section class="mp-sec"><h2>Outside the ranking</h2>
+<p>Ensembles, references published after the gate, and models with too few live races so far.</p>
+<div class="panel tablewrap"><table><thead><tr><th>Model</th><th>Name</th><th>Rel. MAE</th><th>Series</th></tr></thead><tbody>{others}</tbody></table></div></section>"""
+
+
+def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked: set[str], st: pd.DataFrame, bt: pd.DataFrame, atomic_write) -> list[str]:
+    """models/ and models/<name>/: the page text comes from the same standings as the leaderboard. Returns the paths, for the sitemap."""
+    root = (site / "index.html").read_text() if (site / "index.html").exists() else ""
+    header = re.search(r'<header class="top">.*?</header>', root, re.S)
+    footer = re.search(r"<footer>.*?</footer>", root, re.S)
+    chrome = tuple(_up(x[0], "../../") if x else "" for x in (header, footer))
+    chrome_i = tuple(_up(x[0], "../") if x else "" for x in (header, footer))
+    field = int(st["rank"].notna().sum())
+    ranked = set(st.loc[st["rank"].notna(), "model"])
+    per = _series_scores(s, cfg, ranked)
+    tables = {t: standings(s[s["target"] == t], cfg, unranked, "live") for t in cfg["targets"]}
+    live = set(st.loc[st["rel_mae"].notna(), "model"])
+    info = {m["name"]: m for m in models if m["name"] in live}
+    family = {}
+    for m in info.values():
+        family.setdefault(m["family"], []).append(m["name"])
+    out = site / "models"
+    out.mkdir(exist_ok=True)
+    for old in out.iterdir():      # a model hidden or removed since the last build loses its page
+        if old.is_dir() and old.name not in info:
+            shutil.rmtree(old)
+    paths = ["models/"]
+    for m, i in info.items():
+        r = st[st["model"] == m].iloc[0]
+        by_target = {}
+        for t, x in tables.items():
+            row = x[x["model"] == m] if not x.empty else x
+            if len(row) and pd.notna(row.iloc[0]["rel_mae"]):
+                y = row.iloc[0]
+                by_target[t] = {"rank": y["rank"] if pd.notna(y["rank"]) else None, "of": int(x["rank"].notna().sum()), "rel_mae": y["rel_mae"], "series": y["series"]}
+        body, desc = _model_body({**i, "kin": family[i["family"]] if i["family"] != "baseline" else []}, r, st, by_target, per, bt, cfg, field)
+        title = f"{_label(m)}: day-ahead energy forecast accuracy · EnergyBench"
+        (out / m).mkdir(exist_ok=True)
+        atomic_write(out / m / "index.html", _page("../../", f"models/{m}/", title, desc, body, [("Leaderboard", ""), ("Models", "models/"), (DISPLAY.get(m, m), f"models/{m}/")], chrome))
+        paths.append(f"models/{m}/")
+    desc = "Every forecasting model in EnergyBench with its live rank, Elo and Rel. MAE on day-ahead electricity price, wind, solar and load."
+    atomic_write(out / "index.html", _page("../", "models/", "Energy forecasting models compared · EnergyBench", desc, _models_index(st, cfg, info, field),
+                                           [("Leaderboard", ""), ("Models", "models/")], chrome_i))
+    return paths
+
+
+def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, atomic_write, models: list[dict] | None = None) -> None:
+    refs = refs | {m["name"] for m in models or [] if m["ensemble"]}   # as the Leaderboard's default: the ensembles leave the races
     st = standings(s, cfg, refs, "live")
     bt = standings(s, cfg, refs, "backtest")
     best = _best_by_target(s, cfg, refs, "live")
@@ -261,7 +497,13 @@ def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, 
     atomic_write(site / "robots.txt", "User-agent: *\nAllow: /\nDisallow: /api/\n\n" + "".join(f"User-agent: {b}\nAllow: /\nDisallow: /api/\n\n" for b in AI_CRAWLERS)
                  + f"Sitemap: {SITE_URL}/sitemap.xml\n")
     day = generated[:10]
-    urls = [f"{SITE_URL}/{p}" for p, _ in PAGES.values()] + [f"{SITE_URL}/llms.txt"]
+    extra = []
+    if models and not st.empty:
+        try:      # one bad model must not cost the rest of the export
+            extra = write_models(site, s, cfg, models, refs, st, bt, atomic_write)
+        except Exception:  # noqa: BLE001
+            log.exception("model pages failed")
+    urls = [f"{SITE_URL}/{p}" for p, _ in PAGES.values()] + [f"{SITE_URL}/{p}" for p in extra] + [f"{SITE_URL}/llms.txt"]
     atomic_write(site / "sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                  + "".join(f"  <url><loc>{u}</loc><lastmod>{day}</lastmod><changefreq>daily</changefreq></url>\n" for u in urls) + "</urlset>\n")
     snap = _snapshot(st, best, s, cfg, generated) if not st.empty else ""

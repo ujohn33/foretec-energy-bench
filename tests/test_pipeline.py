@@ -810,3 +810,11 @@ def test_relegation_spares_last_model_of_family(cfg):
         rows += [{"issue_date": d, "model": m, "zone": "BE", "target": "wind", "n": 96, "mae": v, "mae_base": 100.0} for m, v in (("solo_m", 95.0), ("fast_m", 60.0))]
     pd.DataFrame(rows).to_parquet(p["scores"], index=False)
     assert check(cfg, today=dt.date(2026, 10, 13))[0] == []
+
+
+def test_model_page_links():
+    """The site chrome keeps working from models/<name>/; a *_cov label is the base name with its weather inputs."""
+    from foretec_live.seo import _label, _up
+    out = _up('<a href="./">a</a><a href="explorer.html">b</a><a href="https://x.y">c</a><a href="mailto:a@b.c">d</a><a href="#top">e</a>', "../../")
+    assert out == '<a href="../../">a</a><a href="../../explorer.html">b</a><a href="https://x.y">c</a><a href="mailto:a@b.c">d</a><a href="#top">e</a>'
+    assert _label("timesfm3_cov") == "TimesFM 3 with weather inputs" and _label("lgbm_cov") == "LightGBM with weather" and _label("new_model") == "new_model"
