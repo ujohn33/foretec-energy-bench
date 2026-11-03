@@ -905,14 +905,13 @@ as a frontier. The frontier falls from $+63$\% (TimesFM 2.5, September 2025) to 
 to $+10$\% (Timestral, October 2026). Only the first step is larger than the intervals; the later releases improve on
 Chronos-2 by amounts within them. All models ran over the same weeks, so the figure compares model generations on a
 common test, not the progress of one forecaster over time. TimesFM 2.5 and Tabby take the covariates through a ridge
-regression, which may explain part of their distance, and t0-beta and TiRex-2, whose release months are not known, are
-shown apart and do not enter the frontier.
+regression, which may explain part of their distance.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-  width=0.95\linewidth, height=6.4cm, xmin=-0.8, xmax=17.3, ymin=-10, ymax=88,
+  width=0.95\linewidth, height=6.4cm, xmin=-0.8, xmax=14.4, ymin=-10, ymax=88,
   xtick={0,4,8,12}, xticklabels={Sep 2025,Jan 2026,May 2026,Sep 2026},
   x tick label style={font=\scriptsize}, y tick label style={font=\scriptsize},
   ytick={0,20,40,60,80}, yticklabels={0,$+20$\%,$+40$\%,$+60$\%,$+80$\%},
@@ -925,28 +924,24 @@ shown apart and do not enter the frontier.
   table[x=x, y=gap, y error plus=hi, y error minus=lo, restrict expr to domain={\thisrow{ridge}}{0:0}] {release.dat};
 \addplot[only marks, mark=*, mark size=2.3pt, fill=white, draw=covc, thick, error bars/.cd, y dir=both, y explicit, error bar style={covc!45}]
   table[x=x, y=gap, y error plus=hi, y error minus=lo, restrict expr to domain={\thisrow{ridge}}{1:1}] {release.dat};
-\addplot[only marks, mark=*, mark size=2.3pt, histc, error bars/.cd, y dir=both, y explicit, error bar style={histc!60}]
-  table[x=x, y=gap, y error plus=hi, y error minus=lo] {release_unknown.dat};
-\draw[black, semithick] (axis cs:-0.8,0) -- (axis cs:17.3,0);
+\draw[black, semithick] (axis cs:-0.8,0) -- (axis cs:14.4,0);
 \node[anchor=south west, font=\scriptsize] at (axis cs:-0.75,0) {\m{tso\_cutoff}};
-\draw[gray!60, densely dotted] (axis cs:14.9,-10) -- (axis cs:14.9,88);
-\node[font=\scriptsize, text=black!60, anchor=north] at (axis cs:16.0,-10) {date unknown};
 \begin{scope}[font=\scriptsize]
 \node[anchor=south west] at (axis cs:0.2,64.5) {TimesFM 2.5};
 \node[anchor=south west] at (axis cs:1.2,21.5) {Chronos-2};
 \node[anchor=east] at (axis cs:8.75,32.5) {t0-alpha};
 \node[anchor=south east] at (axis cs:10.8,21.0) {TimesFM 3.0};
-\node[anchor=south] at (axis cs:12.0,50.0) {Tabby};
+\node[anchor=south east, inner xsep=1pt] at (axis cs:11.9,49.0) {Tabby};
 \node[anchor=east] at (axis cs:12.55,4.0) {t0-gamma};
 \node[anchor=west] at (axis cs:13.45,4.0) {Timestral};
-\node[anchor=south east, inner xsep=1pt] at (axis cs:15.75,42.5) {t0-beta};
-\node[anchor=south west, inner xsep=1pt] at (axis cs:16.25,45.5) {TiRex-2};
+\node[anchor=south west, inner xsep=1pt] at (axis cs:12.1,41.8) {t0-beta};
+\node[anchor=south] at (axis cs:10.0,44.5) {TiRex-2};
 \end{scope}
 \end{axis}
 \end{tikzpicture}
 \caption{Foundation models with covariates against the grid operators' pre-gate forecast, by model release date, with
 day-bootstrap 95\% intervals; the line is the best model released so far. Open markers: covariates through a ridge
-regression; grey: release month not known, outside the frontier. Geometric mean of the per-series error ratios on the
+regression. Geometric mean of the per-series error ratios on the
 same 125 races (issue days 16--31 October 2026, eight series); every model ran on the same days, so the figure compares
 model generations, not progress over time.}
 \label{fig:release}

@@ -21,16 +21,17 @@ def pair(m, ref, races):
     x = s[s.model == m][K + ["mae", "n"]].rename(columns={"mae": "m"}).merge(s[s.model == ref][K + ["mae"]].rename(columns={"mae": "t"}), on=K)
     return x.merge(races, on=K).reset_index(drop=True)
 
-# in release order; months from MODEL_FACTS in foretec_live/seo.py (t0-beta and TiRex-2 have none and stay out of the order)
+# in release order; months from MODEL_FACTS in foretec_live/seo.py (TiRex-2: arXiv 2607.01204, 1 Jul 2026; t0-beta: Hugging Face, 16 Sep 2026)
 RELEASE = [("timesfm25_cov", "TimesFM 2.5", "Sep 2025"), ("chronos2_cov", "Chronos-2", "Oct 2025"), ("t0_alpha_cov", "t0-alpha", "Jun 2026"),
-           ("timesfm3_cov", "TimesFM 3.0", "Aug 2026"), ("tabby_cov", "Tabby", "Sep 2026"), ("t0_gamma_cov", "t0-gamma", "Oct 2026"), ("timestral_cov", "Timestral", "Oct 2026")]
+           ("tirex2_cov", "TiRex-2", "Jul 2026"), ("timesfm3_cov", "TimesFM 3.0", "Aug 2026"), ("tabby_cov", "Tabby", "Sep 2026"), ("t0_beta_cov", "t0-beta", "Sep 2026"),
+           ("t0_gamma_cov", "t0-gamma", "Oct 2026"), ("timestral_cov", "Timestral", "Oct 2026")]
 COMMON = [m for m, _, _ in RELEASE] + ["t0_beta_cov", "tirex2_cov", "tabby_pretrain_cov", "lgbm_prod", "chronos2", "timesfm3", "timesfm25", "t0_alpha", "t0_gamma", "timestral"]
 races = s[s.model == "tso_cutoff"][K]
 for m in COMMON:
     races = races.merge(s[s.model == m][K], on=K)
 res = {"races": len(races), "days": races.issue_date.nunique(), "first": races.issue_date.min(), "last": races.issue_date.max(), "per_series": races.groupby("key").size().to_dict(), "models": {}}
 ws = races[races.key.str.endswith(("wind", "solar"))]; ld = races[races.key.str.endswith("load")]
-for m in [r[0] for r in RELEASE] + ["t0_beta_cov", "tirex2_cov", "lgbm_prod"]:
+for m in [r[0] for r in RELEASE] + ["lgbm_prod"]:
     res["models"][m] = {"all": boot(pair(m, "tso_cutoff", races)), "wind_solar": boot(pair(m, "tso_cutoff", ws)), "load": boot(pair(m, "tso_cutoff", ld)),
                         "series": (100 * (ratio(pair(m, "tso_cutoff", races)) - 1)).round(1).to_dict()}
 res["same_family"] = {"timesfm3_vs_25": boot(pair("timesfm3_cov", "timesfm25_cov", races)), "t0_gamma_vs_alpha": boot(pair("t0_gamma_cov", "t0_alpha_cov", races))}
@@ -51,7 +52,7 @@ for tg in ("wind", "solar", "load"):
     res["weather"][tg] = v
 json.dump(res, open(f"{out}/tso_gap.json", "w"), indent=1)
 # release frontier figure: x in months since Sep 2025 (same-month releases set apart by 0.4), the best released so far,
-# ridge-covariate models flagged; models without a known release month go in a separate file, drawn apart
+# ridge-covariate models flagged
 MON = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
 months = lambda r: (int(r.split()[1]) - 2025) * 12 + MON[r.split()[0]] - 9
 RIDGE = {"timesfm25_cov", "tabby_cov", "tabby_pretrain_cov"}
@@ -62,8 +63,4 @@ with open(f"{out}/release.dat", "w") as o:
         x = months(r); k = seen.get(x, 0); seen[x] = k + 1
         g, lo, hi = res["models"][m]["all"]; best = g if best is None else min(best, g)
         o.write(f"{x + (0.4 * k - 0.2 if sum(1 for _, _, q in RELEASE if months(q) == x) > 1 else 0):.1f} {g:.1f} {g - lo:.1f} {hi - g:.1f} {best:.1f} {int(m in RIDGE)}\n")
-with open(f"{out}/release_unknown.dat", "w") as o:
-    o.write("x gap lo hi ridge\n")
-    for i, m in enumerate(("t0_beta_cov", "tirex2_cov")):
-        g, lo, hi = res["models"][m]["all"]; o.write(f"{15.6 + 0.8 * i:.1f} {g:.1f} {g - lo:.1f} {hi - g:.1f} 0\n")
 print(json.dumps({k: v for k, v in res.items() if k != "models"}, indent=None)); [print(m, v["all"], v["wind_solar"], v["load"]) for m, v in res["models"].items()]
