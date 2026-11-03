@@ -50,10 +50,20 @@ for tg in ("wind", "solar", "load"):
         v[lab] = round(gm(q.groupby("key").apply(lambda x: (x.n * x.mae).sum() / (x.n * x.b).sum(), include_groups=False)), 3)
     res["weather"][tg] = v
 json.dump(res, open(f"{out}/tso_gap.json", "w"), indent=1)
-best = None
+# release frontier figure: x in months since Sep 2025 (same-month releases set apart by 0.4), the best released so far,
+# ridge-covariate models flagged; models without a known release month go in a separate file, drawn apart
+MON = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+months = lambda r: (int(r.split()[1]) - 2025) * 12 + MON[r.split()[0]] - 9
+RIDGE = {"timesfm25_cov", "tabby_cov", "tabby_pretrain_cov"}
+best, seen = None, {}
 with open(f"{out}/release.dat", "w") as o:
-    o.write("x gap lo hi best\n")
-    for i, (m, _, _) in enumerate(RELEASE):
+    o.write("x gap lo hi best ridge\n")
+    for m, _, r in RELEASE:
+        x = months(r); k = seen.get(x, 0); seen[x] = k + 1
         g, lo, hi = res["models"][m]["all"]; best = g if best is None else min(best, g)
-        o.write(f"{i} {g:.1f} {g - lo:.1f} {hi - g:.1f} {best:.1f}\n")
+        o.write(f"{x + (0.4 * k - 0.2 if sum(1 for _, _, q in RELEASE if months(q) == x) > 1 else 0):.1f} {g:.1f} {g - lo:.1f} {hi - g:.1f} {best:.1f} {int(m in RIDGE)}\n")
+with open(f"{out}/release_unknown.dat", "w") as o:
+    o.write("x gap lo hi ridge\n")
+    for i, m in enumerate(("t0_beta_cov", "tirex2_cov")):
+        g, lo, hi = res["models"][m]["all"]; o.write(f"{15.6 + 0.8 * i:.1f} {g:.1f} {g - lo:.1f} {hi - g:.1f} 0\n")
 print(json.dumps({k: v for k, v in res.items() if k != "models"}, indent=None)); [print(m, v["all"], v["wind_solar"], v["load"]) for m, v in res["models"].items()]
