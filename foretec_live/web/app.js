@@ -116,9 +116,24 @@
   // model's score is the same under All, With and Without (zone and target choose which races count); only the
   // ensembles checkbox changes the field
   function raceRows(metric = S.metric) {
-    const rows = ROWS.filter((r) => !REF.has(r.model) && inEns(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
+    const unc = uncovered(metric);
+    const rows = ROWS.filter((r) => !REF.has(r.model) && !unc.has(r.model) && inEns(r.model) && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target) && r[metric] != null);
     const part = partialModels(rows);
     return part.size ? rows.filter((r) => !part.has(r.phase + "\t" + r.model)) : rows;
+  }
+  // The grid operators' forecasts cover only some series (no price; wind and solar only where a TSO publishes before
+  // the gate). Where the selection includes a series one of them does not forecast, its rating would rest on other
+  // series than everyone else's, so it is not rated: it leaves the races and is listed below the table without an Elo
+  // score. Model -> [series it forecasts, series selected].
+  function uncovered(metric = S.metric) {
+    const all = new Set(), has = {};
+    for (const r of ROWS) {
+      if (REF.has(r.model) || r[metric] == null || (S.zone !== "all" && r.zone !== S.zone) || (S.target !== "all" && r.target !== S.target)) continue;
+      const k = r.zone + "_" + r.target;
+      all.add(k);
+      if (FAM[r.model] === "tso") (has[r.model] ||= new Set()).add(k);
+    }
+    return new Map(Object.entries(has).filter(([, s]) => s.size < all.size).map(([m, s]) => [m, [s.size, all.size]]));
   }
   // All targets rates every model over the same targets: a model with no scored race in the rating window on a target
   // it does forecast (new on the leaderboard, its wind, solar and load actuals not in yet) would be rated on its other
@@ -1075,6 +1090,20 @@
           <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
           <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${mine.length}</td></tr>`;
+      }).join(""));
+    }
+    // grid operators' forecasts that do not cover every selected series: shown with their own errors, not rated
+    const unc = uncovered("rel_mae");
+    const uncList = [...unc.keys()].filter((m) => inField(m) && ROWS.some((r) => r.model === m && inPeriod.has(r.issue_date)));
+    if (uncList.length && st.length) {
+      const own = pooledStats(inPeriod, false);
+      const evals = (m) => ROWS.filter((r) => r.model === m && inPeriod.has(r.issue_date) && r.rel_mae != null && (S.zone === "all" || r.zone === S.zone) && (S.target === "all" || r.target === S.target)).length;
+      t.querySelector("tbody").insertAdjacentHTML("beforeend", uncList.map((m) => {
+        const q = own[m] || {}, [n, of] = unc.get(m);
+        return `<tr class="ref"><td class="pos">–</td><td class="model"><i style="background:${color(m)}"></i>${nmTip(m)}</td>
+          <td class="elo note">Not rated here: forecasts ${n} of the ${of} selected series; errors on its own series only</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? '<td class="r v dm">–</td>' : ""}<td class="r v">–</td>
+          <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
+          <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${evals(m)}</td></tr>`;
       }).join(""));
     }
   }

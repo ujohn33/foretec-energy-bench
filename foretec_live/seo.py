@@ -225,7 +225,7 @@ def _llms(st: pd.DataFrame, bt: pd.DataFrame, best: dict, s: pd.DataFrame, cfg, 
              f"- Gate-aligned by construction: inputs are fetched at the {cfg['issue_time']} cut-off and frozen; the weather is the "
              "numerical weather prediction run actually available then (ICON-EU, GFS, ECMWF IFS), plus the ENTSO-E load forecast and fuel prices.",
              "- The benchmark runs every model itself, so every model sees exactly the same inputs; entries are code, not forecasts.",
-             "- The grid operators' own forecasts are included: tso_cutoff (published before the gate, ranked) and tso_final "
+             "- The grid operators' own forecasts are included: tso_cutoff (published before the gate, ranked only on selections whose series it all forecasts) and tso_final "
              "(published after the gate, a reference that is not ranked).",
              "- Backtest days are scored the same way but kept apart from live days.", "",
              "## Metrics", "",
