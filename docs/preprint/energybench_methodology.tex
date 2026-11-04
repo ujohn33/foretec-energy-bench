@@ -83,14 +83,15 @@ market now trades quarter-hours, generation definitions that differ between data
 revised. Third, the evaluation window, the baseline and the metric can be chosen after the results are known. Fixed
 public datasets add a related problem: when the same test set is reused across studies, models and settings are
 selected on it repeatedly, and for foundation models the test period may also be part of the pretraining
-data~\cite{meyerleak}.
+data~\cite{meyerleak,impermanent}.
 
 A fourth problem concerns the evaluation of time-series foundation models. In operational energy forecasting, exogenous inputs are
 the standard, not an option: wind and solar forecasts are built on numerical weather predictions, load forecasts on
 temperature and calendar effects, and day-ahead price forecasts on forecasts of load, renewable infeed and fuel
 cost~\cite{hongreview,weron,lago}. The grid operators' own forecasts, the industry reference, are NWP-driven, and the
 energy forecasting competitions routinely supplied weather forecasts~\cite{gefcom}. The benchmarks on which
-foundation models are compared are, by contrast, mostly univariate. A model that forecasts tomorrow's solar output from
+foundation models are compared are, by contrast, mostly univariate; fev-bench~\cite{fevbench} and, for energy,
+FETS~\cite{fets} are recent exceptions. A model that forecasts tomorrow's solar output from
 the last four weeks of solar output alone is evaluated on a task that does not arise in practice, and a ranking
 obtained in this way is of limited use for choosing a model to deploy.
 
@@ -112,9 +113,13 @@ describes that configuration as of 31~October 2026 and the results to date.
 
 \paragraph{Static benchmarks.} Forecasting competitions have shaped the field since the M-competitions~\cite{m4}; the
 Monash archive~\cite{monash}, GIFT-Eval~\cite{gifteval} and fev-bench~\cite{fevbench} standardise the evaluation of
-general-purpose and foundation time-series models on fixed datasets. In energy, the Global Energy Forecasting
+general-purpose and foundation time-series models on fixed datasets; 46 of fev-bench's 100 tasks include
+covariates. In energy, the Global Energy Forecasting
 Competitions~\cite{gefcom} posed realistic tasks as one-off events, and Lago et al.~\cite{lago} published an open
-benchmark for day-ahead price forecasting with fixed splits and day-ahead exogenous forecasts for five markets. Fixed
+benchmark for day-ahead price forecasting with fixed splits and day-ahead exogenous forecasts for five markets.
+FETS~\cite{fets} compares foundation models, with and without covariates, against task-specific gradient-boosted and
+random-forest models on 54 public energy datasets in nine categories, with archived ECMWF IFS forecasts as weather
+covariates over the forecast horizon, and finds covariate-informed zero-shot foundation models best in aggregate. Fixed
 datasets have two weaknesses for the present purpose. They describe a past regime, and energy systems change quickly;
 and their test periods may have been seen, directly or through pretraining corpora, by the models they evaluate.
 Meyer et al.~\cite{meyerleak} document both direct overlap, where one model's training data serve as another's test
@@ -132,8 +137,15 @@ the t0 models accept known-future covariates, by different mechanisms and with d
 benefit is an empirical question that a univariate benchmark cannot answer, and it is the question an operational
 user needs answered first.
 
-\paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome is known. Each differs
+\paragraph{Live benchmarks.} Three recent benchmarks evaluate forecasts made before the outcome is known. Each differs
 from EnergyBench in a respect that matters for the questions studied here.
+
+Impermanent~\cite{impermanent}, from the TimeCopilot project, is motivated by the contamination of static test sets
+and by model selection on them. Its authors run the models themselves on univariate series of GitHub activity (issues,
+pull requests, pushes and stars of the 400 most-starred repositories) at hourly to monthly frequency, score forecasts as
+the observations arrive, by MASE and scaled CRPS, and compare foundation models (Chronos-2, Moirai~2, TimesFM 2.5,
+TiRex) with statistical baselines. It shares EnergyBench's design of running every model under common conditions, but
+its series are not energy series and it provides no covariates.
 
 TS-Arena~\cite{tsarena} implements a forecast pre-registration protocol for time-series foundation models: a round
 hands out each series' history up to its last published value and closes registration before the next value is
@@ -164,8 +176,8 @@ platform~\cite{predico} scores live renewable forecasts submitted to Elia and 50
 enrolled forecasters and without publishing their inputs.
 
 \paragraph{Positioning.} EnergyBench takes Energy-Arena's operational framing (the day-ahead gate defines the task)
-and TS-Arena's pre-registration logic (only a forecast made before the outcome is known is free of leakage), and differs
-from both in that it runs every model itself. Each day it fetches one information set at the gate-aligned
+and TS-Arena's pre-registration logic (only a forecast made before the outcome is known is free of leakage), and, like
+Impermanent, runs every model itself, on an information set that includes weather forecasts. Each day it fetches one information set at the gate-aligned
 cut-off, freezes and publishes it, and gives it to every entry: the information set is enforced rather than declared,
 and any forecast can be reproduced from its archived inputs. Foundation models from seven families also run with the
 same frozen covariates, so the effect of the weather inputs is measured for each model; all four targets
@@ -845,7 +857,9 @@ yesterday's price, whereas the foundation models receive a small set of ensemble
 best of them on wind (0.154--0.156, against 0.163--0.197) and level on solar (0.357--0.376, against 0.332--0.388), but
 considerably worse on load (1.025--1.035), where 28 days are too few to learn the response of load to the weather. Trained on
 two years, \m{lgbm\_prod} does better. On the days both ran (16--31 October) it reaches 0.293, against 0.322 for
-\m{lgbm\_cov}, within the range of the native-covariate foundation models (0.269--0.323).
+\m{lgbm\_cov}, within the range of the native-covariate foundation models (0.269--0.323). The direction agrees with FETS~\cite{fets}, where
+covariate-informed zero-shot foundation models also outperformed gradient-boosted models trained on the target data,
+although on fixed historical test blocks rather than live.
 
 \subsection{The full field over the last twelve days}
 
@@ -1058,6 +1072,11 @@ arXiv:2410.10393, 2024.
 \bibitem{meyerleak} M.~Meyer, S.~Kaltenpoth, K.~Zalipski, O.~M\"uller. Rethinking evaluation in the era of time
 series foundation models: (un)known information leakage challenges. arXiv:2510.13654, 2025.
 \bibitem{fevbench} O.~Shchur et al. fev-bench: a realistic benchmark for time series forecasting. arXiv:2509.26468, 2025.
+\bibitem{fets} M.~Obermeier, M.~Pruckner, F.~Haselbeck, A.~Zeiselmair. FETS benchmark: foundation models enable scalable
+and generalizable energy time series forecasting. \emph{Energy and AI}, 100867, 2026. arXiv:2604.22328.
+\bibitem{impermanent} A.~Garza, R.~Rosillo, R.~Mendoza-Smith, D.~Salinas, A.~R.~Williams, A.~Ashok, M.~Goswami,
+J.~M.~Ju\'arez. Impermanent: a live benchmark for temporal generalization in time series forecasting.
+arXiv:2603.08707, 2026.
 \bibitem{gefcom} T.~Hong, P.~Pinson, S.~Fan, H.~Zareipour, A.~Troccoli, R.~J.~Hyndman. Probabilistic energy
 forecasting: Global Energy Forecasting Competition 2014 and beyond. \emph{International Journal of Forecasting}
 32(3):896--913, 2016.
