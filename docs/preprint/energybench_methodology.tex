@@ -53,10 +53,10 @@
 
 \begin{abstract}
 \noindent
-Comparisons of energy forecasting models usually rest on backtests, which are prone to look-ahead bias: inputs published
-after the forecast would have been issued, such as later weather-model runs or revised data, take the place of the
-information that was available at the time. EnergyBench
-evaluates every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
+Energy forecasting models are usually compared on backtests and fixed public datasets. Backtests can use data that
+did not yet exist when the forecast would have been made, and a fixed test set, reused across studies and possibly
+contained in the pretraining data of foundation models, invites overfitting to the benchmark. EnergyBench evaluates
+every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
 every model forecasts the next day's price, wind and solar generation and load on the 15-minute grid for six bidding
 zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike existing live benchmarks, EnergyBench runs the models itself, on one
 information set that it freezes at the cut-off and publishes, including three numerical weather prediction models, so that
@@ -65,7 +65,7 @@ pooled per series against a seasonal-naive baseline, and models are ranked by a 
 with a day-bootstrap interval. The field spans baselines, linear and gradient-boosted models on the frozen weather,
 eighteen time-series foundation models from eleven families, ensembles, and the grid operators' own forecasts. Over the
 first thirty live days, the covariates reduced the error of each of the ten foundation models run with and without
-them by 38--52\% on matched races (45--52\% for the seven that accept them natively; 64--72\% on wind, 55--62\% on
+them by 38--52\% on matched races (64--72\% on wind, 55--62\% on
 solar). Used zero-shot, these models match or outperform a LightGBM model trained on the same covariates. Model size,
 from 3M to 331M parameters, has a much smaller effect, and median ensembles of the covariate models rank highest. The grid
 operators' pre-gate forecasts remain ahead on wind and solar, where the best single foundation models have 20--28\% more
@@ -80,7 +80,10 @@ backtests. First, the information set drifts: a forecast nominally made at 11:30
 were published hours later, from actuals that were still provisional, or from a TSO forecast that only appears after
 the gate. Second, the target may differ from the quantity the market trades, for example hourly values where the
 market now trades quarter-hours, generation definitions that differ between data providers, or actuals that were later
-revised. Third, the evaluation window, the baseline and the metric can be chosen after the results are known.
+revised. Third, the evaluation window, the baseline and the metric can be chosen after the results are known. Fixed
+public datasets add a related problem: when the same test set is reused across studies, models and settings are
+selected on it repeatedly, and for foundation models the test period may also be part of the pretraining
+data~\cite{meyerleak}.
 
 A fourth problem concerns the evaluation of time-series foundation models. In operational energy forecasting, exogenous inputs are
 the standard, not an option: wind and solar forecasts are built on numerical weather predictions, load forecasts on
@@ -91,9 +94,10 @@ foundation models are compared are, by contrast, mostly univariate. A model that
 the last four weeks of solar output alone is evaluated on a task that does not arise in practice, and a ranking
 obtained in this way is of limited use for choosing a model to deploy.
 
-A live benchmark that provides every entry with the same inputs avoids the first two problems. If each
+A live benchmark that provides every entry with the same inputs avoids the first two problems and the risk of contamination. If each
 model runs at the actual cut-off on the data available at that time, weather forecasts included, and its forecast is
-locked before the actual gate, look-ahead is excluded, and the record grows daily and is public. The drawback is
+locked before the actual gate, look-ahead is excluded. Because the outcomes do not yet exist when the forecasts are
+made, no model can have been trained or tuned on them, and the record grows daily and is public. The drawback is
 that a live record is short and its standings vary from day to day. The design described below accounts for this
 variability. Errors are pooled before they are normalised, rankings are reported with intervals, and only live
 forecasts are reported. The third problem, the choice of analysis after the results are known, is reduced but not
@@ -113,6 +117,8 @@ Competitions~\cite{gefcom} posed realistic tasks as one-off events, and Lago et 
 benchmark for day-ahead price forecasting with fixed splits and day-ahead exogenous forecasts for five markets. Fixed
 datasets have two weaknesses for the present purpose. They describe a past regime, and energy systems change quickly;
 and their test periods may have been seen, directly or through pretraining corpora, by the models they evaluate.
+Meyer et al.~\cite{meyerleak} document both direct overlap, where one model's training data serve as another's test
+set, and temporal overlap between correlated training and test series in the evaluation of foundation models.
 Retrospective energy studies also often leave the information set implicit: several price-forecasting studies use
 ENTSO-E's day-ahead wind and solar forecasts as inputs although those are published only after 18:00 on $D-1$, six
 hours after the auction closes~\cite{energyarena}.
@@ -1049,6 +1055,8 @@ forecasting methods. \emph{International Journal of Forecasting} 36(1):54--74, 2
 forecasting archive. \emph{NeurIPS Datasets and Benchmarks}, 2021.
 \bibitem{gifteval} T.~Aksu et al. GIFT-Eval: a benchmark for general time series forecasting model evaluation.
 arXiv:2410.10393, 2024.
+\bibitem{meyerleak} M.~Meyer, S.~Kaltenpoth, K.~Zalipski, O.~M\"uller. Rethinking evaluation in the era of time
+series foundation models: (un)known information leakage challenges. arXiv:2510.13654, 2025.
 \bibitem{fevbench} O.~Shchur et al. fev-bench: a realistic benchmark for time series forecasting. arXiv:2509.26468, 2025.
 \bibitem{gefcom} T.~Hong, P.~Pinson, S.~Fan, H.~Zareipour, A.~Troccoli, R.~J.~Hyndman. Probabilistic energy
 forecasting: Global Energy Forecasting Competition 2014 and beyond. \emph{International Journal of Forecasting}
