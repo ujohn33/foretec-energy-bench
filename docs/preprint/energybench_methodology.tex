@@ -33,11 +33,13 @@
 \newcommand{\m}[1]{\texttt{#1}}
 
 \title{\textbf{EnergyBench: a live, gate-aligned benchmark\\of day-ahead forecasts for European power markets}}
-\author{Evgenii Genov$^{1}$ \qquad Ander Martinez Alonso$^{1,2}$ \qquad Christoph Bergmeir$^{3}$\\[4pt]
+\author{Evgenii Genov$^{1}$ \qquad Ander Martinez Alonso$^{1,2}$ \qquad Christoph Bergmeir$^{3,4}$\\[4pt]
 \small $^{1}$EVERGi Research Group, Flanders Alliance for Climate Technology (FACT),\\
 \small Vrije Universiteit Brussel, Pleinlaan 2, 1050 Brussels, Belgium\\
 \small $^{2}$DTU Wind and Energy Systems, Technical University of Denmark\\
-\small $^{3}$Department of Computer Science and Artificial Intelligence, University of Granada, Granada, Spain\\[4pt]
+\small $^{3}$Department of Computer Science and Artificial Intelligence, University of Granada, Granada, Spain\\
+\small $^{4}$Department of Data Science \& Artificial Intelligence, Monash University,\\
+\small 25 Exhibition Walk, Clayton, VIC 3168, Australia\\[4pt]
 \small\href{mailto:evgenii.genov@vub.be}{evgenii.genov@vub.be}, \href{mailto:Ander.Martinez.Alonso@vub.be}{Ander.Martinez.Alonso@vub.be},
 \href{mailto:bergmeir@ugr.es}{bergmeir@ugr.es}}
 \date{\small Methodology preprint, 3 November 2026\\
@@ -54,50 +56,50 @@
 Comparisons of energy forecasting models usually rest on backtests, which are prone to look-ahead bias: inputs published
 after the forecast would have been issued, such as later weather-model runs or revised data, take the place of the
 information that was available at the time. EnergyBench
-runs every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
+evaluates every entry live instead. Each day at 11:30 CET/CEST, thirty minutes before the day-ahead (SDAC) gate closes,
 every model forecasts the next day's price, wind and solar generation and load on the 15-minute grid for six bidding
-zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike other live benchmarks, EnergyBench runs the models itself, on one
-information set that it freezes at the cut-off and publishes, including three numerical weather prediction models, so
-foundation models are compared with and without the same weather covariates under a real market deadline. Errors are
+zones (BE, NL, FR, DE-LU, DK1, DK2). Unlike existing live benchmarks, EnergyBench runs the models itself, on one
+information set that it freezes at the cut-off and publishes, including three numerical weather prediction models, so that
+foundation models can be compared with and without the same weather covariates under the actual market deadline. Errors are
 pooled per series against a seasonal-naive baseline, and models are ranked by a Bradley--Terry rating on the Elo scale
 with a day-bootstrap interval. The field spans baselines, linear and gradient-boosted models on the frozen weather,
 eighteen time-series foundation models from eleven families, ensembles, and the grid operators' own forecasts. Over the
 first thirty live days, the covariates reduced the error of each of the ten foundation models run with and without
 them by 38--52\% on matched races (45--52\% for the seven that accept them natively; 64--72\% on wind, 55--62\% on
 solar). Used zero-shot, these models match or outperform a LightGBM model trained on the same covariates. Model size,
-from 3M to 331M parameters, matters far less, and median ensembles of the covariate models lead the standings. The grid
+from 3M to 331M parameters, has a much smaller effect, and median ensembles of the covariate models rank highest. The grid
 operators' pre-gate forecasts remain ahead on wind and solar, where the best single foundation models have 20--28\% more
-error; on load the two are level. A model enters the benchmark by pull request.
+error; on load the two are level. New entries are added by pull request.
 \end{abstract}
 
 \section{Introduction}
 
-Day-ahead forecasts of price, renewable generation and load are the inputs of every bidding decision on European
-power markets, and claims about how well a given model makes them are rarely comparable. Three things go wrong in the
-usual backtest. First, the information set drifts: a forecast nominally made at 11:30 is built from weather runs that
+Day-ahead forecasts of price, renewable generation and load are central inputs to bidding decisions on European
+power markets, yet reported accuracies of different models are rarely comparable. Three problems commonly affect
+backtests. First, the information set drifts: a forecast nominally made at 11:30 is built from weather runs that
 were published hours later, from actuals that were still provisional, or from a TSO forecast that only appears after
 the gate. Second, the target may differ from the quantity the market trades, for example hourly values where the
 market now trades quarter-hours, generation definitions that differ between data providers, or actuals that were later
 revised. Third, the evaluation window, the baseline and the metric can be chosen after the results are known.
 
-A fourth gap has opened with time-series foundation models. In operational energy forecasting, exogenous inputs are
+A fourth problem concerns the evaluation of time-series foundation models. In operational energy forecasting, exogenous inputs are
 the standard, not an option: wind and solar forecasts are built on numerical weather predictions, load forecasts on
 temperature and calendar effects, and day-ahead price forecasts on forecasts of load, renewable infeed and fuel
 cost~\cite{hongreview,weron,lago}. The grid operators' own forecasts, the industry reference, are NWP-driven, and the
-energy forecasting competitions supplied weather forecasts as a matter of course~\cite{gefcom}. The benchmarks on which
+energy forecasting competitions routinely supplied weather forecasts~\cite{gefcom}. The benchmarks on which
 foundation models are compared are, by contrast, mostly univariate. A model that forecasts tomorrow's solar output from
 the last four weeks of solar output alone is evaluated on a task that does not arise in practice, and a ranking
 obtained in this way is of limited use for choosing a model to deploy.
 
-A live benchmark that provides every entry with the same inputs avoids the first two problems by construction. If each
+A live benchmark that provides every entry with the same inputs avoids the first two problems. If each
 model runs at the actual cut-off on the data available at that time, weather forecasts included, and its forecast is
-locked before the actual gate, look-ahead is excluded, and the record accumulates day by day in public. The drawback is
+locked before the actual gate, look-ahead is excluded, and the record grows daily and is public. The drawback is
 that a live record is short and its standings vary from day to day. The design described below accounts for this
 variability. Errors are pooled before they are normalised, rankings are reported with intervals, and only live
 forecasts are reported. The third problem, the choice of analysis after the results are known, is reduced but not
 removed by fixed public rules (Section~\ref{sec:limits}).
 
-EnergyBench went live on 2~October 2026 with three zones (BE, NL, FR) and three targets; total load was added on
+EnergyBench began operating on 2~October 2026 with three zones (BE, NL, FR) and three targets; total load was added on
 6~October and three zones (DE-LU, DK1, DK2) on 15~October.
 The code and the configuration file that define the benchmark are versioned in a public repository. This paper
 describes that configuration as of 31~October 2026 and the results to date.
@@ -124,8 +126,8 @@ the t0 models accept known-future covariates, by different mechanisms and with d
 benefit is an empirical question that a univariate benchmark cannot answer, and it is the question an operational
 user needs answered first.
 
-\paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome exists, and each
-leaves open a question that EnergyBench is built to answer.
+\paragraph{Live benchmarks.} Two recent platforms evaluate forecasts made before the outcome is known. Each differs
+from EnergyBench in a respect that matters for the questions studied here.
 
 TS-Arena~\cite{tsarena} implements a forecast pre-registration protocol for time-series foundation models: a round
 hands out each series' history up to its last published value and closes registration before the next value is
@@ -133,15 +135,15 @@ recorded. Its 14 challenges draw on SMARD (German day-ahead price, load and gene
 prices, load and generation) and Fingrid (Finland), at 15-minute resolution with a one-day horizon and hourly with a
 three-day horizon, from a 1{,}000-step context. Models are scored by MASE and ranked by an online Elo rating whose
 interval comes from replaying the rounds in random order. Two features limit what its rankings say about energy
-forecasting. \emph{First, there are no covariates}: the foundation models forecast wind, solar and load from the
-series' own history, without the weather forecast that any operational forecaster of those quantities would use, so
-the benchmark measures a task no market participant faces, and a model's ability to exploit covariates, which in our
-results reduces the error of the same models by 38--52\% (Section~\ref{sec:results}), is not measured at all. \emph{Second, the
-information set is not tied to a market gate}: each round starts at the last published value, so the window follows
+forecasting. First, no covariates are provided: the foundation models forecast wind, solar and load from the
+series' own history, without the weather forecasts on which operational forecasts of those quantities are based. The
+task therefore differs from operational practice, and a model's ability to use covariates, which in our results
+reduces the error of the same models by 38--52\% (Section~\ref{sec:results}), is not assessed. Second, the
+information set is not tied to a market gate: each round starts at the last published value, so the window follows
 each source's publication delay rather than the market. A German price forecast registered on day $X$ starts after the
 delivery day that cleared on $X$ and covers a later day than the next auction needs, and the generation and load
 windows do not align with a delivery day at all. What a forecaster could have known at a decision time is therefore
-not defined, and no forecast corresponds to a bid that could have been placed.
+not defined, and the forecasts do not correspond to bids that could have been placed.
 
 Energy-Arena~\cite{energyarena} is an open, API-based platform whose challenges are defined by their market deadline:
 forecasts are submitted before 12:00 CET on $D-1$ for the whole next day, as point (RMSE), quantile (weighted interval
@@ -156,13 +158,13 @@ platform~\cite{predico} scores live renewable forecasts submitted to Elia and 50
 enrolled forecasters and without publishing their inputs.
 
 \paragraph{Positioning.} EnergyBench takes Energy-Arena's operational framing (the day-ahead gate defines the task)
-and TS-Arena's pre-registration logic (only a forecast made before the outcome exists is free of leakage), and closes
-the gaps between them by running every model itself. Each day it fetches one information set at the gate-aligned
+and TS-Arena's pre-registration logic (only a forecast made before the outcome is known is free of leakage), and differs
+from both in that it runs every model itself. Each day it fetches one information set at the gate-aligned
 cut-off, freezes and publishes it, and gives it to every entry: the information set is enforced rather than declared,
 and any forecast can be reproduced from its archived inputs. Foundation models from seven families also run with the
-same frozen covariates, so the value of the weather is measured model by model rather than assumed away; all four targets
-are forecast in six zones; and the grid operators' own forecasts, before and after the gate, serve as references. The
-cost is that entries are submitted as code rather than as forecasts, and proprietary data cannot be used.
+same frozen covariates, so the effect of the weather inputs is measured for each model; all four targets
+are forecast in six zones; and the grid operators' own forecasts, before and after the gate, serve as references. In
+return, entries must be submitted as code rather than as forecasts, and proprietary data cannot be used.
 Table~\ref{tab:compare} summarises the differences.
 
 \begin{table}[t]
@@ -178,7 +180,7 @@ Zones and targets & 14 challenges (SMARD, Gridstatus, Fingrid) & wind, solar, lo
 Who runs models & participants (containers) & participants (API submissions) & the benchmark, from submitted code \\
 Information set & series history only & anything before the gate; self-declared, unverified & frozen and published: history, three NWP models, load forecast, fuel \\
 Covariates for foundation models & none & if a participant adds them & eleven foundation models also with the same covariates \\
-Foundation models & the focus of the field & none named; depends on submissions & eleven families, and ensembles \\
+Foundation models & the focus of the benchmark & none named; depends on submissions & eleven families, and ensembles \\
 Transparency & platform code public & method description and forecasts optional & code, inputs and forecasts public \\
 Scores & MASE & RMSE, WIS, CRPS & MAE, RMSE, bias, pinball; relative to seasonal naive, pooled per series \\
 Ranking & online Elo, replay bootstrap & per metric over rolling windows & Bradley--Terry Elo, day bootstrap \\
@@ -263,7 +265,7 @@ July 2026, so Danish wind has come from Energinet's real-time production data si
 solar and load stay on ENTSO-E). The first two live issue days, 2 and 3 October, were run and scored on
 Energy-Charts data alone, with wind and solar scored on $D+2$.
 
-The Netherlands shows why provenance matters. ENTSO-E's Dutch series cover only what TenneT meters itself: solar at
+The Netherlands illustrates the importance of provenance. ENTSO-E's Dutch series cover only what TenneT meters itself: solar at
 about 1\% of the fleet (a capacity factor of 0.1\% over 20 September--7 October 2026, against 10.7\% in the national
 estimate, 12.7\% in Belgium and 13.6\% in France), wind mostly offshore, and load net of embedded solar (about 6\,GW
 against 17\,GW gross at a sunny midday). The Dutch wind, solar and load targets therefore come exclusively from NED,
@@ -430,7 +432,7 @@ doubling the error symmetrically and penalises a model that fails on one series.
 Three choices in these definitions affect which model is ranked best, and they are stated here explicitly.
 \emph{The functional rewarded.} Absolute error is minimised by the median of the
 predictive distribution and squared error by its mean~\cite{gneiting2011}; for skewed targets such as solar power or
-spiking prices the two differ, and a model trained on quantile loss is not wrong to forecast the median. The field mixes
+spiking prices the two differ, and for a model trained on quantile loss the median is the appropriate point forecast. The field mixes
 both: most foundation models report the median of their predictive quantiles (Chronos, TiRex, Moirai, Sundial, Toto, t0,
 Timestral, Tabby), while TimesFM and the LightGBM and ridge entries, fitted on squared error, report a conditional
 mean, as does the climatology. The standings are
@@ -456,7 +458,7 @@ model joins the races of the series it declares from the day it is added. Leavin
 because the benchmark runs every entry itself: an entry cannot choose the days on which it forecasts. A benchmark that
 accepted submitted forecasts would have to count a missing forecast as a loss, or replace it by the baseline, since a
 participant could otherwise withhold forecasts on difficult days. The grid operators' pre-gate forecast, which
-covers only some series, is rated only on selections whose every series it forecasts (BE wind, say, or load); on
+covers only some series, is rated only on selections whose every series it forecasts (for example BE wind, or load); on
 any other selection it takes no part in the races, so that no rating rests on a different set of series from the
 rest of the field, and its errors are shown without a rating. Within a race every pair of models plays
 one game, won by the lower relative error of the day (equal errors split the game). All games of the selected period
@@ -471,7 +473,7 @@ leaderboard~\cite{chatbotarena}.
 The 95\% interval is the 2.5th--97.5th percentile of 200 refits on issue days drawn with replacement. Days rather than
 races are resampled because all races of a day share the same weather and tend to be won and lost together.
 Overlapping intervals mean the order of two models is not settled. Any pairwise rating is relative to the field: a model's score depends on whom it
-played, and several near-identical entries (three releases of one model family, say) take wins from each other and
+played, and several near-identical entries (for example three releases of one model family) take wins from each other and
 from everyone else. The pooled relative errors do not depend on the field and are always reported next to the rating. A model is listed as provisional if it has fewer races than the smaller of 24 and half the most any model has. The standings can be restricted to the last 7 or 30 days,
 to a zone or a target, and to models with or without covariates; filters choose which races count and which models
 are shown, never how a race is scored.
@@ -671,7 +673,7 @@ no forecast, or (for \m{tso\_final} in DK1 and DK2) a forecast of a different sc
 \label{fig:heatmap}
 \end{figure}
 
-\subsection{Covariates roughly halve the error of foundation models}
+\subsection{Effect of covariates on foundation models}
 
 Ten foundation models run both on the series' own history and with the frozen covariate table, so the value of the
 weather can be measured model by model on exactly the same races (Table~\ref{tab:cov}; TimeH2O is too recent to
@@ -815,7 +817,7 @@ the spread is small and not monotone: Timestral (209M), t0-gamma (256M) and Chro
 largest at 331M, sits mid-field, and TTM r2 at 3.4M is the weakest. Above about 100M the relation disappears
 ($\rho = -0.19$, 11 models), and it is not significant with covariates ($\rho = -0.38$, ten models), where TimesFM 3.0,
 Timestral and t0-gamma lead Chronos-2 by 0.01--0.02. Every covariate model, whatever its size, has a lower error than
-every history-only model, so the weather input matters far more than any difference in size.
+every history-only model, so the weather input has a larger effect than any difference in size.
 
 \begin{figure}[t]
 \centering
@@ -835,7 +837,7 @@ races each shares with it (\m{lgbm\_cov}, Rel.\ MAE 0.331--0.339, against 0.283-
 (0.337 against 0.338). LightGBM receives more of the table: every NWP model's columns, the calendar and, for price,
 yesterday's price, whereas the foundation models receive a small set of ensemble means and spreads. LightGBM is the
 best of them on wind (0.154--0.156, against 0.163--0.197) and level on solar (0.357--0.376, against 0.332--0.388), but
-far behind on load (1.025--1.035), where 28 days are too few to learn the response of load to the weather. Trained on
+considerably worse on load (1.025--1.035), where 28 days are too few to learn the response of load to the weather. Trained on
 two years, \m{lgbm\_prod} does better. On the days both ran (16--31 October) it reaches 0.293, against 0.322 for
 \m{lgbm\_cov}, within the range of the native-covariate foundation models (0.269--0.323).
 
@@ -847,8 +849,7 @@ issue days 20--31 October, on which all of them ran (262 races each); Toto~2 and
 median of the five covariate foundation models (\m{ens\_fm\_cov}, Rel.\ MAE 0.242) has a lower error than each of its
 members (0.246--0.276). With \m{lgbm\_prod}, a model of a different class trained on the same weather, as a sixth member,
 the median (\m{ens\_hybrid}, 0.233) has a lower error than every single model. An ensemble is fixed in advance and
-does not require knowing which member will perform best, which makes it the more practical choice, although twelve
-days are too few to rank it reliably.
+does not require knowing which member will perform best; twelve days are, however, too few to rank it reliably.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -998,7 +999,7 @@ level rather than in skill.
 \section{Limitations}
 \label{sec:limits}
 
-The record is short and covers one season; the standings will move. The weather inputs are three deterministic models
+The record is short and covers one season; the standings will change as it grows. The weather inputs are three deterministic models
 served by one provider, and their spread stands in for forecast uncertainty. That provider is a single point of
 failure: on six of the thirty live days (3, 4, 5, 10, 13 and 17 October) it served the 06 UTC ICON-EU run at the
 cut-off before the run was fully ingested, with missing values over the delivery day. Models built on the
@@ -1016,7 +1017,7 @@ changed definition during the record, and the weather points rest on public capa
 (municipal data in BE, NL and DK, commune centres in FR, unit positions in DE-LU). The \m{tso\_cutoff} reference exists only where a TSO publishes
 before the gate (BE and NL wind and solar, and load), and the Danish final forecasts measure a different scope from the
 actuals. The three zones added on 15 October have seventeen issue days, and entries that joined late are compared with the
-rest only on the days they share; both will mean more with time. A model that fails is left out of the races it
+rest only on the days they share; both comparisons will become more informative as the record grows. A model that fails is left out of the races it
 missed (Section~\ref{sec:ranking}), so a model that fails often is flagged by the run tracker rather than penalised in the rating. The
 value computation assumes a price-taking producer without intraday trading or curtailment.
 
@@ -1029,17 +1030,17 @@ entries in the field.
 
 \section{Conclusion}
 
-A live benchmark aligned with the market gate removes the freedom to choose a favourable backtest. EnergyBench
-runs one daily for the European day-ahead market, on quarter-hours, from frozen public data with recorded
-provenance, with ranking statistics that state their uncertainty and a value view that connects accuracy to revenue.
-After thirty live days in six zones, the main finding is that the weather information available at the cut-off matters
-more than the model that uses it. The same foundation model forecasts with about half the error when it is given that
+A live benchmark aligned with the market gate excludes look-ahead and fixes the evaluation days before the outcomes
+are known. EnergyBench runs such a benchmark daily for the European day-ahead market, on quarter-hours, from frozen
+public data with recorded provenance, with rankings reported with intervals and a revenue-based valuation of wind and
+solar forecasts. Over the first thirty live days in six zones, the weather information available at the cut-off
+mattered more than the choice of model. The same foundation model forecasts with about half the error when it is given that
 information (for Chronos-2, in every zone). Zero-shot foundation models with covariates match or outperform a
 gradient-boosting model trained on the same covariate table, and the median of several such models has a lower error
-than any of them. Model size matters far less. The grid operators' pre-gate forecasts remain ahead on wind and solar,
+than any of them. Model size has a much smaller effect. The grid operators' pre-gate forecasts remain ahead on wind and solar,
 where the best single foundation models have 20--28\% more error, while on load the two are level; the operators'
-final forecasts, published after the gate, are further ahead. The repository accepts entries by pull request, and
-further zones, references and settlement rules will be added in the same way.
+final forecasts, published after the gate, are further ahead. New entries are accepted by pull request, and
+further zones, references and settlement rules are planned.
 
 \begin{thebibliography}{99}\small
 \bibitem{m4} S.~Makridakis, E.~Spiliotis, V.~Assimakopoulos. The M4 competition: 100{,}000 time series and 61
