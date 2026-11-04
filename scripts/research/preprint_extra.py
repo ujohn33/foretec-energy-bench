@@ -10,7 +10,7 @@ ff = {}
 for m, g in p.groupby("model"):
     r = {"rel": gm(g.rel), "relr": gm(g.relr), "nser": len(g)}
     for t, gt in g.groupby("target"): r[t] = gm(gt.rel)
-    r.update(e.get(m, {})); ff[m] = r
+    r.update(e.get(m, {})); r.setdefault("races", int((w.rel_mae.notna() & (w.model == m)).sum())); ff[m] = r
 json.dump(ff, open(f"{out}/late_field_{os.environ.get('LATE_FROM', '2026-10-16')}.json", "w"), indent=1)
 # 2) TSO pairs without DK
 tp = {}

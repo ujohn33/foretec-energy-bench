@@ -30,8 +30,11 @@ def per_series(x):
         "relr": g.apply(lambda q: np.sqrt((q.n * q.rmse ** 2).sum() / (q.n * q.rmse_b ** 2).sum()), include_groups=False),
         "days": g.size()}).reset_index()
 
+TSO = {"tso_cutoff"}   # the grid operators' pre-gate forecast: rated only where it forecasts every series of the selection, as on the site
 def elo(x, boot=200):
     x = x[~x.model.isin(REF) & x.rel_mae.notna()]
+    ser = x.zone + "_" + x.target
+    x = x[~x.model.isin([m for m in TSO if 0 < ser[x.model == m].nunique() < ser.nunique()])]   # no games at all, so no effect on the others
     models = sorted(x.model.unique()); k = len(models); ix = {m: i for i, m in enumerate(models)}
     days = sorted(x.issue_date.unique()); per = []
     for d in days:
@@ -68,6 +71,7 @@ for m, g in ps.groupby("model"):
     for t, gt in g.groupby("target"): r[t] = gm(gt.rel)
     for z, gz in g.groupby("zone"): r["z_" + z] = gm(gz.rel)
     r.update(e.get(m, {}))
+    r.setdefault("races", int((s.rel_mae.notna() & (s.model == m)).sum()))
     st[m] = r
 json.dump(st, open(f"{out}/standings.json", "w"), indent=1)
 
