@@ -246,17 +246,31 @@ class NedSource(Source):
 
 class EnerginetSource(Source):
     """DK1/DK2 wind (onshore + offshore) from Energinet's real-time production, quarter-hour means of the 5-minute
-    values (a quarter-hour needs at least 2 of its 3)."""
+    values (a quarter-hour needs at least 2 of its 3).
+
+    Prodex is keyed on Danish local time with 24 hours a day: on the autumn clock change it has no records for the
+    first (summer-time) 02:00-03:00 or for 23:05-23:55 (26 Oct 2025 and 25 Oct 2026, 23 five-minute records each; both
+    spring days are complete). That empties 8 of the 100 quarter-hours, below the 95% needed to freeze the day. So in
+    a window of at most FILL_WINDOW (a delivery day being frozen, revised or drawn, never model history), quarter-hours
+    Prodex leaves empty that ended SETTLED_AFTER ago are filled from Energinet's hourly settlement
+    (ProductionConsumptionSettlement, keyed on UTC hours, complete across the clock change): the hour's wind MWh, i.e.
+    its mean MW, held across its quarter-hours. Settlement agrees with Prodex within 1-4% hourly. Until it is
+    published the quarter-hours stay empty and the day is frozen on a later run.
+    """
     name = "energinet"
     URL = "https://api.energidataservice.dk/dataset/ElectricityProdex5MinRealtime"
+    SETTLEMENT_URL = "https://api.energidataservice.dk/dataset/ProductionConsumptionSettlement"
     WIND = ("OnshoreWindPower", "OffshoreWindPower")
+    SETTLED_WIND = ("OffshoreWindLt100MW_MWh", "OffshoreWindGe100MW_MWh", "OnshoreWindLt50kW_MWh", "OnshoreWindGe50kW_MWh")
+    SETTLED_AFTER = pd.Timedelta("6h")   # Prodex arrives within ~5 min; a younger gap may still fill itself
+    FILL_WINDOW = pd.Timedelta("3D")
 
-    def _get(self, params: dict) -> list[dict]:
+    def _get(self, params: dict, url: str | None = None) -> list[dict]:
         """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times."""
         retries, fails, limited = (2 if self.cfg.get("_fallback") else 4), 0, 0
         while True:
             try:
-                r = requests.get(self.URL, params=params, timeout=120)
+                r = requests.get(url or self.URL, params=params, timeout=120)
                 if r.status_code == 429 and limited < 6:
                     limited += 1
                     time.sleep(float(r.headers.get("Retry-After") or 10 * limited))
@@ -288,8 +302,40 @@ class EnerginetSource(Source):
         five = five[~five.index.duplicated(keep="last")]
         q = five.resample("15min")
         s = q.mean()[q.count() >= 2]
+        if pd.Timestamp(end) - pd.Timestamp(start) <= self.FILL_WINDOW:
+            s = self._fill_from_settlement(zone, s, start, end)
         s.index.name = "time_utc"
         return s[(s.index >= start) & (s.index < end)]
+
+    def _fill_from_settlement(self, zone: str, s: pd.Series, start, end) -> pd.Series:
+        """Quarter-hours of [start, end) Prodex left empty and that ended SETTLED_AFTER ago, from the hourly settlement.
+        No request when there is no such gap (every ordinary day); a failed request keeps Prodex alone."""
+        idx = pd.date_range(pd.Timestamp(start), pd.Timestamp(end), freq="15min", inclusive="left")
+        settled = pd.Timestamp.now(tz="UTC").tz_localize(None) - self.SETTLED_AFTER
+        gaps = idx[~idx.isin(s.index) & (idx + pd.Timedelta("15min") <= settled)]
+        if gaps.empty:
+            return s
+        a, b = gaps[0].floor("h"), gaps[-1].floor("h") + pd.Timedelta("1h")
+        cols = list(self.SETTLED_WIND)
+        try:
+            rows = self._get({"start": f"{a:%Y-%m-%dT%H:%M}", "end": f"{b:%Y-%m-%dT%H:%M}", "timezone": "UTC", "limit": 0,
+                              "filter": f'{{"PriceArea":["{zone}"]}}', "columns": "HourUTC," + ",".join(cols)},
+                             url=self.SETTLEMENT_URL)
+        except (requests.RequestException, ValueError, KeyError) as e:
+            log.warning("energinet settlement %s failed (%s); %d quarter-hours stay empty", zone, e, len(gaps))
+            return s
+        df = pd.DataFrame(rows)
+        if df.empty or "HourUTC" not in df or not set(cols) <= set(df.columns):
+            return s
+        hourly = pd.Series(df[cols].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
+                           index=pd.DatetimeIndex(pd.to_datetime(df["HourUTC"]))).dropna()
+        hourly = hourly[~hourly.index.duplicated(keep="last")]
+        fill = pd.Series(hourly.reindex(gaps.floor("h")).to_numpy(), index=gaps).dropna()
+        if fill.empty:
+            return s
+        log.info("energinet %s: %d quarter-hours Prodex lacks filled from settlement (%s .. %s)",
+                 zone, len(fill), fill.index[0], fill.index[-1])
+        return pd.concat([s, fill]).sort_index()
 
 
 class RteForecast:

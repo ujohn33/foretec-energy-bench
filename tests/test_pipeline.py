@@ -613,6 +613,7 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
 
     monkeypatch.setattr(tso.requests, "get", lambda url, params, timeout: seen.append(params) or R())
     src = tso.EnerginetSource(cfg)
+    src.FILL_WINDOW = pd.Timedelta(0)                        # the settlement fill has its own test
     s = src.fetch("DK1", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-01 01:00"))
     assert list(s.index) == [pd.Timestamp("2026-10-01 00:00"), pd.Timestamp("2026-10-01 00:30")]
     assert s.iloc[0] == 151.0 and s.iloc[1] == 156.5        # mean of 150,151,152; of 156,157 (00:40 dropped)
@@ -622,6 +623,73 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
     # DK load stays on ENTSO-E: as a fallback this source must not fill A65's gaps with a different quantity
     n = len(seen)
     assert src.fetch("DK1", "load", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty and len(seen) == n
+
+
+@pytest.mark.parametrize("delivery,n", [("2026-10-25", 100), ("2026-03-29", 92), ("2026-10-02", 96)])
+def test_energinet_clock_change_days(cfg, monkeypatch, delivery, n):
+    """Energinet DK wind on clock-change days. Prodex keeps 24 local hours a day, so on the autumn change it has no
+    records for the first 02:00-03:00 (00:00-00:55 UTC) or 23:05-23:55 CET (as on 25 Oct 2026): those 8 quarter-hours
+    come from the hourly settlement and the day is complete with 100. Spring (92) and ordinary days are complete in
+    Prodex and make no settlement request."""
+    from foretec_live.data import tso
+    from foretec_live.score import actuals
+
+    issue = dt.date.fromisoformat(delivery) - dt.timedelta(days=1)
+    idx = delivery_index(issue, cfg)
+    five = pd.date_range(idx[0], idx[-1] + pd.Timedelta("15min"), freq="5min", inclusive="left")
+    if n == 100:
+        hole = ((five >= "2026-10-25 00:00") & (five < "2026-10-25 01:00")) | ((five >= "2026-10-25 22:05") & (five < "2026-10-25 23:00"))
+        assert hole.sum() == 23
+        five = five[~hole]
+    prodex = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", "OnshoreWindPower": 1000.0, "OffshoreWindPower": 500.0} for x in five]
+    hours = pd.date_range(idx[0], idx[-1], freq="h")
+    settled = [{"HourUTC": f"{h:%Y-%m-%dT%H:%M:%S}", "OffshoreWindLt100MW_MWh": 10.0, "OffshoreWindGe100MW_MWh": 400.0 + h.hour,
+                "OnshoreWindLt50kW_MWh": 5.0, "OnshoreWindGe50kW_MWh": 1100.0} for h in hours]
+    calls = []
+
+    class R:
+        def __init__(self, recs): self.recs = recs
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"records": self.recs}
+
+    def get(url, params, timeout):
+        calls.append((url.rsplit("/", 1)[1], params))
+        a, b = pd.Timestamp(params["start"]), pd.Timestamp(params["end"])
+        if url == tso.EnerginetSource.SETTLEMENT_URL:
+            return R([r for r in settled if a <= pd.Timestamp(r["HourUTC"]) < b])
+        return R([r for r in prodex if a <= pd.Timestamp(r["Minutes5UTC"]) < b])
+
+    monkeypatch.setattr(tso.requests, "get", get)
+    cfg = {**cfg, "source": "energinet", "fallback_source": None}
+    y = actuals(issue, "DK1", "wind", cfg, tso.EnerginetSource(cfg))
+    assert y is not None and len(y) == n and y.notna().all()
+    f = Path(cfg["_root"]) / "data" / "actuals" / delivery / "DK1_wind.parquet"
+    assert len(pd.read_parquet(f)) == n
+    settlement = [p for u, p in calls if u == "ProductionConsumptionSettlement"]
+    if n != 100:
+        assert y.eq(1500.0).all() and not settlement
+        return
+    assert len(settlement) == 1 and settlement[0]["start"] == "2026-10-25T00:00" and settlement[0]["end"] == "2026-10-25T23:00"
+    filled = y[y != 1500.0]
+    assert len(filled) == 8                                   # 4 in the repeated hour, 4 in the last (22:00 has 1 of 3)
+    assert filled["2026-10-25 00:00":"2026-10-25 00:45"].eq(1515.0).all()            # 10 + 400 + 5 + 1100 MWh in one hour
+    assert filled["2026-10-25 22:00":].eq(1537.0).all()
+    # a gap younger than SETTLED_AFTER may still arrive in Prodex, and model history never triggers the request
+    src, n_calls = tso.EnerginetSource(cfg), len(calls)
+    src.SETTLED_AFTER = pd.Timedelta("100000D")
+    assert len(src.fetch("DK2", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))) == 92 and len(calls) == n_calls + 1
+    src = tso.EnerginetSource(cfg)
+    assert src.fetch("DK2", "wind", idx[0] - pd.Timedelta("3D"), idx[-1] + pd.Timedelta("15min")).isna().sum() == 0
+    assert not any(u == "ProductionConsumptionSettlement" for u, _ in calls[n_calls + 1:])
+    # a failed settlement request keeps Prodex alone
+    def down(url, params, timeout):
+        if url == tso.EnerginetSource.SETTLEMENT_URL:
+            raise tso.requests.ConnectionError("down")
+        return get(url, params, timeout)
+    monkeypatch.setattr(tso.requests, "get", down)
+    monkeypatch.setattr(tso.time, "sleep", lambda s: None)
+    assert len(tso.EnerginetSource(cfg).fetch("DK2", "wind", idx[0], idx[-1] + pd.Timedelta("15min"))) == 92
 
 
 def test_long_history_lag_models(cfg):
