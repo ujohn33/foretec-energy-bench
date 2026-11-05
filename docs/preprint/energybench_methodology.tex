@@ -1,7 +1,7 @@
 % EnergyBench: methodology preprint.
 % Build: latexmk -pdf energybench_methodology.tex. Table rows and elo_live.dat are generated from the scores by
 % scripts/research/preprint_all.py and preprint_tso_gap.py on the as-run scores (forecasts as locked at the gate;
-% issue days up to 31 Oct 2026; Danish load left out).
+% issue days up to 2 Nov 2026; Danish load and TimeH2O left out). Tables: scripts/research/preprint_fill_tex.py.
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -43,7 +43,7 @@
 \small 25 Exhibition Walk, Clayton, VIC 3168, Australia\\[4pt]
 \small\href{mailto:evgenii.genov@vub.be}{evgenii.genov@vub.be}, \href{mailto:Ander.Martinez.Alonso@vub.be}{Ander.Martinez.Alonso@vub.be},
 \href{mailto:bergmeir@ugr.es}{bergmeir@ugr.es}}
-\date{\small Methodology preprint, 3 November 2026\\
+\date{\small Methodology preprint, November 2026\\
 \href{https://energybench.foretec.co}{energybench.foretec.co} \quad\textperiodcentered\quad
 \href{https://github.com/ujohn33/foretec-energy-bench}{github.com/ujohn33/foretec-energy-bench}}
 
@@ -139,7 +139,7 @@ benefit cannot be measured on a univariate benchmark.
 cover energy are compared with EnergyBench in Table~\ref{tab:compare}. TS-Arena~\cite{tsarena} pre-registers forecasts
 of time-series foundation models for German, US and Finnish price, load and generation series and ranks them by an
 online Elo rating. It provides no covariates, so the models' use of weather forecasts, which in our results reduces
-their error by 38--52\% (Section~\ref{sec:results}), is not assessed; and each round starts from a series' last
+their error by 37--51\% (Section~\ref{sec:results}), is not assessed; and each round starts from a series' last
 published value rather than at a market gate, so the forecasts do not correspond to bids that could have been placed.
 Energy-Arena~\cite{energyarena} is gate-aligned: forecasts for the next day are submitted before the 12:00 day-ahead
 gate. It compares submissions rather than models under common conditions, since participants run their own models on
@@ -513,8 +513,8 @@ A \emph{race} is one issue day and one series; its field is every model with a s
 run failed is left out of that race rather than ranked last (the run tracker on the site shows every failure), and a
 model joins the races of the series it declares from the day it is added. Leaving failures out is defensible only
 because the benchmark runs every entry itself: an entry cannot choose the days on which it forecasts. A benchmark that
-accepted submitted forecasts would have to count a missing forecast as a loss, or replace it by a penalised baseline, as
-Predico does~\cite{predico}, since a participant could otherwise withhold forecasts on difficult days. The grid operators' pre-gate forecast, which
+accepted submitted forecasts would have to count a missing forecast as a loss or give it a penalty score, as Predico does by assigning it the 75th
+percentile of that day's scores~\cite{predico}, since a participant could otherwise withhold forecasts on difficult days. The grid operators' pre-gate forecast, which
 covers only some series, is rated only on selections whose every series it forecasts (for example BE wind, or load); on
 any other selection it takes no part in the races, so that no rating rests on a different set of series from the
 rest of the field, and its errors are shown without a rating. Within a race every pair of models plays

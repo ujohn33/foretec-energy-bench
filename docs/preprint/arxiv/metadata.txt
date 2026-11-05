@@ -11,3 +11,20 @@ Primary category (suggested): cs.LG (Machine Learning)
 Cross-lists (suggested): stat.ML, stat.AP, eess.SY
 
 Source: energybench_arxiv_v3.tar.gz (LaTeX, pdflatex; figures as PDF and pgfplots data files; bibliography inline)
+
+License (suggested): CC BY 4.0. The code repository is Apache-2.0.
+Report number, journal reference, DOI, MSC and ACM classes: none.
+
+Submission checklist (status 5 November 2026; results run through issue day 2 November 2026):
+- Upload energybench_arxiv_v3.tar.gz. It compiles from the archive alone with pdflatex: 2 passes, 21 pages, no undefined
+  or multiply defined references. All figure fonts are embedded.
+- Paste the title, authors, abstract and comments above as plain text. The abstract is 1878 characters, under the
+  1920 limit, and uses Unicode dashes; it contains no LaTeX.
+- Check the arXiv preview PDF against docs/preprint/energybench_methodology.pdf. The page count should match.
+- Co-authors (Ander Martinez Alonso, Christoph Bergmeir) approve the final PDF before submission.
+- A first submission to cs.LG may need endorsement. Christoph Bergmeir has cs.LG/stat.ML submissions, so he can
+  endorse or submit.
+- Before resubmitting a new version, rerun the refresh: scripts/research/preprint_asrun_scores.py, then preprint_all.py,
+  the other preprint_*.py scripts, and preprint_fill_tex.py. Then rebuild this archive from the explicit file list:
+  energybench_methodology.tex params.dat elo_live.dat release.dat zones_price.dat zones_ws.dat zones_load.dat
+  example_BE_wind.dat example_FR_solar.dat fig_map.pdf fig_heatmap.pdf fig_params.pdf
