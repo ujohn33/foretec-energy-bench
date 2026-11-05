@@ -16,6 +16,8 @@ s = s[(s.issue_date <= last) & ~s.model.isin(hidden)].copy()
 # the paper's record: Danish load has too few scored days to weigh as much as a full series (Section 4.1), and the
 # ensembles count from 20 Oct, the day they first ran live (their earlier rows are computed back)
 s = s[~(s.zone.isin(["DK1", "DK2"]) & (s.target == "load")) & ~(s.model.str.startswith("ens_") & (s.issue_date < "2026-10-20"))].copy()
+# TimeH2O (live from 28 Oct) has too few days, and too wide an interval, to rank yet: out of the record, so out of every fit
+s = s[~s.model.str.startswith("timeh2o")].copy()
 s["n"] = s["n"].fillna(96)
 s.to_parquet(f"{out}/scores_basis.parquet", index=False)   # the other preprint scripts read this through SCORES
 K = ["issue_date", "zone", "target"]
