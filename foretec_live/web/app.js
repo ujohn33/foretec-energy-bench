@@ -165,6 +165,9 @@
   // whatever the field size. A model whose run failed or was skipped is not in that race at all (no 0), so the
   // standing is its average over the races it finished; the run tracker still shows the failures.
   const MIN_RACES = 12, MIN_SHARE = 0.2;   // provisional below 12 races or a fifth of the busiest model's
+  // Win rate and skill score as on fev-bench: the share of head-to-head games won (ties count half), and
+  // 1 - the geometric mean over races of the error relative to the baseline (seasonal naive), each ratio clipped to 0.01-100
+  const SKILL_CLIP = [0.01, 100];
 
   // ---------- Diebold-Mariano ----------
   // Loss = Rel. MAE of each race, so series of different scale pool. The loss differential of A against B
@@ -249,11 +252,19 @@
     }
     const out = [];
     for (const [d, ser] of [...byDay.entries()].sort()) {
-      const ranks = {}, vals = {}, pts = {}, pairs = new Map();
+      const ranks = {}, vals = {}, pts = {}, pairs = new Map(), skill = {};
       for (const [key, list] of ser) {
         const sorted = [...list].sort((a, b) => a[S.metric] - b[S.metric]);
         const n = sorted.length;
         if (n < 2) continue;
+        // skill score: the race's error relative to the baseline's, clipped to SKILL_CLIP, summed in logs
+        const base = list.find((r) => r.model === D.config.baseline);
+        for (const r of list) {
+          const q = S.metric === "rel_mae" ? r.rel_mae : base && base[S.metric] > 0 ? r[S.metric] / base[S.metric] : null;
+          if (q == null || !isFinite(q)) continue;
+          const a = (skill[r.model] ||= [0, 0]);
+          a[0] += Math.log(Math.min(SKILL_CLIP[1], Math.max(SKILL_CLIP[0], q))); a[1] += 1;
+        }
         // every pair of models in the race is one game: the lower error wins, equal errors split it
         for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
           const a = sorted[i], b = sorted[j];
@@ -274,7 +285,7 @@
       const avgRank = {}, raw = {}, points = {};
       for (const m in ranks) { avgRank[m] = mean(ranks[m]); raw[m] = mean(vals[m]); }
       for (const m in pts) points[m] = mean(pts[m]);
-      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, pairs, n: Object.keys(pts).length });
+      out.push({ d, phase: phaseOf(d), avgRank, raw, points, pts, pairs, skill, n: Object.keys(pts).length });
     }
     return out;
   }
@@ -296,7 +307,9 @@
         W[i * k + j] += g.wx; W[j * k + i] += g.n - g.wx;
         N[i * k + j] += g.n; N[j * k + i] += g.n;
       }
-      return { W, N };
+      const L = new Float64Array(k), C = new Float64Array(k);
+      for (const m in x.skill) { const i = ix[m]; if (i != null) { L[i] += x.skill[m][0]; C[i] += x.skill[m][1]; } }
+      return { W, N, L, C };
     });
     return { models, k, perDay };
   }
@@ -325,24 +338,39 @@
     const { models, k, perDay } = btMatrices(days);
     if (k < 2) return {};
     const sum = (ids) => {
-      const W = new Float64Array(k * k), N = new Float64Array(k * k);
-      for (const d of ids) { const m = perDay[d]; for (let t = 0; t < k * k; t++) { W[t] += m.W[t]; N[t] += m.N[t]; } }
-      return [W, N];
+      const W = new Float64Array(k * k), N = new Float64Array(k * k), L = new Float64Array(k), C = new Float64Array(k);
+      for (const d of ids) {
+        const m = perDay[d];
+        for (let t = 0; t < k * k; t++) { W[t] += m.W[t]; N[t] += m.N[t]; }
+        for (let i = 0; i < k; i++) { L[i] += m.L[i]; C[i] += m.C[i]; }
+      }
+      return [W, N, L, C];
     };
-    const all = btFit(k, ...sum(perDay.map((_, i) => i)));
-    const out = Object.fromEntries(models.map((m, i) => [m, { elo: toElo(all[i]) }]));
+    const winRate = (W, N, i) => { let w = 0, n = 0; for (let j = 0; j < k; j++) { w += W[i * k + j]; n += N[i * k + j]; } return n ? w / n : null; };
+    const skill = (L, C, i) => (C[i] ? 1 - Math.exp(L[i] / C[i]) : null);
+    const [W, N, L, C] = sum(perDay.map((_, i) => i));
+    const all = btFit(k, W, N);
+    const out = Object.fromEntries(models.map((m, i) => [m, { elo: toElo(all[i]), wr: winRate(W, N, i), skill: skill(L, C, i) }]));
     if (boot && perDay.length > 1) {
-      const draws = models.map(() => []);
+      const draws = models.map(() => ({ elo: [], wr: [], skill: [] }));
       let seed = 42;
       const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);   // reproducible
       for (let b = 0; b < boot; b++) {
         const ids = perDay.map(() => Math.floor(rnd() * perDay.length));
-        const p = btFit(k, ...sum(ids), all);
-        p.forEach((v, i) => draws[i].push(toElo(v)));
+        const [bW, bN, bL, bC] = sum(ids);
+        const p = btFit(k, bW, bN, all);
+        models.forEach((_, i) => {
+          draws[i].elo.push(toElo(p[i]));
+          const w = winRate(bW, bN, i), q = skill(bL, bC, i);
+          if (w != null) draws[i].wr.push(w);
+          if (q != null) draws[i].skill.push(q);
+        });
       }
+      const ends = (a) => { const s = a.sort((x, y) => x - y); return s.length ? [s[Math.floor(0.025 * (s.length - 1))], s[Math.ceil(0.975 * (s.length - 1))]] : [null, null]; };
       models.forEach((m, i) => {
-        const s = draws[i].sort((a, b) => a - b);
-        out[m].lo = s[Math.floor(0.025 * (s.length - 1))]; out[m].hi = s[Math.ceil(0.975 * (s.length - 1))];
+        [out[m].lo, out[m].hi] = ends(draws[i].elo);
+        [out[m].wrLo, out[m].wrHi] = ends(draws[i].wr);
+        [out[m].skLo, out[m].skHi] = ends(draws[i].skill);
       });
     }
     return out;
@@ -419,6 +447,7 @@
     return list.map((s) => ({
       ...s,
       score: elo[s.model] ? elo[s.model].elo : null, eloLo: elo[s.model] && elo[s.model].lo, eloHi: elo[s.model] && elo[s.model].hi,
+      ...(elo[s.model] && { wr: elo[s.model].wr, wrLo: elo[s.model].wrLo, wrHi: elo[s.model].wrHi, skill: elo[s.model].skill, skLo: elo[s.model].skLo, skHi: elo[s.model].skHi }),
       provisional: s.races < need,
       avgRank: mean(s.ranks),
       best: Math.max(...s.dayScores), worst: Math.min(...s.dayScores), days: s.dayScores.length,
@@ -913,6 +942,8 @@
     ci: () => ["95% interval", "How much the Elo score would move if the set of issue days had been different: the 2.5th to 97.5th percentile of 200 refits, each on the period's issue days drawn at random with replacement (a bootstrap over issue days; whole days, because all races of a day share the same weather). Overlapping intervals mean the order of two models is not settled yet. Sorting uses the lower end."],
     races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or a fifth of the most any model has, is provisional and listed after the ranked ones. Under All targets, a model with no scored race yet on one of the targets it forecasts is left out until it has one.`],
     dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
+    wr: () => ["Win rate", `Average win rate, as on fev-bench: the share of head-to-head games the model won, where every race (one issue day, one series) is one game against each other model in it, won by the lower ${metricDef().label} (a tie counts half). 50% is an even record against the field it met. The small figures are the 95% interval: 200 resamples of the period's issue days, drawn with replacement (whole days, because all races of a day share the weather). Higher is better.`],
+    skill: () => ["Skill score", `Skill score, as on fev-bench: 1 minus the geometric mean, over the model's races, of its ${S.metric === "rel_mae" ? "MAE" : metricDef().label} divided by that of ${D.config.baseline} (seasonal naive: the same quarter-hour one week earlier) in the same race, each ratio clipped to 0.01–100. 0% matches the baseline, 30% has 30% less error than it on a typical race, a negative score is worse than it. Unlike Rel. MAE, which pools each series, every race counts the same, and the geometric mean keeps one bad day from dominating. Higher is better.`],
     rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
     rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
     relw: () => ["Rel. WIS", `The weighted interval score of the model's quantiles, relative to ${D.config.baseline} on the same days and series: it rewards a forecast distribution that is both sharp and calibrated. Below 1 beats the baseline. Only models that publish quantiles have one. ${aggText()} Lower is better.`],
@@ -995,6 +1026,8 @@
     ci: { get: (s) => s.eloLo, dir: -1 },
     races: { get: (s) => s.races, dir: -1 },
     rank: { get: (s) => s.avgRank, dir: 1 },
+    wr: { get: (s) => s.wr, dir: -1 },
+    skill: { get: (s) => s.skill, dir: -1 },
     rel: { get: (s) => s.rel, dir: 1 },
     relr: { get: (s) => s.relr, dir: 1 },
     nser: { get: (s) => s.nser, dir: -1 },
@@ -1028,6 +1061,8 @@
       `<span class="${tip ? "lbl" : ""}">${esc(label)}</span><i aria-hidden="true">${on ? (dir < 0 ? "▼" : "▲") : "↕"}</i></button></th>`;
   }
 
+  // 41.3%, a negative skill score with a true minus sign; the win rate's interval without the % sign
+  const pct1 = (v, unit = "%") => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(1).replace("-", "−") + unit);
   const pctCell = (v) => (v == null || !isFinite(v) ? "–" : (100 * v).toFixed(0) + "%");
 
   // ---------- sections ----------
@@ -1058,7 +1093,7 @@
     const dmOn = det && SHOW_DM;
     // the Elo bar spans 700..1300; the 95% interval is drawn on it as a whisker
     const eloX = (v) => Math.min(100, Math.max(0, (v - 700) / 6));
-    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}
+    t.innerHTML = `<thead><tr>${sortTh("pos", "#", "pos", false)}${sortTh("model", "Model", "", false)}${sortTh("pts", "Elo", "pts", false, "elo")}${det ? sortTh("ci", "95% interval", "ci", true, "hide-sm") : ""}${dmOn ? sortTh("dm", "DM p vs #1", "dm") : ""}${sortTh("rank", "Avg rank", "rank")}${sortTh("wr", "Win rate", "wr")}${sortTh("skill", "Skill score", "skill")}
       ${sortTh("rel", "Rel. MAE", "rel")}${sortTh("relr", "Rel. RMSE", "relr")}${sortTh("relw", "Rel. WIS", "relw")}${multi ? sortTh("nser", "Series", "nser") : ""}${det ? sortTh("mae", "MAE" + unit, "mae") + sortTh("rmse", "RMSE" + unit, "rmse") + sortTh("wis", "WIS" + unit, "wis") + sortTh("winkler", "Winkler 80%" + unit, "winkler") + sortTh("cover", "Coverage 80%", "cover") : ""}
       ${det ? sortTh("best", "Best day", "best") + sortTh("worst", "Worst day", "worst") : ""}${sortTh("races", "N evaluations", "races")}</tr></thead><tbody>` +
       sortRows(st.map((s) => ({ ...s, pos: shownPlace[s.model] ?? 1e3, fpos: fieldPlace[s.model], dm: s.model === leader ? 2 : dm[s.model] && dm[s.model].p }))).map((s) => { const medal = !s.provisional && s.pos <= 3 ? ` medal m${s.pos}` : ""; return `<tr class="${bt ? "is-bt" : ""}${s.provisional ? " prov" : ""}${medal}${s.model === S.hl ? " hl" : ""}${isBench(s.model) ? " base" : ""}">
@@ -1066,6 +1101,8 @@
         <td class="model"><i style="background:${color(s.model)}"></i>${nmTip(s.model)}</td>
         <td class="elo" ${s.eloLo != null ? `title="95% interval ${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}"` : ""}><div class="bar"><em><span style="width:${Math.round(eloX(s.score))}%;background:${bt ? btColor(s.model) : color(s.model)}"></span>${s.eloLo != null ? `<i class="ci" style="left:${eloX(s.eloLo).toFixed(1)}%;width:${(eloX(s.eloHi) - eloX(s.eloLo)).toFixed(1)}%"></i>` : ""}</em><b>${fmt(s.score, 0)}</b></div></td>
         ${det ? `<td class="r v hide-sm">${s.eloLo != null ? `${fmt(s.eloLo, 0)}–${fmt(s.eloHi, 0)}` : "–"}</td>` : ""}${dmOn ? dmCell(dm[s.model], s.model === leader) : ""}<td class="r v">${fmt(s.avgRank, 2)}</td>
+        <td class="r v wr">${pct1(s.wr)}${s.wrLo != null ? `<small>${pct1(s.wrLo, "")}–${pct1(s.wrHi, "")}</small>` : ""}</td>
+        <td class="r v" ${s.skLo != null ? `title="95% interval ${pct1(s.skLo)} to ${pct1(s.skHi)}"` : ""}>${pct1(s.skill)}</td>
         <td class="r v">${fmt(s.rel, 3)}</td><td class="r v">${fmt(s.relr, 3)}</td><td class="r v">${fmt(s.relw, 3)}</td>${multi ? `<td class="r v">${s.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(s.mae, 1)}</td><td class="r v">${fmt(s.rmse, 1)}</td><td class="r v">${fmt(s.wis, 1)}</td><td class="r v">${fmt(s.winkler, 1)}</td><td class="r v">${pctCell(s.cover)}</td>
         <td class="r v">${fmt(s.best, 0)}</td><td class="r v">${fmt(s.worst, 0)}</td>` : ""}<td class="r v">${s.races}</td>
       </tr>`; }).join("") + "</tbody>";
@@ -1090,7 +1127,7 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", refs.map((m) => {
         const mine = refRel.filter((r) => r.model === m), q = refStats[m] || {};
         return `<tr class="ref"><td class="pos">ref.</td><td class="model"><i style="background:${color(m)}"></i>${nmTip(m)}</td>
-          <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td>
+          <td class="elo note">Reference, not ranked: published after the gate${only}</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? dmCell(leadLoss && dmTest(dailyLoss(mine, m), leadLoss), false) : ""}<td class="r v">–</td><td class="r v">–</td><td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
           <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${mine.length}</td></tr>`;
       }).join(""));
@@ -1104,7 +1141,7 @@
       t.querySelector("tbody").insertAdjacentHTML("beforeend", uncList.map((m) => {
         const q = own[m] || {}, [n, of] = unc.get(m);
         return `<tr class="ref"><td class="pos">–</td><td class="model"><i style="background:${color(m)}"></i>${nmTip(m)}</td>
-          <td class="elo note">Not rated here: forecasts ${n} of the ${of} selected series; errors on its own series only</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? '<td class="r v dm">–</td>' : ""}<td class="r v">–</td>
+          <td class="elo note">Not rated here: forecasts ${n} of the ${of} selected series; errors on its own series only</td>${det ? '<td class="r v hide-sm">–</td>' : ""}${dmOn ? '<td class="r v dm">–</td>' : ""}<td class="r v">–</td><td class="r v">–</td><td class="r v">–</td>
           <td class="r v">${fmt(q.rel, 3)}</td><td class="r v">${fmt(q.relr, 3)}</td><td class="r v">${fmt(q.relw, 3)}</td>${multi ? `<td class="r v">${q.nser ?? "–"}</td>` : ""}${det ? `<td class="r v">${fmt(q.mae, 1)}</td><td class="r v">${fmt(q.rmse, 1)}</td><td class="r v">${fmt(q.wis, 1)}</td><td class="r v">${fmt(q.winkler, 1)}</td><td class="r v">${pctCell(q.cover)}</td>
           <td class="r v">–</td><td class="r v">–</td>` : ""}<td class="r v">${evals(m)}</td></tr>`;
       }).join(""));
