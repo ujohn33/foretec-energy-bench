@@ -296,6 +296,21 @@ def _covariate_summary(cfg) -> dict | None:
     return out
 
 
+
+def _columnar(rows: list[list], cols: list[str]) -> dict:
+    """Score rows by column: string columns as indices into their list of distinct values (app.js decodeScores)."""
+    out = {"n": len(rows), "cols": cols, "enc": {}, "data": {}}
+    for j, c in enumerate(cols):
+        vals = [r[j] for r in rows]
+        if any(isinstance(v, str) for v in vals):
+            uniq = sorted({v for v in vals if v is not None})
+            ix = {v: i for i, v in enumerate(uniq)}
+            out["enc"][c] = uniq
+            out["data"][c] = [None if v is None else ix[v] for v in vals]
+        else:
+            out["data"][c] = vals
+    return out
+
 def build_site(cfg) -> Path:
     p = paths(cfg)
     site = p["site"]
@@ -388,6 +403,31 @@ def build_site(cfg) -> Path:
         "days": {d: ph for d, (ph, _) in days.items()},
     }
     _atomic_write(site / "data" / "summary.json", json.dumps(summary, separators=(",", ":"), allow_nan=False))
+    # what the pages load: data/boot.json is summary.json with only the live scores, stored by column (repeated names as
+    # indices); the backtest scores load on demand from data/scores-backtest.json. summary.json stays the public download.
+    pi = cols.index("phase")
+    boot = {k: v for k, v in summary.items() if k != "scores"}
+    boot["scores"] = _columnar([r for r in rows if r[pi] == "live"], cols)
+    boot["backtest_scores"] = "data/scores-backtest.json"
+    coverage = {}      # model -> zone -> targets it forecasts in any phase (app.js partialModels needs the backtest's too)
+    for r in rows:
+        coverage.setdefault(r[2], {}).setdefault(r[3], set()).add(r[4])
+    boot["coverage"] = {m: {z: sorted(t) for z, t in zs.items()} for m, zs in coverage.items()}
+    # the run tracker's per-series codes as one string per cell, in a fixed series order ("." = no entry); app.js expands them
+    series = [f"{z}_{t}" for z in cfg["zones"] for t in cfg["targets"]]
+    known = set(series)
+    cells = {}
+    for d, per in summary["tracker"]["cells"].items():
+        cells[d] = {}
+        for m, c in per.items():
+            codes = c.get("s") or {}
+            if set(codes) <= known and all(len(v) == 1 for v in codes.values()):
+                c = {**c, "s": "".join(codes.get(k, ".") for k in series)}
+            cells[d][m] = c
+    boot["tracker"] = {**summary["tracker"], "cells": cells, "series": series}
+    _atomic_write(site / "data" / "boot.json", json.dumps(boot, separators=(",", ":"), allow_nan=False))
+    _atomic_write(site / "data" / "scores-backtest.json",
+                  json.dumps(_columnar([r for r in rows if r[pi] == "backtest"], cols), separators=(",", ":"), allow_nan=False))
     try:      # what crawlers and AI agents read without JavaScript (seo.py); never fail the site build on it
         from .seo import write_seo
         write_seo(site, s, cfg, {m["name"] for m in models if m["reference"]}, summary["generated_utc"], _atomic_write, models)

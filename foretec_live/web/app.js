@@ -1,4 +1,5 @@
-/* EnergyBench by Foretec leaderboard. Reads data/summary.json and data/days/<issue_date>.json. */
+/* EnergyBench by Foretec leaderboard. Reads data/boot.json (live scores; the backtest's load on demand from
+   data/scores-backtest.json), falling back to data/summary.json, and data/days/<issue_date>.json. */
 (() => {
   "use strict";
 
@@ -143,7 +144,9 @@
     const out = new Set();
     if (S.target !== "all") return out;
     const forecasts = {};
-    for (const r of ROWS) if (S.zone === "all" || r.zone === S.zone) (forecasts[r.model] ||= new Set()).add(r.target);
+    if (D.coverage) {   // boot.json: every phase's targets, also while the backtest's rows are not loaded
+      for (const [m, zs] of Object.entries(D.coverage)) for (const [z, ts] of Object.entries(zs)) if (S.zone === "all" || z === S.zone) for (const t of ts) (forecasts[m] ||= new Set()).add(t);
+    } else for (const r of ROWS) if (S.zone === "all" || r.zone === S.zone) (forecasts[r.model] ||= new Set()).add(r.target);
     for (const phase of new Set(rows.map((r) => r.phase))) {
       let sel = rows.filter((r) => r.phase === phase);
       const n = WINDOWS[S.win];
@@ -454,7 +457,7 @@
       { k: "bt", label: "Backtest", title: "The backtest: every model re-run on past issue days with the data public at their cut-off" },
     ], S.phase === "backtest" ? "bt" : S.win, (k) => {
       if (k === "bt") { S.phase = "backtest"; S.win = "all"; } else { S.phase = "live"; S.win = k; }
-      renderAll();
+      if (S.phase === "backtest") ensureBacktest().then(renderAll); else renderAll();
     });
     seg($("f-agg"), [
       { k: "mean", label: "Mean" }, { k: "median", label: "Median" }, { k: "gmean", label: "Geo. mean" },
@@ -1813,7 +1816,7 @@
     ], S.phase === "backtest" ? "bt" : S.win, (k) => {
       if (k === "bt") { S.phase = "backtest"; S.win = "all"; } else { S.phase = "live"; S.win = k; }
       saveFilters();
-      renderValue();
+      if (S.phase === "backtest") ensureBacktest().then(renderValue); else renderValue();
     });
     const ms = MODELS.filter((m) => inEns(m) && res[m] && res[m].quant);
     options($("v-model"), ms.map((m) => ({ k: m, label: REF.has(m) ? `${dn(m)} (ref)` : dn(m) })), S.v.model);
@@ -2082,16 +2085,44 @@
     try { localStorage.setItem("ft-filters", JSON.stringify(Object.fromEntries(FILTER_KEYS.map((k) => [k, S[k]])))); } catch (e) { /* storage unavailable */ }
   }
 
+  // ---------- score rows: live ones come with the page data, the backtest's when first needed ----------
+  /** rows as objects, from data/boot.json's columns (string columns as indices into enc) or summary.json's arrays */
+  function decodeScores(p, cols) {
+    if (Array.isArray(p)) return p.map((a) => Object.fromEntries(cols.map((c, i) => [c, a[i]])));
+    const out = new Array(p.n);
+    for (let i = 0; i < p.n; i++) {
+      const r = {};
+      for (const c of p.cols) { const v = p.data[c][i]; r[c] = p.enc[c] && v != null ? p.enc[c][v] : v; }
+      out[i] = r;
+    }
+    return out;
+  }
+  let BT = null;   // the backtest's rows: a promise, settled once they are in ROWS
+  function ensureBacktest() {
+    if (!BT) BT = fetch(D.backtest_scores, { cache: "no-cache" }).then((r) => r.json())
+      .then((p) => { ROWS = ROWS.concat(decodeScores(p)); }).catch(() => { BT = null; });
+    return BT;
+  }
+
   async function init() {
     try {
-      D = await (await fetch("data/summary.json", { cache: "no-cache" })).json();
+      D = await (await fetch("data/boot.json", { cache: "no-cache" })).json();
     } catch (e) {
+      try { D = await (await fetch("data/summary.json", { cache: "no-cache" })).json(); } catch (e2) { D = null; }
+    }
+    if (!D) {
       const host = document.querySelector("main section .wrap");
       if (host) host.insertAdjacentHTML("afterbegin", '<p class="lede">Data is not available yet.</p>');
       return;
     }
-    const cols = D.score_columns;
-    ROWS = D.scores.map((a) => Object.fromEntries(cols.map((c, i) => [c, a[i]])));
+    ROWS = decodeScores(D.scores, D.score_columns);
+    if (D.tracker && D.tracker.series) {   // boot.json: each cell's per-series codes as one string in this series order
+      const ser = D.tracker.series;
+      for (const per of Object.values(D.tracker.cells)) for (const c of Object.values(per)) if (typeof c.s === "string") {
+        const o = {}; for (let i = 0; i < ser.length; i++) if (c.s[i] !== ".") o[ser[i]] = c.s[i]; c.s = o;
+      }
+    }
+    if (!D.backtest_scores) BT = Promise.resolve();   // summary.json: the backtest is already in
     MODELS = D.models.map((m) => m.name);
     FAM = Object.fromEntries(D.models.map((m) => [m.name, m.family || m.name]));
     META = Object.fromEntries(D.models.map((m) => [m.name, m]));
@@ -2125,9 +2156,11 @@
       const up = new Date(D.generated_utc.replace("Z", ":00Z"));
       $("updated").textContent = up.toLocaleString("en-GB", { timeZone: D.config.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });   // "29 Oct, 07:13 CET"
     }
+    if (S.phase === "backtest") await ensureBacktest();   // a remembered Backtest view: its rows before the first render
     if (PAGE === "leaderboard") {
       S.hl = applyLinkFilters();
       if (S.phase === "live" && !hasLive) S.phase = "backtest";
+      if (S.phase === "backtest") await ensureBacktest();   // a shared link to the backtest
       if (S.hl) S.pin.add(S.hl);
       const card = new URLSearchParams(location.search).has("card");
       if (card) { document.documentElement.dataset.theme = "light"; document.body.classList.add("card-mode"); }
