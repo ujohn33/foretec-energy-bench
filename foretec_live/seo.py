@@ -14,6 +14,7 @@ day, Rel. MAE races, Bradley-Terry Elo, mean across series), so llms.txt, the mo
 """
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import logging
@@ -490,6 +491,8 @@ def _models_index(st: pd.DataFrame, cfg, info: dict, field: int) -> str:
 def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked: set[str], st: pd.DataFrame, atomic_write) -> list[str]:
     """models/ and models/<name>/: the page text comes from the same standings as the leaderboard. Returns the paths, for the sitemap."""
     root = (site / "index.html").read_text() if (site / "index.html").exists() else ""
+    # the home page's logo is its <h1>; a model page has its own <h1>, so its copy of the header drops that wrapper
+    root = re.sub(r'<h1 class="brand-h1">\s*(.*?)\s*</h1>', r"\1", root, count=1, flags=re.S)
     header = re.search(r'<header class="top">.*?</header>', root, re.S)
     footer = re.search(r"<footer>.*?</footer>", root, re.S)
     chrome = tuple(_up(x[0], "../../") if x else "" for x in (header, footer))
@@ -535,6 +538,40 @@ def write_models(site: Path, s: pd.DataFrame, cfg, models: list[dict], unranked:
     return paths
 
 
+
+def _static_standings(st: pd.DataFrame) -> str:
+    """The Leaderboard's standings table as plain HTML, for crawlers and before the script runs; app.js replaces it on
+    load. Same default as the page (live, all zones and targets, every live day); model names link to their pages."""
+    e = html.escape
+    rows = "".join(
+        f'<tr><td>{int(r["rank"])}</td><td class="model"><a href="models/{e(r["model"])}/">{e(DISPLAY.get(r["model"], r["model"]))}</a></td>'
+        f'<td class="r">{r["elo"]:.0f}</td><td class="r">{_f(r["rel_mae"])}</td><td class="r">{int(r["races"])}</td></tr>'
+        for _, r in st[st["rank"].notna()].iterrows())
+    return ('<thead><tr><th>#</th><th>Model</th><th class="r">Elo</th><th class="r">Rel. MAE</th><th class="r">N evaluations</th></tr></thead>'
+            f"<tbody>{rows}</tbody>")
+
+
+def _lastmods(site: Path, paths: list[str], generated: str, day: str) -> dict[str, str]:
+    """Each sitemap URL's last real change: a page's date moves only when its content does. The build time itself
+    (dateModified, "updated ...") is masked before hashing; state in site/.sitemap-state.json (dotfiles are not served)."""
+    state_f = site / ".sitemap-state.json"
+    try:
+        state = json.loads(state_f.read_text())
+    except (OSError, ValueError):
+        state = {}
+    out = {}
+    for path in paths:
+        f = site / (path + "index.html" if path == "" or path.endswith("/") else path)
+        if not f.exists():
+            continue
+        text = f.read_text().replace(generated, "")
+        digest = hashlib.sha1(text.encode()).hexdigest()
+        old = state.get(path)
+        out[path] = old[1] if old and old[0] == digest else day
+        state[path] = [digest, out[path]]
+    state_f.write_text(json.dumps(state, indent=0, sort_keys=True))
+    return out
+
 def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, atomic_write, models: list[dict] | None = None) -> None:
     refs = refs | {m["name"] for m in models or [] if m["ensemble"]}   # as the Leaderboard's default: the ensembles leave the races
     st = standings(s, cfg, refs, "live")
@@ -555,13 +592,20 @@ def write_seo(site: Path, s: pd.DataFrame, cfg, refs: set[str], generated: str, 
             extra = write_models(site, s, cfg, models, refs, st, atomic_write)
         except Exception:  # noqa: BLE001
             log.exception("model pages failed")
-    urls = [f"{SITE_URL}/{p}" for p, _ in PAGES.values()] + [f"{SITE_URL}/{p}" for p in extra] + [f"{SITE_URL}/llms.txt"]
-    atomic_write(site / "sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-                 + "".join(f"  <url><loc>{u}</loc><lastmod>{day}</lastmod><changefreq>daily</changefreq></url>\n" for u in urls) + "</urlset>\n")
     for page, (_, title) in PAGES.items():
         f = site / page
         if not f.exists():
             continue
         text = f.read_text()
         text = text.replace("</head>", _head(page, title, cfg, _dataset(cfg, s, generated) if page == "index.html" else None) + "</head>", 1)
+        if page == "index.html" and not st.empty:      # the standings in the HTML itself, not only after the script runs
+            text = text.replace('<table id="standings-table"></table>', f'<table id="standings-table">{_static_standings(st)}</table>', 1)
         atomic_write(f, text)
+    # sitemap: the pages, and only the model pages of models that ran live in the last week (retired and backtest-only
+    # models keep their pages but are not advertised); no llms.txt (not a page); each date is the page's last real change
+    recent = sorted(s.loc[s["phase"] == "live", "issue_date"].unique())[-7:]
+    active = set(s.loc[(s["phase"] == "live") & s["issue_date"].isin(recent), "model"])
+    listed = [p for p, _ in PAGES.values()] + [p for p in extra if p == "models/" or p[len("models/"):-1] in active]
+    mods = _lastmods(site, listed, generated, day)
+    atomic_write(site / "sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                 + "".join(f"  <url><loc>{SITE_URL}/{p}</loc><lastmod>{mods[p]}</lastmod></url>\n" for p in listed if p in mods) + "</urlset>\n")
