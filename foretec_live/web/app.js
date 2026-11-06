@@ -456,7 +456,6 @@
   }
 
   const narrow = () => window.innerWidth < 640;
-  const aggText = () => (singleSeries() ? "" : `Across the selected series: the ${{ mean: "mean", median: "median", gmean: "geometric mean" }[S.agg]} of the per-series values.`);
   const singleSeries = () => S.zone !== "all" && S.target !== "all";
   const rawAllowed = () => S.metric === "rel_mae" || singleSeries();
   function unitSuffix() {
@@ -933,38 +932,37 @@
 
 
   // ---------- explanations: shown on hover (mouse), focus (keyboard) or tap (touch) wherever a metric is named ----------
-  const units = () => [...new Set(Object.values(D.config.targets).map((t) => t.unit))].join(" or ");
-  const mixedUnits = () => (S.target === "all" ? " With all targets selected, values in different units are averaged together: pick one target to compare them." : "");
+  const mixedUnits = () => (S.target === "all" ? " Mixes units under All targets: pick one target." : "");
   const fieldSize = () => Math.max(0, ...DAYS.map((x) => x.n));
   const GLOSS = {
-    pos: () => ["Position", "Place in the standings: highest score first, equal scores split by average rank; provisional models (too few races yet) follow the ranked ones. It stays the same when you sort the table by another column."],
-    pts: () => ["Elo", `Elo score: a Bradley–Terry rating on the Elo scale. A race is one issue day and one series; in each race every pair of models is one game, won by the lower ${metricDef().label} (equal errors split it). All games of the selected period are fitted at once, so the order of the races does not matter. 1000 is the field's average; 400 points more means 10:1 odds of winning a game. Beating a strong model counts more than beating a weak one. A failed run is left out of the race.`],
-    ci: () => ["95% interval", "How much the Elo score would move if the set of issue days had been different: the 2.5th to 97.5th percentile of 200 refits, each on the period's issue days drawn at random with replacement (a bootstrap over issue days; whole days, because all races of a day share the same weather). Overlapping intervals mean the order of two models is not settled yet. Sorting uses the lower end."],
-    races: () => ["N evaluations", `Scored forecasts in the period, one per issue day and series (a race). A model with fewer than ${MIN_RACES}, or a fifth of the most any model has, is provisional and listed after the ranked ones. Under All targets, a model with no scored race yet on one of the targets it forecasts is left out until it has one.`],
-    dm: () => ["Diebold–Mariano test vs #1", `p-value of the Diebold–Mariano test that the model and the leader are equally accurate. Loss is Rel. MAE, differenced per race and averaged per issue day over the series both delivered; Newey–West variance, Harvey–Leybourne–Newbold correction, two-sided. ≈ marks no significant difference at 5% (statistically tied with #1), ▲ significantly more accurate than #1 on Rel. MAE, a bare p significantly less accurate. Needs ${DM_MIN_DAYS} common days.`],
-    wr: () => ["Win rate", `Average win rate, as on fev-bench: the share of head-to-head games the model won, where every race (one issue day, one series) is one game against each other model in it, won by the lower ${metricDef().label} (a tie counts half). 50% is an even record against the field it met. The small figures are the 95% interval: 200 resamples of the period's issue days, drawn with replacement (whole days, because all races of a day share the weather). Higher is better.`],
-    skill: () => ["Skill score", `Skill score, as on fev-bench: 1 minus the geometric mean, over the model's races, of its ${S.metric === "rel_mae" ? "MAE" : metricDef().label} divided by that of ${D.config.baseline} (seasonal naive: the same quarter-hour one week earlier) in the same race, each ratio clipped to 0.01–100. 0% matches the baseline, 30% has 30% less error than it on a typical race, a negative score is worse than it. Unlike Rel. MAE, which pools each series, every race counts the same, and the geometric mean keeps one bad day from dominating. Higher is better.`],
-    rank: () => ["Average rank", `In every selected series (zone and target) the models are ranked by ${metricDef().label} for the day: 1 is best, and tied models share the average place. Ranks are averaged over the series, then over the days. Lower is better.`],
-    rel: () => ["Rel. MAE", `Per series (zone and target), all of the model's absolute errors in the period are pooled and divided by those of ${D.config.baseline} (the same quarter-hour one week earlier) on the same days; below 1 beats that baseline. ${aggText()} Lower is better.`],
-    relw: () => ["Rel. WIS", `The weighted interval score of the model's quantiles, relative to ${D.config.baseline} on the same days and series: it rewards a forecast distribution that is both sharp and calibrated. Below 1 beats the baseline. Only models that publish quantiles have one. ${aggText()} Lower is better.`],
-    wis: () => ["WIS", `Weighted interval score: the score of the 10-90%, 20-80%, 30-70% and 40-60% intervals and the median together, in the series' unit (${units()}); equal to twice the average pinball loss. Lower is better.${mixedUnits()}`],
-    winkler: () => ["Winkler 80%", `Interval score of the 10-90% interval: its width, plus 10 times the distance by which the actual falls outside it. Lower is better.${mixedUnits()}`],
-    cover: () => ["Coverage 80%", "Share of quarter-hours with the actual inside the 10-90% interval. A calibrated forecast covers 80%; less is overconfident, more is too wide. Sorted by the distance from 80%."],
-    relr: () => ["Rel. RMSE", `Like Rel. MAE with squared errors: per series sqrt(sum of squared errors / the baseline's), on the same days. Large misses weigh more. ${aggText()} Lower is better.`],
-    nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts. Relative errors of models with different series are averaged over different sets, so compare them with care."],
-    ens: () => ["Ensembles", "Medians of other models' forecasts. Excluded by default: then they also leave the races."],
-    agg: () => ["Across series", "How the per-series Rel. MAE and Rel. RMSE are combined when several zones or targets are selected."],
-    rel_mae: () => ["Rel. MAE", `A model's MAE divided by the MAE of ${D.config.baseline} (the same quarter-hour one week earlier) on the same day and series. Below 1 beats that baseline; 0.5 halves its error. It has no unit, so prices, wind and solar can be averaged together. Lower is better.`],
-    mae: () => ["MAE", `Mean absolute error: the average size of the miss over the day's quarter-hours, in the series' own unit (${units()}). Lower is better.${mixedUnits()}`],
-    rmse: () => ["RMSE", `Root mean squared error: like MAE, but errors are squared before averaging, so a few large misses (price spikes, wind ramps) cost more than many small ones. Lower is better.${mixedUnits()}`],
-    pinball: () => ["Pinball loss", `Quantile loss averaged over the 10th to 90th percentiles. It scores the whole forecast band: narrow bands score well only if the outcome falls inside them as often as they claim. Only models that publish quantiles have one. Lower is better.${mixedUnits()}`],
-    bias: () => ["Bias", "Mean of forecast minus actual. Positive means the model forecasts too high on average, negative too low. Closest to 0 is best."],
-    best: () => ["Best day", "The model's best issue day: the share of its head-to-head games it won that day, in % (averaged over that day's races)."],
-    worst: () => ["Worst day", "The model's worst issue day: the share of its head-to-head games it won that day, in % (averaged over that day's races)."],
+    pos: () => ["Position", "Place by Elo; provisional models (too few races yet) come last. Sorting by another column does not change it."],
+    pts: () => ["Elo", `Bradley–Terry rating from head-to-head games: in each race (one issue day, one series) the lower ${metricDef().label} wins. 1000 is the field's average; +400 means 10:1 odds of winning.`],
+    ci: () => ["95% interval", "Range of the Elo score over 200 resamples of the issue days. Overlapping ranges mean the order is not settled yet."],
+    races: () => ["N evaluations", `Scored forecasts, one per issue day and series. Fewer than ${MIN_RACES}, or a fifth of the busiest model's, is provisional.`],
+    dm: () => ["Diebold–Mariano test vs #1", `p-value that the model and #1 are equally accurate on daily Rel. MAE. ≈ tied at 5%, ▲ significantly better. Needs ${DM_MIN_DAYS} common days.`],
+    wr: () => ["Win rate", `Share of head-to-head games won (lower ${metricDef().label} wins, ties count half). Small figures: 95% interval. Higher is better.`],
+    skill: () => ["Skill score", `1 minus the geometric mean of the error relative to ${D.config.baseline} per race, clipped to 0.01–100. 0% matches the baseline. Higher is better.`],
+    rank: () => ["Average rank", `Place by ${metricDef().label} in each series and day (1 = best), averaged. Lower is better.`],
+    rel: () => ["Rel. MAE", `Absolute error divided by ${D.config.baseline}'s (same quarter-hour last week) on the same days. Below 1 beats it. Lower is better.`],
+    relw: () => ["Rel. WIS", `Interval score of the quantile band divided by ${D.config.baseline}'s: rewards bands that are narrow and calibrated. Lower is better.`],
+    wis: () => ["WIS", `Weighted interval score of the quantile band, in the series' unit. Lower is better.${mixedUnits()}`],
+    winkler: () => ["Winkler 80%", `Width of the 10–90% band plus a penalty when the actual falls outside it. Lower is better.${mixedUnits()}`],
+    cover: () => ["Coverage 80%", "Share of quarter-hours inside the 10–90% band. 80% is calibrated; less is overconfident."],
+    relr: () => ["Rel. RMSE", "Like Rel. MAE with squared errors, so large misses weigh more. Lower is better."],
+    nser: () => ["Series", "How many of the selected series (zone × target) the model forecasts."],
+    ens: () => ["Ensembles", "Medians of other models' forecasts. Excluded by default."],
+    agg: () => ["Across series", "How per-series relative errors are combined across zones or targets."],
+    rel_mae: () => ["Rel. MAE", `MAE divided by ${D.config.baseline}'s on the same day and series. Below 1 beats it. Lower is better.`],
+    mae: () => ["MAE", `Average size of the miss, in the series' unit. Lower is better.${mixedUnits()}`],
+    rmse: () => ["RMSE", `Like MAE, but large misses weigh more. Lower is better.${mixedUnits()}`],
+    pinball: () => ["Pinball loss", `Quantile loss over the 10th–90th percentiles: scores the whole band. Lower is better.${mixedUnits()}`],
+    bias: () => ["Bias", "Mean of forecast minus actual: positive is too high. Closest to 0 is best."],
+    best: () => ["Best day", "Share of head-to-head games won on the model's best issue day."],
+    worst: () => ["Worst day", "Share of head-to-head games won on the model's worst issue day."],
     bar: () => ["Score", "The score as a bar on its 0–100 scale."],
     metric: () => GLOSS[S.metric](),
-    value: () => ["Value", `The mean ${metricDef().label} per issue day, in the series' own unit. Needs one zone and one target.`],
-    heat: () => ["Average rank", "Each cell is the model's average rank on that issue day across the selected series (1 = best); darker is better. The last column averages over the days shown."],
+    value: () => ["Value", `Mean ${metricDef().label} per issue day. Needs one zone and one target.`],
+    heat: () => ["Average rank", "Average rank per issue day (1 = best); darker is better."],
   };
   let tipAnchor = null, tipTimer = null, lastPointer = "mouse";
   function showTip(el) {
