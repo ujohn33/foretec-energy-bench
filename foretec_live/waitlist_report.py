@@ -19,6 +19,7 @@ import collections
 import datetime as dt
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -29,16 +30,30 @@ STATE = Path(os.environ.get("STATE_DIRECTORY", "/var/lib/foretec-waitlist-report
 ROLE = {"participant": "participant", "sponsor": "sponsor", "researcher": "researcher", "curious": "just curious"}
 
 
+def failures() -> int:
+    """Sign-up requests that crashed in the waiting-list service over the last day (tracebacks in its journal)."""
+    try:
+        out = subprocess.run(["journalctl", "-u", "foretec-waitlist", "--since", "-24h", "-o", "cat", "--no-pager"],
+                             capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    return out.count("Traceback (most recent call last)")
+
+
 def main(argv: list[str]) -> int:
     rows = [json.loads(x) for x in LIST.read_text().splitlines() if x.strip()] if LIST.exists() else []
     done = int(STATE.read_text()) if STATE.exists() else 0
     new = rows[done:]
+    failed = failures()
     monday = dt.date.today().weekday() == 0
-    if not new and not monday and "--test" not in argv and "--dry" not in argv:
+    if not new and not failed and not monday and "--test" not in argv and "--dry" not in argv:
         return 0
     roles = collections.Counter(r["role"] for r in rows)
-    subject = f"Competition waiting list: {len(new)} new, {len(rows)} in total"
+    subject = f"Competition waiting list: {len(new)} new, {len(rows)} in total" + (f", {failed} FAILED" if failed else "")
     lines = [f"{len(new)} new sign-up{'s' if len(new) != 1 else ''} since the last report, {len(rows)} in total.", ""]
+    if failed:
+        lines += [f"WARNING: {failed} sign-up request{'s' if failed != 1 else ''} failed on the server in the last 24 hours",
+                  "(the visitor saw an error; addresses are not logged). Check: journalctl -u foretec-waitlist --since -1d", ""]
     if new:
         lines += ["New:"] + [f"  {r['t'][:16].replace('T', ' ')} UTC  {ROLE.get(r['role'], r['role']):<12}  {r['email']}" for r in new] + [""]
     if rows:

@@ -164,7 +164,12 @@ class Handler(BaseHTTPRequestHandler):
                 data = {k: v[0] for k, v in parse_qs(raw).items()}
         except ValueError:
             return self._reply(400, "Invalid request.", as_json)
-        self._reply(*add(data), as_json)
+        try:
+            self._reply(*add(data), as_json)
+        except Exception:   # e.g. the list cannot be written: say so, and leave a trace the daily report counts
+            import traceback
+            traceback.print_exc()
+            self._reply(500, "Sign-up failed on our side. Please email evgeny@foretec.be and we will add you.", as_json)
 
 
 
