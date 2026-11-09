@@ -11,7 +11,7 @@ EnvironmentFile=/etc/foretec-waitlist.env
 EnvironmentFile=-/root/.env
 ExecStart=/usr/bin/python3 -I /srv/foretec/foretec-live/foretec_live/waitlist_report.py
 StateDirectory=foretec-waitlist-report
-Environment=WAITLIST_FILE=/var/lib/private/foretec-waitlist/waitlist.jsonl
+Environment=WAITLIST_FILE=/var/lib/foretec-waitlist/waitlist.jsonl
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
