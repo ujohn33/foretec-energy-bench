@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch the competition waiting list and email each new sign-up right away
+
+[Path]
+# the service writes the list here (DynamicUser state directory); a change starts foretec-waitlist-notify.service
+PathModified=/var/lib/private/foretec-waitlist/waitlist.jsonl
+Unit=foretec-waitlist-notify.service
+
+[Install]
+WantedBy=paths.target

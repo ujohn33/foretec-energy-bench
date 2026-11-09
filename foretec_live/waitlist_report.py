@@ -10,6 +10,7 @@ report, and every Monday in any case, so a silent week still shows the job is al
   state    $STATE_DIRECTORY/reported  (how many entries the last report covered)
 
 python3 waitlist_report.py           daily run
+python3 waitlist_report.py --new-only  on each change to the list (foretec-waitlist-notify.path): email new sign-ups only
 python3 waitlist_report.py --test    send a report now, whatever the count
 python3 waitlist_report.py --dry     print the email instead of sending it
 """
@@ -43,9 +44,15 @@ def failures() -> int:
 def main(argv: list[str]) -> int:
     rows = [json.loads(x) for x in LIST.read_text().splitlines() if x.strip()] if LIST.exists() else []
     done = int(STATE.read_text()) if STATE.exists() else 0
+    if done > len(rows):   # entries were removed by hand: start counting from the list as it is now
+        done = len(rows)
     new = rows[done:]
     failed = failures()
     monday = dt.date.today().weekday() == 0
+    if "--new-only" in argv and not new:   # run on every change to the list: only a new sign-up is news
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(str(len(rows)))
+        return 0
     if not new and not failed and not monday and "--test" not in argv and "--dry" not in argv:
         return 0
     roles = collections.Counter(r["role"] for r in rows)

@@ -114,6 +114,7 @@ if [ $WEB -eq 1 ]; then
   [ -f /etc/foretec-waitlist.env ] || install -m 600 /dev/null /etc/foretec-waitlist.env
   grep -q '^REPORT_TO=' /etc/foretec-waitlist.env || echo 'REPORT_TO=evgeny@foretec.be' >> /etc/foretec-waitlist.env
   systemctl enable --now foretec-waitlist-report.timer
+  systemctl enable --now foretec-waitlist-notify.path
   systemctl reload caddy || systemctl restart caddy
 fi
 
