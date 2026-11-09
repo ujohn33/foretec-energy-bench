@@ -6,8 +6,9 @@ state directory writable (scripts/systemd/foretec-waitlist.service).
 
   accepted   email (checked, lower-cased, at most 254 characters), role (one of ROLES), consent (must be true),
              org (the organisation, optional: compete.html asks sponsors for it, foretec.be's form has none; at most 120
-             printable characters, kept for sponsors only)
-  stored     {"t": UTC time, "email", "role", "org" (sponsors)}, one line each, in $STATE_DIRECTORY/waitlist.jsonl; an email already on
+             printable characters, kept for sponsors only), message (optional free text, at most 1000 characters,
+             control characters other than line breaks removed)
+  stored     {"t": UTC time, "email", "role", "org" (sponsors), "message" (if given)}, one line each, in $STATE_DIRECTORY/waitlist.jsonl; an email already on
              the list is acknowledged and not stored twice
   refused    a filled-in honeypot field (silently accepted, not stored), more than PER_IP_HOUR requests an hour from one
              address, more than PER_DAY new entries a day in total
@@ -29,7 +30,7 @@ HOST, PORT = "127.0.0.1", int(os.environ.get("WAITLIST_PORT", "8091"))
 STORE = Path(os.environ.get("STATE_DIRECTORY", "/var/lib/foretec-waitlist")) / "waitlist.jsonl"
 ROLES = {"participant", "sponsor", "researcher", "curious"}
 EMAIL = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$")
-MAX_BODY, PER_IP_HOUR, PER_DAY = 2048, 10, 500
+MAX_BODY, PER_IP_HOUR, PER_DAY = 8192, 10, 500
 PAGE = "/compete.html"
 # foretec.be posts its sign-up form here too (cross-site): only these origins may read the reply
 ORIGINS = {"https://foretec.be", "https://www.foretec.be"}
@@ -72,6 +73,8 @@ def add(data: dict) -> tuple[int, str]:
     org = " ".join(str(data.get("org", "")).split())[:120] if role == "sponsor" else ""
     if not org.isprintable():
         org = ""
+    raw = str(data.get("message", "")).replace("\r\n", "\n").replace("\r", "\n")
+    message = "".join(c for c in raw if c == "\n" or c.isprintable()).strip()[:1000]
     if not consent:
         return 400, "Please tick the box so we may email you."
     with _lock:
@@ -87,6 +90,8 @@ def add(data: dict) -> tuple[int, str]:
             row = {"t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "email": email, "role": role}
             if org:
                 row["org"] = org
+            if message:
+                row["message"] = message
             f.write(json.dumps(row) + "\n")
         os.chmod(STORE, 0o600)
         _day["n"] += 1

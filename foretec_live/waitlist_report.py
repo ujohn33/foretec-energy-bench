@@ -62,7 +62,13 @@ def main(argv: list[str]) -> int:
         lines += [f"WARNING: {failed} sign-up request{'s' if failed != 1 else ''} failed on the server in the last 24 hours",
                   "(the visitor saw an error; addresses are not logged). Check: journalctl -u foretec-waitlist --since -1d", ""]
     if new:
-        lines += ["New:"] + [f"  {r['t'][:16].replace('T', ' ')} UTC  {ROLE.get(r['role'], r['role']):<12}  {r['email']}" for r in new] + [""]
+        lines += ["New:"]
+        for r in new:
+            lines.append(f"  {r['t'][:16].replace('T', ' ')} UTC  {ROLE.get(r['role'], r['role']):<12}  {r['email']}"
+                         + (f"  ({r['org']})" if r.get("org") else ""))
+            if r.get("message"):
+                lines += ["      " + x for x in r["message"].splitlines()]
+        lines += [""]
     if rows:
         lines += ["All sign-ups by role:"] + [f"  {ROLE.get(k, k):<12}  {v}" for k, v in roles.most_common()] + [""]
     lines += ["Full list on the server:  ssh transparency 'cat /var/lib/foretec-waitlist/waitlist.jsonl'",

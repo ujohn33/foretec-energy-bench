@@ -72,7 +72,7 @@ if [ $WEB -eq 1 ]; then
   HEADERS=$(printf '  header {\n    Strict-Transport-Security "max-age=31536000"\n    X-Content-Type-Options "nosniff"\n    X-Frame-Options "DENY"\n    Referrer-Policy "strict-origin-when-cross-origin"\n    Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"\n    Content-Security-Policy "%s"\n    -Server\n  }\n' "$CSP")
   HEADERS="$HEADERS"$'\n'
   # the competition waiting list (foretec_live/waitlist.py, foretec-waitlist.service): the only dynamic path
-  WAITLIST=$(printf '  request_body /api/waitlist {\n    max_size 4KB\n  }\n  reverse_proxy /api/waitlist 127.0.0.1:8091\n')
+  WAITLIST=$(printf '  request_body /api/waitlist {\n    max_size 16KB\n  }\n  reverse_proxy /api/waitlist 127.0.0.1:8091\n')
   WAITLIST="$WAITLIST"$'\n'
   # share cards (foretec_live/share.py, foretec-share.service)
   WAITLIST="$WAITLIST"$(printf '  reverse_proxy /s/* 127.0.0.1:8092\n')$'\n'

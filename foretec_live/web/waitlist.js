@@ -25,7 +25,7 @@
     try {
       const r = await fetch("/api/waitlist", {
         method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email, role: form.role.value, org: form.role.value === "sponsor" ? form.org.value.trim() : "", consent: true, website: form.website.value }),
+        body: JSON.stringify({ email, role: form.role.value, org: form.role.value === "sponsor" ? form.org.value.trim() : "", message: form.message.value.trim(), consent: true, website: form.website.value }),
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok) { say("Thank you, you are on the list.", true); form.reset(); showOrg(); }
