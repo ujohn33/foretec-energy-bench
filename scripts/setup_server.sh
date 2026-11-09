@@ -63,7 +63,8 @@ fi
 if [ $WEB -eq 1 ]; then
   apt-get install -y -qq caddy >/dev/null
   # pages and data revalidate on every load (app.js/style.css are cache-busted by name, vendor/ never changes)
-  FRESH=$(printf '  @fresh path / *.html /data/*\n  header @fresh Cache-Control "no-cache"\n')
+  # data files (downloads, the pages' JSON, leaderboard.csv, llms.txt) are fetched and rendered but never listed in search
+  FRESH=$(printf '  @datafile path *.json *.csv *.gz *.txt *.parquet\n  header @datafile X-Robots-Tag "noindex"\n  @fresh path / *.html /data/*\n  header @fresh Cache-Control "no-cache"\n')
   FRESH="$FRESH"$'\n'
   # security headers: HTTPS only, no framing or MIME sniffing, scripts and data from the
   # site itself, fonts from the site and Google Fonts, map tiles from OpenStreetMap; dotfiles are never served
