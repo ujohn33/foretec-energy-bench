@@ -26,6 +26,8 @@ declare -A PKGS=(
   [timestral]="timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"
   # Toto 2.0 (Datadog, Apache-2.0); Toto 1.0 stays in [toto]
   [toto2]="toto-2==2.0.0"
+  # Simons (Abel AI Lab): package Apache-2.0, weights OpenMDW-1.1, pinned in models/_shared/fl_simons.py
+  [simons]="simons @ git+https://github.com/Abel-ai-lab/Simons.git@ebc951aeec8971f7a7a89c0c83479aa4bf4a23ea"
   # TimeH2O (H2O.ai): inference package Apache-2.0; weights gated (non-commercial licence), need HF_TOKEN in /root/.env
   [timeh2o]="h2ofm==0.43.1"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
