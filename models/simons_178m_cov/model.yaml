@@ -1,0 +1,8 @@
+name: simons_178m_cov
+author: Abel AI Lab
+description: "Simons-178M zero-shot with known-future covariates (NWP ensemble means and spreads, ENTSO-E load forecast (price only), fuel cost, calendar) over the history and the delivery day, read as an in-context ridge regression (kept if a backtest on the history favours it) and as covariate rows."
+family: simons
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: simons
+script: forecaster.py

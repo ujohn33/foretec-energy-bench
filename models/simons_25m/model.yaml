@@ -1,0 +1,8 @@
+name: simons_25m
+author: Abel AI Lab
+description: "Simons-25M (abel-lab/Simons-25M, November 2026, code Apache-2.0, weights OpenMDW-1.1): one of four sizes of Abel AI Lab's open time series foundation model, zero-shot on the target's own history, 9 quantiles."
+family: simons
+inputs: [history]
+runner: subprocess
+env: simons
+script: forecaster.py
