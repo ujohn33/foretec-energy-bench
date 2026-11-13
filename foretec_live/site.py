@@ -121,7 +121,7 @@ def _day_json(issue_date: str, folder: Path, cfg) -> dict:
             df = load_imbalance(cfg, zone, delivery_date(issue_date))
         except Exception:  # noqa: BLE001 - a missing or unreadable file only leaves the zone out
             df = None
-        if df is not None and len(df):
+        if df is not None and len(df) and {"long", "short"} <= set(df.columns):   # an empty file has no columns
             df = df.reindex(idx)
             if df[["long", "short"]].notna().any(axis=None):
                 imb[zone] = {"long": _round(df["long"], 2), "short": _round(df["short"], 2)}
