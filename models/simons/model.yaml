@@ -6,4 +6,3 @@ inputs: [history]
 runner: subprocess
 env: simons
 script: forecaster.py
-live: false   # until its backtest has run
