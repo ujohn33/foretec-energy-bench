@@ -9,7 +9,7 @@ history and the delivery day.
 
 Run without the bundle's sign-flip test-time augmentation (tta_sign_flip: also forecasting the negated series); every
 other setting of the released tta.json is kept. On the server's CPU the flip costs 2.5x (history only) to 6x (16
-covariates) the time, which would not fit in the live run.
+covariates) the time, which would not fit in the live run. sign_flip=True keeps it (for an A/B).
 
 Licence: ci-proto Code and Model Licence 1.0 (Apache-2.0 based, commercial use allowed); a public product using it must
 show "Uses ci-proto, released by Continuous Intelligence. Continuous Intelligence does not endorse or approve this
@@ -31,12 +31,12 @@ from fl_io import read_request, write_output
 REPO, REVISION = "ContinuousIntelligence/ci-proto", "ee3031351a151e3f6febf8c62b53e6ea1008bef6"
 
 
-def run(covariates: bool = False) -> None:
+def run(covariates: bool = False, sign_flip: bool = False) -> None:
     import continuousintelligence as ci
     from huggingface_hub import snapshot_download
     req, series = read_request()
     bundle = snapshot_download(REPO, revision=REVISION, allow_patterns=["model.ckpt", "tta.json", "config.json"])
-    tta = {**json.load(open(os.path.join(bundle, "tta.json"))), "tta_sign_flip": False}
+    tta = {**json.load(open(os.path.join(bundle, "tta.json"))), "tta_sign_flip": sign_flip}
     tta_file = os.path.join(tempfile.mkdtemp(), "tta.json")
     with open(tta_file, "w") as f:
         json.dump(tta, f)
