@@ -1,0 +1,9 @@
+name: simons_cov
+author: Abel AI Lab
+description: "Simons-297M zero-shot with its native known-future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost; at most 16, own zone first) over the history and the delivery day."
+family: simons
+inputs: [history, nwp, load_forecast, fuel]
+runner: subprocess
+env: simons
+script: forecaster.py
+live: false   # until its backtest has run

@@ -1,0 +1,9 @@
+name: ci_proto
+author: Continuous Intelligence
+description: "ci-proto (ContinuousIntelligence/ci-proto, November 2026, 167M parameters): an attention-free time mixer, zero-shot on the target's own history with its own calendar features, 9 quantiles. Run without the sign-flip test-time augmentation, which would not fit in the live run. Uses ci-proto, released by Continuous Intelligence. Continuous Intelligence does not endorse or approve this product or service."
+family: ciproto
+inputs: [history, calendar]
+runner: subprocess
+env: ciproto
+script: forecaster.py
+live: false   # until its backtest has run

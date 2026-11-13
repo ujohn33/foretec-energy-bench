@@ -1,0 +1,9 @@
+name: simons
+author: Abel AI Lab
+description: "Simons-297M (abel-lab/Simons-297M, November 2026, OpenMDW-1.1 weights): a causal patch transformer with one-way covariate attention and cross-variate attention, zero-shot on the target's own history, 9 quantiles."
+family: simons
+inputs: [history]
+runner: subprocess
+env: simons
+script: forecaster.py
+live: false   # until its backtest has run

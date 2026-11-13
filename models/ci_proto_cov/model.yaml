@@ -1,0 +1,9 @@
+name: ci_proto_cov
+author: Continuous Intelligence
+description: "ci-proto zero-shot with its native future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost) over the history and the delivery day, plus its own calendar features. Run without the sign-flip test-time augmentation, which would not fit in the live run. Uses ci-proto, released by Continuous Intelligence. Continuous Intelligence does not endorse or approve this product or service."
+family: ciproto
+inputs: [history, nwp, load_forecast, fuel, calendar]
+runner: subprocess
+env: ciproto
+script: forecaster.py
+live: false   # until its backtest has run

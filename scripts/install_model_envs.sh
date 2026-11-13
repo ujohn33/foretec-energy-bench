@@ -28,6 +28,10 @@ declare -A PKGS=(
   [toto2]="toto-2==2.0.0"
   # TimeH2O (H2O.ai): inference package Apache-2.0; weights gated (non-commercial licence), need HF_TOKEN in /root/.env
   [timeh2o]="h2ofm==0.43.1"
+  # ci-proto (Continuous Intelligence): ci-proto licence (Apache-2.0 based; public attribution + one-time notification)
+  [ciproto]="continuousintelligence==0.1.1"
+  # Simons (Abel AI Lab): code Apache-2.0, weights OpenMDW-1.1
+  [simons]="simons @ git+https://github.com/Abel-ai-lab/Simons.git@8e338e915d26c8960713889ef12ab1cf5c08d591"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"
