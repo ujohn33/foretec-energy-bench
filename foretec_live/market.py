@@ -28,6 +28,7 @@ from .timeutil import delivery_index
 
 log = logging.getLogger(__name__)
 API = "https://web-api.tp.entsoe.eu/api"
+COLUMNS = ("long", "short")
 
 
 def _area(cfg, zone: str) -> str:
@@ -89,8 +90,16 @@ def fetch_imbalance(cfg, zone: str, delivery: dt.date) -> pd.DataFrame:
                 if v.notna().any():
                     out[name].append(v.ffill())          # a left-out position repeats the previous one (A03 curve)
     out = {k: pd.concat(v).sort_index().groupby(level=0).last().resample("15min").ffill() for k, v in out.items() if v}
-    df = pd.DataFrame(out).reindex(idx)
-    return df
+    # both columns always: a reply without prices (an acknowledgement such as "No matching data", or a document with no
+    # Period yet) becomes all-NaN, not a frame with no columns, whose row checks are vacuously true
+    return pd.DataFrame(out, columns=COLUMNS).reindex(idx)
+
+
+def _complete(df: pd.DataFrame | None) -> float:
+    """Share of quarter-hours with both prices; 0 for a missing frame or one without the long/short columns."""
+    if df is None or not len(df) or not set(COLUMNS) <= set(df.columns):
+        return 0.0
+    return float(df[list(COLUMNS)].notna().all(axis=1).mean())
 
 
 def update_imbalance(cfg, first: dt.date, last: dt.date) -> list[str]:
@@ -100,14 +109,14 @@ def update_imbalance(cfg, first: dt.date, last: dt.date) -> list[str]:
     while d <= last:
         for zone in cfg["zones"]:
             f = _path(cfg, zone, d)
-            if f.exists() and pd.read_parquet(f).notna().all(axis=1).mean() >= 0.99:
+            if f.exists() and _complete(pd.read_parquet(f)) >= 0.99:
                 continue
             try:
                 df = fetch_imbalance(cfg, zone, d)
             except Exception as e:  # noqa: BLE001 - value is extra; never fail a scoring run on it
                 log.warning("imbalance %s %s: %s", zone, d, str(e)[:150])
                 continue
-            if df.notna().all(axis=1).mean() >= 0.95:
+            if _complete(df) >= 0.95:
                 f.parent.mkdir(parents=True, exist_ok=True)
                 df.to_parquet(f)
                 written.append(f"{d} {zone}")
@@ -116,8 +125,12 @@ def update_imbalance(cfg, first: dt.date, last: dt.date) -> list[str]:
 
 
 def load_imbalance(cfg, zone: str, delivery: dt.date) -> pd.DataFrame | None:
+    """Long and short prices for delivery day D, or None when there is no file or it lacks the long/short columns."""
     f = _path(cfg, zone, delivery)
-    return pd.read_parquet(f) if f.exists() else None
+    if not f.exists():
+        return None
+    df = pd.read_parquet(f)
+    return df if set(COLUMNS) <= set(df.columns) else None
 
 
 # ---------- forecast value: a producer sells its forecast on the day-ahead market ----------
