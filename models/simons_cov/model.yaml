@@ -1,8 +1,8 @@
 name: simons_cov
 author: Abel AI Lab
-description: "Simons-297M zero-shot with its native known-future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost; at most 16, own zone first) over the history and the delivery day."
+description: "Simons-297M zero-shot with known-future covariates (NWP ensemble means/spreads, ENTSO-E load forecast where the target gets it, fuel cost: the first 12 of the compact set, own zone first; plus calendar) over the history and the delivery day, read as an in-context ridge regression (kept if a backtest on the history favours it) and as covariate rows."
 family: simons
-inputs: [history, nwp, load_forecast, fuel]
+inputs: [history, nwp, load_forecast, fuel, calendar]
 runner: subprocess
 env: simons
 script: forecaster.py
