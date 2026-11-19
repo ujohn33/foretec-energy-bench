@@ -49,13 +49,19 @@ def scorable(issue_date, target, cfg, now=None) -> bool:
     return now >= ready
 
 
-def required_coverage(issue_date, target, cfg, now=None) -> float:
+def required_coverage(issue_date, target, cfg, now=None, zone=None) -> float:
     """Share of quarter-hours that must be published before the actuals are frozen.
 
     Wind and solar become scorable at midnight after delivery. Before `complete_before` on that day only a
     complete day is frozen (the early run must not freeze a day whose last hour is still missing); from then
-    on MIN_COVERAGE suffices, as before.
+    on MIN_COVERAGE suffices, as before. A series in `partial_actuals` (one whose missing hours are never published
+    later) is frozen from `after_days` after delivery with at least its `min_coverage`, and scored on those hours only.
     """
+    part = cfg.get("partial_actuals") or {}
+    if zone is not None and f"{zone}_{target}" in (part.get("series") or []):
+        late = pd.Timestamp((delivery_date(issue_date) + dt.timedelta(days=int(part["after_days"]))).isoformat())
+        if _now(cfg, now) >= late.tz_localize(cfg["timezone"]):
+            return float(part["min_coverage"])
     tcfg = cfg["targets"][target]
     if "score_after_days" not in tcfg or not tcfg.get("complete_before"):
         return MIN_COVERAGE
@@ -287,7 +293,7 @@ def score_pending(cfg, results_subdir="results", now=None, source=None) -> pd.Da
                 todo = [m for m in todo if not voided(issue_date, zone, target, cfg, m)]
             if not todo or not scorable(issue_date, target, cfg, now):
                 continue
-            y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now))
+            y = actuals(issue_date, zone, target, cfg, source, required_coverage(issue_date, target, cfg, now, zone))
             if y is None:
                 continue
             for model in todo:

@@ -26,8 +26,12 @@ Energinet (DK1, DK2), Energi Data Service (api.energidataservice.dk, no key), El
   averaged to quarter-hours. Used for DK wind because ENTSO-E's DK1 offshore (A75 B18) is a different quantity: it
   ran 1.2x the metered output from April 2025 to May 2026, and since July 2026 it covers only the parks registered
   at ENTSO-E (Anholt, Horns Rev A-C, Vesterhav Nord/Syd), missing 0.3-0.5 GW of new offshore output. Prodex agrees
-  with Energinet's settlement within 1-4% (hourly, 2024 - Oct 2026). DK solar stays on ENTSO-E: Prodex solar leaves
-  out self-consumption (DK2 19% below settlement in 2026), A75 matches settlement including it.
+  with Energinet's settlement within 1-4% (hourly, 2024 - Oct 2026).
+  DK solar from Energinet's hourly settlement (ProductionConsumptionSettlement, its four solar columns including
+  self-consumption) since ENTSO-E stopped publishing it (A75 B16 empty from 4 Nov 2026 08:00 UTC). Settlement matched
+  A75 at 0.98x (DK1) and 0.94x (DK2), hourly MAE 15 and 11 MW, 15 Sep - 3 Nov 2026; Prodex solar leaves out
+  self-consumption (0.84x and 0.66x). Settlement is published about ten days after delivery, so a day is frozen and
+  scored then.
   DK load stays on ENTSO-E A65, the quantity Energinet's own day-ahead load forecast (the grid-operator benchmark)
   predicts: in 2026 that forecast is 1.00x A65 with an hourly MAE of 40-89 MW in DK1, against 226-287 MW to Prodex's
   production plus net imports. So this source answers wind only: as a fallback it must not fill A65's load gaps.
@@ -41,9 +45,11 @@ Each source answers only for its own zone and returns nothing elsewhere, so they
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import time
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -244,9 +250,13 @@ class NedSource(Source):
         return s[(s.index >= start) & (s.index < end)] if not s.empty else s
 
 
+class RateLimited(requests.HTTPError):
+    """Energi Data Service answered 429 and the caller does not wait for it."""
+
+
 class EnerginetSource(Source):
     """DK1/DK2 wind (onshore + offshore) from Energinet's real-time production, quarter-hour means of the 5-minute
-    values (a quarter-hour needs at least 2 of its 3).
+    values (a quarter-hour needs at least 2 of its 3). DK1/DK2 solar from the hourly settlement: see _solar.
 
     Prodex is keyed on Danish local time with 24 hours a day: on the autumn clock change it has no records for the
     first (summer-time) 02:00-03:00 or for 23:05-23:55 (26 Oct 2025 and 25 Oct 2026, 23 five-minute records each; both
@@ -262,50 +272,140 @@ class EnerginetSource(Source):
     SETTLEMENT_URL = "https://api.energidataservice.dk/dataset/ProductionConsumptionSettlement"
     WIND = ("OnshoreWindPower", "OffshoreWindPower")
     SETTLED_WIND = ("OffshoreWindLt100MW_MWh", "OffshoreWindGe100MW_MWh", "OnshoreWindLt50kW_MWh", "OnshoreWindGe50kW_MWh")
+    SETTLED_SOLAR = ("SolarPowerLt10kW_MWh", "SolarPowerGe10Lt40kW_MWh", "SolarPowerGe40kW_MWh", "SolarPowerSelfConMWh")
     SETTLED_AFTER = pd.Timedelta("6h")   # Prodex arrives within ~5 min; a younger gap may still fill itself
+    SCALE_DAYS = pd.Timedelta("14D")     # solar history: the days settlement and Prodex share that set Prodex's scale
+    # the settlement dataset is rate-limited per IP (429 with Retry-After of minutes, Nov 2026): settled solar is kept
+    # in a disk cache, asked for new hours at most every SOLAR_REFRESH, and a 429 is not waited out on that path
+    SOLAR_REFRESH = pd.Timedelta("6h")
+    PATIENCE = 30.0                      # seconds of Retry-After an impatient request still waits
     FILL_WINDOW = pd.Timedelta("3D")
 
-    def _get(self, params: dict, url: str | None = None) -> list[dict]:
-        """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times."""
+    def _get(self, params: dict, url: str | None = None, patient: bool = True) -> list[dict]:
+        """One request; Energi Data Service rate-limits bursts (429): wait for Retry-After (or back off), up to 6 times.
+        An impatient request waits only up to PATIENCE seconds and otherwise fails at once."""
         retries, fails, limited = (2 if self.cfg.get("_fallback") else 4), 0, 0
         while True:
             try:
                 r = requests.get(url or self.URL, params=params, timeout=120)
-                if r.status_code == 429 and limited < 6:
+                wait = float(r.headers.get("Retry-After") or 10 * (limited + 1)) if r.status_code == 429 else 0.0
+                if r.status_code == 429 and limited < 6 and (patient or wait <= self.PATIENCE):
                     limited += 1
-                    time.sleep(float(r.headers.get("Retry-After") or 10 * limited))
+                    time.sleep(wait)
                     continue
+                if r.status_code == 429:   # impatient: give up at once, below
+                    raise RateLimited(f"429: rate-limited for {wait:.0f} s")
                 r.raise_for_status()
                 return r.json()["records"]
             except (requests.RequestException, ValueError, KeyError) as e:
                 fails += 1
-                if fails >= retries:
+                if fails >= retries or isinstance(e, RateLimited):
                     raise
                 log.warning("energidataservice failed (%s), retrying", e)
                 time.sleep(5 * fails)
 
-    def fetch(self, zone, target, start, end):
-        if zone not in ("DK1", "DK2") or target != "wind":
-            return pd.Series(dtype=float)
-        cols = self.WIND
+    def _records(self, zone, start, end, cols, time_col, url=None, patient=True) -> pd.Series:
+        """Sum of `cols` per record of [start, end) for one area, a quarter of a year per request, sorted, NaN dropped."""
         rows, a = [], pd.Timestamp(start)
-        while a < end:   # a quarter of a year per request
+        while a < end:
             b = min(pd.Timestamp(end), a + pd.Timedelta(days=92))
             rows += self._get({"start": f"{a:%Y-%m-%dT%H:%M}", "end": f"{b:%Y-%m-%dT%H:%M}", "timezone": "UTC", "limit": 0,
-                               "filter": f'{{"PriceArea":["{zone}"]}}', "columns": "Minutes5UTC," + ",".join(cols)})
+                               "filter": f'{{"PriceArea":["{zone}"]}}', "columns": f"{time_col}," + ",".join(cols)},
+                              url=url, patient=patient)
             a = b
-        if not rows:
-            return pd.Series(dtype=float)
         df = pd.DataFrame(rows)
-        five = pd.Series(df[list(cols)].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
-                         index=pd.DatetimeIndex(pd.to_datetime(df["Minutes5UTC"]))).dropna().sort_index()
-        five = five[~five.index.duplicated(keep="last")]
+        if df.empty or time_col not in df or not set(cols) <= set(df.columns):
+            return pd.Series(dtype=float)
+        out = pd.Series(df[list(cols)].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(cols)).to_numpy(),
+                        index=pd.DatetimeIndex(pd.to_datetime(df[time_col]))).dropna().sort_index()
+        return out[~out.index.duplicated(keep="last")]
+
+    @staticmethod
+    def _quarters(five: pd.Series) -> pd.Series:
         q = five.resample("15min")
-        s = q.mean()[q.count() >= 2]
+        return q.mean()[q.count() >= 2]
+
+    def fetch(self, zone, target, start, end):
+        if zone not in ("DK1", "DK2") or target not in ("wind", "solar"):
+            return pd.Series(dtype=float)
+        if target == "solar":
+            return self._solar(zone, start, end)
+        five = self._records(zone, start, end, self.WIND, "Minutes5UTC")
+        if five.empty:
+            return five
+        s = self._quarters(five)
         if pd.Timestamp(end) - pd.Timestamp(start) <= self.FILL_WINDOW:
             s = self._fill_from_settlement(zone, s, start, end)
         s.index.name = "time_utc"
         return s[(s.index >= start) & (s.index < end)]
+
+    def _solar(self, zone: str, start, end) -> pd.Series:
+        """Settled solar of each UTC hour (its MWh, i.e. its mean MW) held across the hour's quarter-hours.
+
+        A delivery day (a window of at most FILL_WINDOW: frozen, revised or drawn) is settlement only, so it stays
+        empty until Energinet publishes it, about ten days after delivery. Model history (a longer window) would
+        otherwise end ten days before the cut-off; after the last settled hour it continues with Prodex's real-time
+        solar times the settlement / Prodex ratio of the SCALE_DAYS they share (Prodex leaves out self-consumption,
+        about 0.84x in DK1 and 0.66x in DK2 in autumn 2026), so every model sees the same estimate of the recent days.
+        """
+        start, end = pd.Timestamp(start), pd.Timestamp(end)
+        hourly = self._settled_solar(zone, start.floor("h"), end)
+        s = pd.Series(dtype=float)
+        if not hourly.empty:
+            idx = pd.date_range(hourly.index[0], hourly.index[-1] + pd.Timedelta("1h"), freq="15min", inclusive="left")
+            s = pd.Series(hourly.reindex(idx.floor("h")).to_numpy(), index=idx).dropna()
+        if end - start > self.FILL_WINDOW:
+            done = hourly.index[-1] + pd.Timedelta("1h") if not hourly.empty else start
+            if done < end:
+                five = self._records(zone, max(start, done - self.SCALE_DAYS), end, ("SolarPower",), "Minutes5UTC")
+                live = self._quarters(five) if not five.empty else five
+                both = pd.concat([live.resample("1h").mean().rename("live"), hourly.rename("settled")], axis=1).dropna() \
+                    if not live.empty and not hourly.empty else pd.DataFrame(columns=["live", "settled"])
+                if len(both) >= 24 and both["live"].sum() > 0:
+                    ratio = float(both["settled"].sum() / both["live"].sum())
+                    tail = live[live.index >= done] * ratio
+                    if not tail.empty:
+                        log.info("energinet %s solar: history after %s from real-time solar x %.3f", zone, done, ratio)
+                        s = tail if s.empty else pd.concat([s, tail]).sort_index()
+        if s.empty:
+            return pd.Series(dtype=float)
+        s.index.name = "time_utc"
+        return s[(s.index >= start) & (s.index < end)]
+
+    def _settled_solar(self, zone: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
+        """Hourly settled solar of [start, end) from data/cache/energinet/settled_solar_<zone>.parquet, which grows as
+        Energinet publishes: a request only for hours before the cache, or, at most every SOLAR_REFRESH, for the
+        hours after it. A failed or rate-limited request leaves the cache as it is (those hours stay unsettled)."""
+        f = Path(self.cfg["_root"]) / "data" / "cache" / "energinet" / f"settled_solar_{zone}.parquet" if "_root" in self.cfg else None
+        stamp = f.with_suffix(".json") if f is not None else None
+        have = pd.read_parquet(f)["value"] if f is not None and f.exists() else pd.Series(dtype=float)
+        now = pd.Timestamp.now(tz="UTC").tz_localize(None)
+        checked = pd.Timestamp(json.loads(stamp.read_text())["checked_utc"]) if stamp is not None and stamp.exists() else None
+        need = []
+        if have.empty:   # up to now: one request also covers the later days a scoring run is about to ask for
+            need.append((start, max(end, now.floor("h")), True))
+        else:
+            if start < have.index[0]:
+                need.append((start, have.index[0], False))
+            after = have.index[-1] + pd.Timedelta("1h")
+            if end > after and (checked is None or now - checked >= self.SOLAR_REFRESH):
+                need.append((after, max(end, now.floor("h")), True))
+        for a, b, tail in need:
+            try:
+                got = self._records(zone, a, b, self.SETTLED_SOLAR, "HourUTC", url=self.SETTLEMENT_URL, patient=False)
+            except (requests.RequestException, ValueError, KeyError) as e:
+                log.warning("energinet settled solar %s %s .. %s not fetched (%s); using what is cached", zone, a, b, e)
+                continue
+            if not got.empty:
+                have = got if have.empty else pd.concat([have, got]).sort_index()
+                have = have[~have.index.duplicated(keep="last")]
+            if tail and stamp is not None:
+                stamp.parent.mkdir(parents=True, exist_ok=True)
+                stamp.write_text(json.dumps({"checked_utc": str(now)}))
+        if f is not None and need and not have.empty:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            have.rename("value").to_frame().to_parquet(f)
+        return have[(have.index >= start) & (have.index < end)] if not have.empty else have
 
     def _fill_from_settlement(self, zone: str, s: pd.Series, start, end) -> pd.Series:
         """Quarter-hours of [start, end) Prodex left empty and that ended SETTLED_AFTER ago, from the hourly settlement.

@@ -618,7 +618,6 @@ def test_energinet_wind_quarter_hours(cfg, monkeypatch):
     assert list(s.index) == [pd.Timestamp("2026-10-01 00:00"), pd.Timestamp("2026-10-01 00:30")]
     assert s.iloc[0] == 151.0 and s.iloc[1] == 156.5        # mean of 150,151,152; of 156,157 (00:40 dropped)
     assert seen[0]["filter"] == '{"PriceArea":["DK1"]}' and seen[0]["timezone"] == "UTC"
-    assert src.fetch("DK1", "solar", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty   # solar stays on ENTSO-E
     assert src.fetch("NL", "wind", pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")).empty
     # DK load stays on ENTSO-E: as a fallback this source must not fill A65's gaps with a different quantity
     n = len(seen)
@@ -886,3 +885,96 @@ def test_model_page_links():
     out = _up('<a href="./">a</a><a href="explorer.html">b</a><a href="https://x.y">c</a><a href="mailto:a@b.c">d</a><a href="#top">e</a>', "../../")
     assert out == '<a href="../../">a</a><a href="../../explorer.html">b</a><a href="https://x.y">c</a><a href="mailto:a@b.c">d</a><a href="#top">e</a>'
     assert _label("timesfm3_cov") == "TimesFM 3 with weather inputs" and _label("lgbm_cov") == "LightGBM with weather" and _label("new_model") == "new_model"
+
+
+def test_energinet_solar_settlement(cfg, monkeypatch):
+    """DK solar: the settled hour (four solar columns, self-consumption included) held across its quarter-hours. A
+    delivery day is settlement only; model history continues after the last settled hour with real-time solar scaled
+    by the settlement / real-time ratio of the days both have."""
+    from foretec_live.data import tso
+
+    hours = pd.date_range("2026-11-01", "2026-11-10", freq="h", inclusive="left")
+    settled = [{"HourUTC": f"{h:%Y-%m-%dT%H:%M:%S}", "SolarPowerLt10kW_MWh": 10.0, "SolarPowerGe10Lt40kW_MWh": 20.0,
+                "SolarPowerGe40kW_MWh": 60.0 + h.hour, "SolarPowerSelfConMWh": 10.0} for h in hours]
+    five = pd.date_range("2026-11-01", "2026-11-15", freq="5min", inclusive="left")
+    live = [{"Minutes5UTC": f"{x:%Y-%m-%dT%H:%M:%S}", "SolarPower": 50.0} for x in five]
+
+    class R:
+        def __init__(self, recs): self.recs = recs
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"records": self.recs}
+
+    calls = []
+
+    def get(url, params, timeout):
+        a, b = pd.Timestamp(params["start"]), pd.Timestamp(params["end"])
+        if url == tso.EnerginetSource.SETTLEMENT_URL:
+            assert params["columns"].startswith("HourUTC,SolarPower")
+            calls.append((a, b))
+            return R([r for r in settled if a <= pd.Timestamp(r["HourUTC"]) < b])
+        return R([r for r in live if a <= pd.Timestamp(r["Minutes5UTC"]) < b])
+
+    monkeypatch.setattr(tso.requests, "get", get)
+    src = tso.EnerginetSource(cfg)
+    src.SOLAR_REFRESH = pd.Timedelta(0)                      # the refresh interval and the 429 have their own test
+    day = src.fetch("DK2", "solar", pd.Timestamp("2026-11-05"), pd.Timestamp("2026-11-06"))
+    assert len(day) == 96 and day.iloc[0] == 100.0 and day.iloc[3] == 100.0 and day.iloc[4] == 101.0   # 10+20+60+10 MWh
+    assert src.fetch("DK2", "solar", pd.Timestamp("2026-11-12"), pd.Timestamp("2026-11-13")).empty    # not settled yet
+    hist = src.fetch("DK2", "solar", pd.Timestamp("2026-10-20"), pd.Timestamp("2026-11-14"))
+    assert hist.index[0] == pd.Timestamp("2026-11-01") and hist.index[-1] == pd.Timestamp("2026-11-13 23:45")
+    ratio = sum(r["SolarPowerLt10kW_MWh"] + r["SolarPowerGe10Lt40kW_MWh"] + r["SolarPowerGe40kW_MWh"] + r["SolarPowerSelfConMWh"]
+                for r in settled) / (50.0 * len(settled))
+    assert hist["2026-11-10":].sub(50.0 * ratio).abs().max() < 1e-9
+    assert src.fetch("DK2", "load", pd.Timestamp("2026-11-05"), pd.Timestamp("2026-11-06")).empty
+    assert (Path(cfg["_root"]) / "data" / "cache" / "energinet" / "settled_solar_DK2.parquet").exists()
+
+
+def test_energinet_solar_rate_limit(cfg, monkeypatch):
+    """The settlement dataset is rate-limited per IP: cached settled hours make no request, the hours after the cache
+    are asked for at most every SOLAR_REFRESH, and a 429 with a long Retry-After is not waited out."""
+    from foretec_live.data import tso
+
+    hours = pd.date_range("2026-11-01", "2026-11-05", freq="h", inclusive="left")
+    settled = [{"HourUTC": f"{h:%Y-%m-%dT%H:%M:%S}", "SolarPowerLt10kW_MWh": 1.0, "SolarPowerGe10Lt40kW_MWh": 2.0,
+                "SolarPowerGe40kW_MWh": 3.0, "SolarPowerSelfConMWh": 4.0} for h in hours]
+    calls, slept, limited = [], [], []
+
+    class R:
+        def __init__(self, recs, code=200): self.recs, self.status_code, self.headers = recs, code, {"Retry-After": "243"}
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise tso.requests.HTTPError(f"{self.status_code}")
+        def json(self): return {"records": self.recs}
+
+    def get(url, params, timeout):
+        calls.append(params["start"])
+        if limited:
+            return R([], 429)
+        a, b = pd.Timestamp(params["start"]), pd.Timestamp(params["end"])
+        return R([r for r in settled if a <= pd.Timestamp(r["HourUTC"]) < b])
+
+    monkeypatch.setattr(tso.requests, "get", get)
+    monkeypatch.setattr(tso.time, "sleep", slept.append)
+    src = tso.EnerginetSource(cfg)
+    assert len(src.fetch("DK1", "solar", pd.Timestamp("2026-11-02"), pd.Timestamp("2026-11-03"))) == 96 and len(calls) == 1
+    assert len(src.fetch("DK1", "solar", pd.Timestamp("2026-11-02 06:00"), pd.Timestamp("2026-11-02 18:00"))) == 48
+    assert src.fetch("DK1", "solar", pd.Timestamp("2026-11-08"), pd.Timestamp("2026-11-09")).empty
+    assert len(calls) == 1                                   # cached, and the tail was asked for moments ago
+    src.SOLAR_REFRESH = pd.Timedelta(0)
+    limited.append(True)
+    assert src.fetch("DK1", "solar", pd.Timestamp("2026-11-08"), pd.Timestamp("2026-11-09")).empty
+    assert len(calls) == 2 and not slept                     # rate-limited: no wait, nothing new
+    assert len(src.fetch("DK1", "solar", pd.Timestamp("2026-11-03"), pd.Timestamp("2026-11-04"))) == 96   # cache still serves
+
+
+def test_partial_actuals_dk_load(cfg):
+    """A65 DK load hours missing for good: from after_days after delivery the day is frozen with what it has."""
+    from foretec_live.score import MIN_COVERAGE, required_coverage
+
+    cfg = {**cfg, "partial_actuals": {"series": ["DK1_load"], "min_coverage": 0.5, "after_days": 3}}
+    issue = dt.date(2026, 11, 12)                              # delivery 13 Nov
+    assert required_coverage(issue, "load", cfg, "2026-11-15 23:00", "DK1") == MIN_COVERAGE
+    assert required_coverage(issue, "load", cfg, "2026-11-16 00:30", "DK1") == 0.5
+    assert required_coverage(issue, "load", cfg, "2026-11-16 00:30", "DK2") == MIN_COVERAGE
+    assert required_coverage(issue, "load", cfg, "2026-11-16 00:30") == MIN_COVERAGE

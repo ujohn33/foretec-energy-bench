@@ -22,7 +22,8 @@ revision_check: {days: 3, threshold: 0.005}   # wind/solar actuals re-fetched fo
 # actuals frozen under an earlier definition of the series: never re-checked, so their scores stay as they were
 # (NL wind offshore was NED's modelled type 17 through delivery 12 Oct 2026, the metered type 51 since; DK wind was
 # ENTSO-E A75 through delivery 17 Oct 2026, Energinet's real-time production since, and the backtest was rebuilt on it)
-actuals_locked_through: {NL_wind: 2026-10-12, DK1_wind: 2026-10-17, DK2_wind: 2026-10-17}
+# ENTSO-E A75 through delivery 3 Nov 2026 (its last day), Energinet's settlement since)
+actuals_locked_through: {NL_wind: 2026-10-12, DK1_wind: 2026-10-17, DK2_wind: 2026-10-17, DK1_solar: 2026-11-03, DK2_solar: 2026-11-03}
 backtest: {start: 2026-09-14, end: 2026-10-01}   # every model is backtested on this window; `catchup` fills gaps nightly
 
 model_workers: 2             # models run two at a time, each subprocess with half the CPU threads
@@ -52,13 +53,18 @@ fallback_source: [elia, rte, ned, energinet, energycharts]
 # NL: ENTSO-E has offshore + TSO-metered onshore wind, TSO-metered solar only and load net of embedded solar;
 # NED has the national totals (load gross, like Elia's and RTE's total load).
 # DK wind: ENTSO-E's DK1 offshore misses the parks not registered there (0.3-0.5 GW since July 2026); Energinet's
-# real-time production matches its settlement (see data/tso.py). DK solar stays on ENTSO-E (includes self-consumption).
+# real-time production matches its settlement (see data/tso.py). DK solar: ENTSO-E stopped publishing it on 4 Nov 2026;
+# Energinet's settlement (self-consumption included, 0.98x / 0.94x A75 before that) about ten days after delivery.
 # DK load stays on ENTSO-E A65: Energinet's own day-ahead load forecast (tso_cutoff) predicts that quantity, not Prodex's
 # production plus net imports (hourly MAE 40-89 vs 226-287 MW in DK1, 2026), even though A65 has gaps since 10 Oct 2026.
-source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned, DK1_wind: energinet, DK2_wind: energinet}
+source_by_series: {BE_wind: elia, BE_solar: elia, NL_wind: ned, NL_solar: ned, NL_load: ned, DK1_wind: energinet, DK2_wind: energinet,
+                   DK1_solar: energinet, DK2_solar: energinet}
 # only the preferred source, no fallback: ENTSO-E's NL wind/solar and DK wind are a different quantity, a gap is
 # better than mixing
-exclusive_series: [NL_wind, NL_solar, NL_load, DK1_wind, DK2_wind]
+exclusive_series: [NL_wind, NL_solar, NL_load, DK1_wind, DK2_wind, DK1_solar, DK2_solar]
+# ENTSO-E's DK load (A65) has had hours missing since 10 Oct 2026 that are never published later: from after_days
+# after delivery such a day is frozen with the hours it has (at least min_coverage) and scored on those hours only
+partial_actuals: {series: [DK1_load, DK2_load], min_coverage: 0.5, after_days: 3}
 # live forecasts made from a different quantity than the one now scored: kept and shown, never scored
 void_live:
   - {series: [NL_wind, NL_solar], through: 2026-10-10, reason: "made from ENTSO-E's NL history before the switch to NED's national estimate"}
@@ -82,8 +88,9 @@ zones:
   DK1: {energycharts_bzn: DK1, energycharts_country: dk, entsoe: "10YDK-1--------W"}
   DK2: {energycharts_bzn: DK2, energycharts_country: dk, entsoe: "10YDK-2--------M"}
 # series whose actuals are only published at a coarser resolution: forecasts and actuals are averaged to it before
-# scoring, so 15-minute detail the actuals do not have is neither rewarded nor penalised (ENTSO-E DK load is hourly)
-score_resolution: {DK1_load: 1h, DK2_load: 1h}
+# scoring, so 15-minute detail the actuals do not have is neither rewarded nor penalised (ENTSO-E DK load and
+# Energinet's settled DK solar are hourly)
+score_resolution: {DK1_load: 1h, DK2_load: 1h, DK1_solar: 1h, DK2_solar: 1h}
 
 targets:
   price:
