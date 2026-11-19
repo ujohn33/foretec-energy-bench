@@ -29,9 +29,8 @@ Energinet (DK1, DK2), Energi Data Service (api.energidataservice.dk, no key), El
   with Energinet's settlement within 1-4% (hourly, 2024 - Oct 2026).
   DK solar from Energinet's hourly settlement (ProductionConsumptionSettlement, its four solar columns including
   self-consumption) since ENTSO-E stopped publishing it (A75 B16 empty from 4 Nov 2026 08:00 UTC). Settlement matched
-  A75 at 0.98x (DK1) and 0.94x (DK2), hourly MAE 15 and 11 MW, 15 Sep - 3 Nov 2026; Prodex solar leaves out
-  self-consumption (0.84x and 0.66x). Settlement is published about ten days after delivery, so a day is frozen and
-  scored then.
+  A75 at 0.98x (DK1) and 0.94x (DK2), hourly MAE 15 and 11 MW, 15 Sep - 3 Nov 2026 (without its self-consumption
+  column 0.84x and 0.66x). Settlement is published about ten days after delivery, so a day is frozen and scored then.
   DK load stays on ENTSO-E A65, the quantity Energinet's own day-ahead load forecast (the grid-operator benchmark)
   predicts: in 2026 that forecast is 1.00x A65 with an hourly MAE of 40-89 MW in DK1, against 226-287 MW to Prodex's
   production plus net imports. So this source answers wind only: as a fallback it must not fill A65's load gaps.
@@ -346,8 +345,8 @@ class EnerginetSource(Source):
         A delivery day (a window of at most FILL_WINDOW: frozen, revised or drawn) is settlement only, so it stays
         empty until Energinet publishes it, about ten days after delivery. Model history (a longer window) would
         otherwise end ten days before the cut-off; after the last settled hour it continues with Prodex's real-time
-        solar times the settlement / Prodex ratio of the SCALE_DAYS they share (Prodex leaves out self-consumption,
-        about 0.84x in DK1 and 0.66x in DK2 in autumn 2026), so every model sees the same estimate of the recent days.
+        solar times the settlement / Prodex ratio of the SCALE_DAYS they share (1.03 in DK1 and 0.96 in DK2 for
+        27 Oct - 9 Nov 2026), so every model sees the same estimate of the recent days.
         """
         start, end = pd.Timestamp(start), pd.Timestamp(end)
         hourly = self._settled_solar(zone, start.floor("h"), end)
