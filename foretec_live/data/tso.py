@@ -279,6 +279,7 @@ class EnerginetSource(Source):
     # in a disk cache, asked for new hours at most every SOLAR_REFRESH, and a 429 is not waited out on that path
     SOLAR_REFRESH = pd.Timedelta("6h")
     PATIENCE = 30.0                      # seconds of Retry-After an impatient request still waits
+    _settlement_down = False             # set on a 429 for settled solar: no more requests from this source object
     FILL_WINDOW = pd.Timedelta("3D")
 
     def _get(self, params: dict, url: str | None = None, patient: bool = True) -> list[dict]:
@@ -391,9 +392,12 @@ class EnerginetSource(Source):
             if end > after and (checked is None or now - checked >= self.SOLAR_REFRESH):
                 need.append((after, max(end, now.floor("h")), True))
         for a, b, tail in need:
+            if self._settlement_down:   # one 429 per run: asking again for every pending day keeps the limit hot
+                break
             try:
                 got = self._records(zone, a, b, self.SETTLED_SOLAR, "HourUTC", url=self.SETTLEMENT_URL, patient=False)
             except (requests.RequestException, ValueError, KeyError) as e:
+                self._settlement_down = isinstance(e, RateLimited)
                 log.warning("energinet settled solar %s %s .. %s not fetched (%s); using what is cached", zone, a, b, e)
                 continue
             if not got.empty:

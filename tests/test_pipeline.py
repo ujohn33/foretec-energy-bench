@@ -965,6 +965,7 @@ def test_energinet_solar_rate_limit(cfg, monkeypatch):
     limited.append(True)
     assert src.fetch("DK1", "solar", pd.Timestamp("2026-11-08"), pd.Timestamp("2026-11-09")).empty
     assert len(calls) == 2 and not slept                     # rate-limited: no wait, nothing new
+    assert src.fetch("DK1", "solar", pd.Timestamp("2026-11-09"), pd.Timestamp("2026-11-10")).empty and len(calls) == 2   # no second try
     assert len(src.fetch("DK1", "solar", pd.Timestamp("2026-11-03"), pd.Timestamp("2026-11-04"))) == 96   # cache still serves
 
 
