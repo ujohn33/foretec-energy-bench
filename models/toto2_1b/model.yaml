@@ -6,3 +6,5 @@ inputs: [history]
 runner: subprocess
 env: toto2
 script: forecaster.py
+enabled: false
+retired: "20 Nov 2026: the 1B size of Toto 2.0 was level with the base size (toto2) in the live run over the 28 days to 19 Nov (mean pooled Rel. MAE), 0.624 against 0.628, at almost four times the run time (101 s against 28 s)."

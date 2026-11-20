@@ -5,3 +5,5 @@ runner: subprocess
 env: timesfm
 script: forecaster.py
 family: timesfm
+enabled: false
+retired: "20 Nov 2026: superseded by TimesFM 3 (timesfm3): level with it in the live run over the 28 days to 19 Nov (mean pooled Rel. MAE) (0.621 against 0.626) at half the run time."

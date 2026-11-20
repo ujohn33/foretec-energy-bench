@@ -6,3 +6,5 @@ inputs: [history, nwp, load_forecast, fuel]
 runner: subprocess
 env: timesfm
 script: forecaster.py
+enabled: false
+retired: "20 Nov 2026: superseded by TimesFM 3 with covariates (timesfm3_cov), which beat it in the live run over the 28 days to 19 Nov (mean pooled Rel. MAE): 0.367 against 0.468."
