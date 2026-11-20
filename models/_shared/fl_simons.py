@@ -14,6 +14,7 @@ one batch).
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from fl_cov import calendar, compact_features, future_index, load_covariates, nonneg
@@ -47,5 +48,5 @@ def run(covariates: bool = False) -> None:
     for h, keys in by_horizon.items():
         extra = {"future_covariates": [covariate_frame(req, cov, inp, k) for k in keys], "batch_size": 1} if covariates else {}
         for key, q in zip(keys, forecast_series(model, [series[k] for k in keys], h, **extra)):
-            results[key] = nonneg(key, q[:, 4], q)                       # (h, 9): 0.1 ... 0.9
+            results[key] = nonneg(key, q[:, 4], np.sort(q, axis=1))   # (h, 9): 0.1 ... 0.9; sorted in case a release stops ordering them
     write_output(req, results)
