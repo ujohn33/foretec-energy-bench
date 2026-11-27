@@ -30,8 +30,8 @@ declare -A PKGS=(
   [timeh2o]="h2ofm==0.43.1"
   # ci-proto (Continuous Intelligence): ci-proto licence (Apache-2.0 based; public attribution + one-time notification)
   [ciproto]="continuousintelligence==0.1.1"
-  # Simons (Abel AI Lab): code Apache-2.0, weights OpenMDW-1.1; package 0.1.2
-  [simons]="simons @ git+https://github.com/Abel-ai-lab/Simons.git@d9a845700eaa5ee649d1abac64260935bc32b2ac"
+  # Simons (Abel AI Lab): code Apache-2.0, weights OpenMDW-1.1; package 0.1.3 or later
+  [simons]="simons-forecasting>=0.1.3"
   # classical statistical models through sktime's StatsForecast wrappers (statsforecast needs pandas 2,
   # the main venv has pandas 3); same sktime version as the main venv
   [stats]="sktime==1.2.0|statsforecast>=2.1.1|pyyaml|joblib"
